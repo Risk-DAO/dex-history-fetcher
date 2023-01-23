@@ -45,7 +45,11 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
 
     let liquidityValues = [];
     for(let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += stepBlock) {
-        const toBlock = fromBlock + stepBlock - 1 > currentBlock ? currentBlock : fromBlock + stepBlock - 1;
+        let toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
+        if(toBlock > currentBlock) {
+            toBlock = currentBlock;
+        }
+
         let events;
         try {
             events = await pairContract.queryFilter('Sync', fromBlock, toBlock); 
