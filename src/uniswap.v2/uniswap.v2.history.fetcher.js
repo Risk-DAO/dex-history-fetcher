@@ -79,7 +79,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
             }
             
             if(i == events.length -1) {
-                // on the last iteration
+                // always save the last event
                 liquidityValues.push({
                     blockNumber: workingEvent.blockNumber,
                     reserve0: workingEvent.args.reserve0.toString(),
