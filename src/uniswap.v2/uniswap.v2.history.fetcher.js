@@ -43,6 +43,8 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
         startBlock = deployBlockNumber;
     }
 
+    console.log(`FetchHistoryForPair[${pairKey}]: start fetching data for ${currentBlock - startBlock} blocks to reach current block: ${currentBlock}`);
+
     let liquidityValues = [];
     for(let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += stepBlock) {
         let toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
@@ -97,7 +99,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
         }
     }
     
-    if(liquidityValues.length >= 0) {
+    if(liquidityValues.length > 0) {
         const textToAppend = liquidityValues.map(_ => `${_.blockNumber},${_.reserve0},${_.reserve1}`);
         fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
     }
