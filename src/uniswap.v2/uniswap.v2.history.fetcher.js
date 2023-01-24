@@ -11,6 +11,29 @@ const { sleep } = require('../utils/utils');
 const RPC_URL = process.env.RPC_URL;
 
 /**
+ * Fetch all liquidity history from UniswapV2 pairs
+ * The pairs to fetch are read from the config file './uniswap.v2.config'
+ */
+async function UniswapV2HistoryFetcher() {
+    if(!RPC_URL) {
+        throw new Error('Could not find RPC_URL env variable');
+    }
+
+    console.log('UniswapV2HistoryFetcher: starting');
+    const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
+
+    for(const pairKey of Object.keys(univ2Config.uniswapV2Pairs)) {
+        console.log('Start fetching pair ' + pairKey);
+        await FetchHistoryForPair(web3Provider, pairKey, `./data/${pairKey}_uniswapv2.csv`);
+        console.log('End fetching pair ' + pairKey);
+    }
+
+    console.log('UniswapV2HistoryFetcher: ending');
+}
+
+UniswapV2HistoryFetcher();
+
+/**
  * Fetches all history for a uniswap v2 pair (a pool)
  * Store the results into a csv file, and use the file as start for a run
  * if the file does not exists, create it and start at the contract deploy block
@@ -79,7 +102,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
             }
             
             if(i == events.length -1) {
-                // on the last iteration
+                // always save the last event
                 liquidityValues.push({
                     blockNumber: workingEvent.blockNumber,
                     reserve0: workingEvent.args.reserve0.toString(),
@@ -104,20 +127,3 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
         fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
     }
 }
-
-async function UniswapV2HistoryFetcher() {
-    if(!RPC_URL) {
-        throw new Error('Could not find RPC_URL env variable');
-    }
-
-    console.log('UniswapV2HistoryFetcher: starting');
-    const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-
-    for(const pairKey of Object.keys(univ2Config.uniswapV2Pairs)) {
-        await FetchHistoryForPair(web3Provider, pairKey, `./data/${pairKey}_uniswapv2.csv`);
-    }
-
-    
-}
-
-UniswapV2HistoryFetcher();
