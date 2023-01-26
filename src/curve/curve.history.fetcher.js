@@ -4,6 +4,7 @@ const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const { sleep } = require('../utils/utils');
 const curvePoolABI = require('./curve.pool.abi.json');
 const erc20ABI = require('./dai.erc20.abi.json');
+const fs = require('fs');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
@@ -31,113 +32,133 @@ async function getPoolTokens(pool) {
     return poolTokens;
 }
 
-/// for (tokenAddress), (pooladdress) and [blockrange] returns [{from: block:balance},{to: block:balance}]
-async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange){
+/// for (tokenAddress), (pooladdress) and [blockrange] returns historical data and blocklist
+async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange) {
     const contract = new ethers.Contract(tokenAddress, erc20ABI, web3Provider);
     const startBlock = blockRange[0];
     const lastBlock = blockRange[1];
+    const blockList = [];
 
-    const results = [];
-    results[0] = {from: {}};
-    results[1] = {to: {}};
-
+    const results = {
+        [tokenAddress]: {
+            from: {},
+            to: {}
+        }
+    };
 
     const filterFrom = contract.filters.Transfer(poolAddress);
     const filterTo = contract.filters.Transfer(null, poolAddress);
 
     const fromEvents = await contract.queryFilter(filterFrom, startBlock, lastBlock);
-    
+
     const toEvents = await contract.queryFilter(filterTo, startBlock, lastBlock);
 
-    for(let i = 0; i < fromEvents.length; i++){
-        results[0].from[fromEvents[i].blockNumber] = fromEvents[i].args[2];
+    for (let i = 0; i < fromEvents.length; i++) {
+        results[tokenAddress]['from'][fromEvents[i].blockNumber] = fromEvents[i].args[2];
+        if (!blockList.includes(fromEvents[i].blockNumber)) {
+            blockList.push(fromEvents[i].blockNumber);
+        }
     }
-    for(let i = 0; i < toEvents.length; i++){
-        results[1].from[toEvents[i].blockNumber] = toEvents[i].args[2];
+    for (let i = 0; i < toEvents.length; i++) {
+        results[tokenAddress]['to'][toEvents[i].blockNumber] = toEvents[i].args[2];
+        if (!blockList.includes(toEvents[i].blockNumber)) {
+            blockList.push(toEvents[i].blockNumber);
+        }
     }
+    results['blockList'] = blockList;
+
     return results;
 }
-
-async function GetBalances(block) {
-    const results = [];
-    const p = '0x' + '1'.padStart(64, '0');
-    const pKeccak = ethers.utils.keccak256(p);
-
-    const bnPKeccak = BigNumber.from(pKeccak);
-    console.log(bnPKeccak.toString());
-    for (let i = 0; i < 3; i++) {
-        const r = await web3Provider.getStorageAt(threePoolAddr, bnPKeccak.add(i), block);
-        const b = BigNumber.from(r);
-        results.push(b.toString());
-    }
-    return results;
-}
-
-async function FetchHistoryForPool(historyFileName) {
-    const currentBlock = await web3Provider.getBlockNumber();
-    const initStepBlock = 5000;
-    let stepBlock = initStepBlock;
-    let startBlock = await GetContractCreationBlockNumber(web3Provider, threePoolAddr);
-    let lastBlock = undefined;
-    let topics = [];
-    let historicalData = [];
-
-
-    for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += stepBlock) {
-        let toBlock = fromBlock + stepBlock - 1;
-        if (toBlock > currentBlock) {
-            toBlock = currentBlock;
-        }
-        let events;
-        try {
-            console.log(`FetchHistoryForPool: start fetching data for ${currentBlock - startBlock} blocks to reach current block: ${currentBlock}`);
-            events = await web3Provider.getLogs({
-                address: threePoolAddr,
-                fromBlock: fromBlock,
-                toBlock: toBlock
-            });
-        }
-        catch (error) {
-            fromBlock -= stepBlock;
-            stepBlock = stepBlock / 2;
-            console.log(`Exception: ${error.message}, will retry with new step: ${stepBlock}`);
-            await sleep(5000);
-            continue;
-        }
-        for (let i = 0; i < events.length; i++) {
-            historicalData.push({
-                block: events[i].blockNumber,
-                balances: await GetBalances(events[i].blockNumber)
-            });
-        }
-    }
-
-    /// getting the logs
-
-
-
-}
-
-
 
 async function main() {
+    const stepBlock = 5000;
+    let poolAddress = threePoolAddr;
     let poolTokens = undefined;
+    let startBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
+    const currentBlock = await web3Provider.getBlockNumber();
+    const rangeData = [];
+
+
     if (!RPC_URL) {
         throw new Error('Could not find RPC_URL env variable');
     }
     console.log('CURVE HistoryFetcher: starting');
+
+
+    /// Fetching tokens in pool
     console.log('--- fetching pool tokens ---');
     try {
-        poolTokens = await getPoolTokens(threePoolAddr);
-        console.log('PoolTokens', poolTokens);
+        poolTokens = await getPoolTokens(poolAddress);
+        console.log('Tokens found:', poolTokens.length);
         console.log('--- Pool tokens fetched ---');
-        
+
     }
     catch (error) {
         console.log('Could not fetch tokens');
     }
 
+    /// creating data file
+    const historyFileName = `./src/data/${poolAddress}_curve.csv`;
+    if (!fs.existsSync(historyFileName)) {
+        let tokenHeaders = 'blocknumber';
+        for (let i = 0; i < poolTokens.length; i++) {
+            tokenHeaders += `,reserve_${poolTokens[i]}`;
+        }
+        fs.writeFileSync(historyFileName, `${tokenHeaders}\n`);
+    }
+    // //// If datafile exists, picking up where we left off
+    // else {
+    //     const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
+    //     const lastLine = fileContent[fileContent.length-2];
+    //     startBlock = Number(lastLine.split(',')[0]) + 1;
+    // }
+
+    
+
+    /// Shaping historicalData object
+    const historicalData = {
+        [startBlock]: {}
+    };
+    for (let i = 0; i < poolTokens.length; i++) {
+        historicalData[startBlock][poolTokens[i]] = 0;
+    }
+
+
+    /// THIS IS WHERE STUFF HAPPENS, FROM START BLOCK TO END BLOCK
+    for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += stepBlock) {
+        let toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
+        if (toBlock > currentBlock) {
+            toBlock = currentBlock;
+        }
+        console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} `);
+        ///Fetch each token events and store them in historicalData
+        for (let i = 0; i < poolTokens.length; i++) {
+            console.log(`token ${i + 1}/${poolTokens.length}: ${poolTokens[i]}`);
+            const tokenData = await getTokenBalancesInRange(poolTokens[i], poolAddress, [fromBlock, toBlock])
+                ;
+            rangeData.push(tokenData);
+        }
+        ///Compute historical picture
+        /////Compute block numbers from blockList(s)
+        const concatenatedArrays = [];
+        for (let y = 0; y < rangeData.length; y++) {
+            for (let z = 0; z < rangeData[y]['blockList'].length; z++) {
+                concatenatedArrays.push(rangeData[y]['blockList'][z]);
+            }
+        }
+        let blockNumbersForRange = [... new Set(concatenatedArrays)];
+        blockNumbersForRange = blockNumbersForRange.sort((a, b) => {
+            return a - b;
+        });
+
+        /// Construct historical data for each blockNumbersForRange entry
+        for (let block = 0; block < blockNumbersForRange.length; block++) {
+            historicalData[blockNumbersForRange[block]] = {};
+        }
+        console.log('lol', historicalData[0].blockList);
+        console.log('end');
+
+    }
 
 }
-
-getTokenBalancesInRange('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', threePoolAddr, [16490137, 16491137]);
+main();
