@@ -71,19 +71,18 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange) {
 }
 
 async function main() {
-    const stepBlock = 5000;
-    let poolAddress = threePoolAddr;
-    let poolTokens = undefined;
-    let startBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
-    const currentBlock = await web3Provider.getBlockNumber();
-    const rangeData = [];
-
-
     if (!RPC_URL) {
         throw new Error('Could not find RPC_URL env variable');
     }
     console.log('CURVE HistoryFetcher: starting');
 
+
+    /// function variables
+    const stepBlock = 5000;
+    let poolAddress = threePoolAddr;
+    let poolTokens = undefined;
+    let startBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
+    const currentBlock = await web3Provider.getBlockNumber();
 
     /// Fetching tokens in pool
     console.log('--- fetching pool tokens ---');
@@ -113,25 +112,20 @@ async function main() {
     //     startBlock = Number(lastLine.split(',')[0]) + 1;
     // }
 
-    
-
-    /// Shaping historicalData object
-    const historicalData = {
-        [startBlock]: {}
-    };
-    for (let i = 0; i < poolTokens.length; i++) {
-        historicalData[startBlock][poolTokens[i]] = 0;
-    }
+    /// in the meantime:
+    const historicalData = [];
 
 
     /// THIS IS WHERE STUFF HAPPENS, FROM START BLOCK TO END BLOCK
     for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += stepBlock) {
+        const rangeData = [];
+        const dataToWrite = [];
         let toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
         if (toBlock > currentBlock) {
             toBlock = currentBlock;
         }
         console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} `);
-        ///Fetch each token events and store them in historicalData
+        ///Fetch each token events and store them in rangeData
         for (let i = 0; i < poolTokens.length; i++) {
             console.log(`token ${i + 1}/${poolTokens.length}: ${poolTokens[i]}`);
             const tokenData = await getTokenBalancesInRange(poolTokens[i], poolAddress, [fromBlock, toBlock])
@@ -153,9 +147,43 @@ async function main() {
 
         /// Construct historical data for each blockNumbersForRange entry
         for (let block = 0; block < blockNumbersForRange.length; block++) {
-            historicalData[blockNumbersForRange[block]] = {};
+            ///if there is no file, initialize variables
+            if(historicalData.length === 0){
+                const initialArray = [];
+                initialArray.push(startBlock);
+                for(let i = 0; i < poolTokens.length; i++){
+                    initialArray.push(0);
+                }
+                dataToWrite.push(initialArray);
+            }
+
+            ///now take first block of blockNumberForRange and compute differences
+            const currBlock = blockNumbersForRange[block];
+            const arrayToPush = [];
+            arrayToPush.push(currBlock);
+            for(let j = 0; j < poolTokens.length; j++){
+                const token = poolTokens[j];
+                const tokenIndex = j + 1;
+                /// old value
+                const oldValue = BigNumber.from(dataToWrite[block][tokenIndex]);
+                let delta = BigNumber.from('0');
+                /// Compute new token value
+                ////adding tokens going to the pool
+                if(rangeData[j][token]['to'][currBlock]){
+                    delta = delta.add(rangeData[j][token]['to'][currBlock]);
+                }
+                ////substracting tokens leaving the pool
+                if(rangeData[j][token]['from'][currBlock]){
+                    delta = delta.add(rangeData[j][token]['from'][currBlock]);
+                }
+                const newValue = oldValue.add(delta);
+                //push to array
+                arrayToPush.push(newValue.toString());
+            }
+            ///push array to data to be written
+            dataToWrite.push(arrayToPush);
+            console.log('dataToWrite', dataToWrite);
         }
-        console.log('lol', historicalData[0].blockList);
         console.log('end');
 
     }
