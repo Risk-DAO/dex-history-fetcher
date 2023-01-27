@@ -5,6 +5,7 @@ const { sleep } = require('../utils/utils');
 const curvePoolABI = require('./curve.pool.abi.json');
 const erc20ABI = require('./dai.erc20.abi.json');
 const fs = require('fs');
+const { isSetIterator } = require('util/types');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
@@ -78,11 +79,14 @@ async function main() {
 
 
     /// function variables
-    const stepBlock = 5000;
     let poolAddress = threePoolAddr;
+    const historyFileName = `./src/data/${poolAddress}_curve.csv`;
+    const stepBlock = 5000;
     let poolTokens = undefined;
     let startBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
     const currentBlock = await web3Provider.getBlockNumber();
+    let firstRun = true;
+    let lastBlockData = [];
 
     /// Fetching tokens in pool
     console.log('--- fetching pool tokens ---');
@@ -95,31 +99,31 @@ async function main() {
     catch (error) {
         console.log('Could not fetch tokens');
     }
+    ///if file exists, taking start block from file
+    if (fs.existsSync(historyFileName)) {
+        const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
+        const lastLine = fileContent[fileContent.length - 2];
+        startBlock = Number(lastLine.split(',')[0]) + 1;
+    }
 
-    /// creating data file
-    const historyFileName = `./src/data/${poolAddress}_curve.csv`;
+    ///else creating data file
     if (!fs.existsSync(historyFileName)) {
+        const initialArray = [];
+        initialArray.push(startBlock);
         let tokenHeaders = 'blocknumber';
         for (let i = 0; i < poolTokens.length; i++) {
+            initialArray.push('0');
             tokenHeaders += `,reserve_${poolTokens[i]}`;
         }
-        fs.writeFileSync(historyFileName, `${tokenHeaders}\n`);
+        fs.writeFileSync(historyFileName, `${tokenHeaders}\n${initialArray}\n`);
     }
-    // //// If datafile exists, picking up where we left off
-    // else {
-    //     const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
-    //     const lastLine = fileContent[fileContent.length-2];
-    //     startBlock = Number(lastLine.split(',')[0]) + 1;
-    // }
 
-    /// in the meantime:
-    const historicalData = [];
-
+    
 
     /// THIS IS WHERE STUFF HAPPENS, FROM START BLOCK TO END BLOCK
     for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += stepBlock) {
         const rangeData = [];
-        const dataToWrite = [];
+        let dataToWrite = [];
         let toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
         if (toBlock > currentBlock) {
             toBlock = currentBlock;
@@ -145,23 +149,24 @@ async function main() {
             return a - b;
         });
 
+        // if this is the first run, load last line as first item of the array
+        if (firstRun) {
+            const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
+            let lastLine = fileContent[fileContent.length - 2];
+            lastLine = lastLine.split(',');
+            dataToWrite.push(lastLine);
+        }
+        else {
+            const initialArray = lastBlockData;
+            dataToWrite.push(initialArray);
+        }
         /// Construct historical data for each blockNumbersForRange entry
         for (let block = 0; block < blockNumbersForRange.length; block++) {
-            ///if there is no file, initialize variables
-            if(historicalData.length === 0){
-                const initialArray = [];
-                initialArray.push(startBlock);
-                for(let i = 0; i < poolTokens.length; i++){
-                    initialArray.push(0);
-                }
-                dataToWrite.push(initialArray);
-            }
-
-            ///now take first block of blockNumberForRange and compute differences
+            ///Take first block of blockNumberForRange and compute differences
             const currBlock = blockNumbersForRange[block];
             const arrayToPush = [];
             arrayToPush.push(currBlock);
-            for(let j = 0; j < poolTokens.length; j++){
+            for (let j = 0; j < poolTokens.length; j++) {
                 const token = poolTokens[j];
                 const tokenIndex = j + 1;
                 /// old value
@@ -169,11 +174,11 @@ async function main() {
                 let delta = BigNumber.from('0');
                 /// Compute new token value
                 ////adding tokens going to the pool
-                if(rangeData[j][token]['to'][currBlock]){
+                if (rangeData[j][token]['to'][currBlock]) {
                     delta = delta.add(rangeData[j][token]['to'][currBlock]);
                 }
                 ////substracting tokens leaving the pool
-                if(rangeData[j][token]['from'][currBlock]){
+                if (rangeData[j][token]['from'][currBlock]) {
                     delta = delta.add(rangeData[j][token]['from'][currBlock]);
                 }
                 const newValue = oldValue.add(delta);
@@ -182,11 +187,21 @@ async function main() {
             }
             ///push array to data to be written
             dataToWrite.push(arrayToPush);
-            console.log('dataToWrite', dataToWrite);
         }
-        console.log('end');
-
+        // save last block
+        console.log('dataToWrite.at(-1)', dataToWrite.at(-1));
+        lastBlockData = dataToWrite.at(-1);
+        if (firstRun) {
+            dataToWrite.shift();
+            fs.appendFileSync(historyFileName, dataToWrite.join('\n') + '\n');
+        }
+        else {
+            fs.appendFileSync(historyFileName, dataToWrite.join('\n') + '\n');
+        }
+        // switch first run to false
+        firstRun = false;
     }
-
+    console.log('end');
 }
+
 main();
