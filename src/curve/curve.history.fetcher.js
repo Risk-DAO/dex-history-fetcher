@@ -82,6 +82,20 @@ async function fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock){
     return results;
 }
 
+function blockList(rangeData){
+    const concatenatedArrays = [];
+    for (let y = 0; y < rangeData.length; y++) {
+        for (let z = 0; z < rangeData[y]['blockList'].length; z++) {
+            concatenatedArrays.push(rangeData[y]['blockList'][z]);
+        }
+    }
+    let blockNumbersForRange = [... new Set(concatenatedArrays)];
+    blockNumbersForRange = blockNumbersForRange.sort((a, b) => {
+        return a - b;
+    });
+    return blockNumbersForRange;
+}
+
 async function main() {
     if (!RPC_URL) {
         throw new Error('Could not find RPC_URL env variable');
@@ -97,7 +111,6 @@ async function main() {
     let startBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
     const currentBlock = await web3Provider.getBlockNumber();
     let firstRun = true;
-    let lastBlockData = [];
 
     /// Fetching tokens in pool
     console.log('--- fetching pool tokens ---');
@@ -114,7 +127,11 @@ async function main() {
     if (fs.existsSync(historyFileName)) {
         const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
         const lastLine = fileContent[fileContent.length - 2];
-        startBlock = Number(lastLine.split(',')[0]) + 1;
+        startBlock = Number(lastLine.split(',')[0]);
+        console.log('startblock from file is:', startBlock);
+    }
+    else{
+        console.log('startblock from contract is:', startBlock);
     }
 
     ///else creating data file
@@ -133,8 +150,8 @@ async function main() {
 
     /// THIS IS WHERE STUFF HAPPENS, FROM START BLOCK TO END BLOCK
     for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += stepBlock) {
-        const rangeData = [];
         let dataToWrite = [];
+        let lastBlockData = [];
         let toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
         if (toBlock > currentBlock) {
             toBlock = currentBlock;
@@ -144,18 +161,9 @@ async function main() {
         rangeData = await fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock);
         ///Compute historical picture
         /////Compute block numbers from blockList(s)
-        const concatenatedArrays = [];
-        for (let y = 0; y < rangeData.length; y++) {
-            for (let z = 0; z < rangeData[y]['blockList'].length; z++) {
-                concatenatedArrays.push(rangeData[y]['blockList'][z]);
-            }
-        }
-        let blockNumbersForRange = [... new Set(concatenatedArrays)];
-        blockNumbersForRange = blockNumbersForRange.sort((a, b) => {
-            return a - b;
-        });
+        blockNumbersForRange = blockList(rangeData);
 
-        // if this is the first run, load last line as first item of the array
+        // if this is the first loop, load last line as first item of the array
         if (firstRun) {
             const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
             let lastLine = fileContent[fileContent.length - 2];
