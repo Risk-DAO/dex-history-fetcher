@@ -71,6 +71,17 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange) {
     return results;
 }
 
+async function fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock){
+    results = [];
+    for (let i = 0; i < poolTokens.length; i++) {
+        console.log(`token ${i + 1}/${poolTokens.length}: ${poolTokens[i]}`);
+        const tokenData = await getTokenBalancesInRange(poolTokens[i], poolAddress, [fromBlock, toBlock])
+            ;
+        results.push(tokenData);
+    }
+    return results;
+}
+
 async function main() {
     if (!RPC_URL) {
         throw new Error('Could not find RPC_URL env variable');
@@ -130,12 +141,7 @@ async function main() {
         }
         console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} `);
         ///Fetch each token events and store them in rangeData
-        for (let i = 0; i < poolTokens.length; i++) {
-            console.log(`token ${i + 1}/${poolTokens.length}: ${poolTokens[i]}`);
-            const tokenData = await getTokenBalancesInRange(poolTokens[i], poolAddress, [fromBlock, toBlock])
-                ;
-            rangeData.push(tokenData);
-        }
+        rangeData = await fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock);
         ///Compute historical picture
         /////Compute block numbers from blockList(s)
         const concatenatedArrays = [];
