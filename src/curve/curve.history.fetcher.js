@@ -110,7 +110,7 @@ async function main() {
     let poolTokens = undefined;
     let startBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
     const currentBlock = await web3Provider.getBlockNumber();
-    let firstRun = true;
+    let lastBlockData = [];
 
     /// Fetching tokens in pool
     console.log('--- fetching pool tokens ---');
@@ -123,14 +123,36 @@ async function main() {
     catch (error) {
         console.log('Could not fetch tokens');
     }
+///if file exists, taking start block and last block data from file
+    if (fs.existsSync(historyFileName)) {
+        const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
+        const lastLine = fileContent[fileContent.length - 2];
+        lastBlockData = lastLine.split(',');
+        startBlock = Number(lastBlockData[0]) + 1;
+        console.log('startblock from file is:', startBlock);
+    }
+    else{
+        console.log('startblock from contract is:', startBlock);
+    }
+
+    ///else creating data file
+    if (!fs.existsSync(historyFileName)) {
+        const initialArray = [];
+        initialArray.push(startBlock);
+        let tokenHeaders = 'blocknumber';
+        for (let i = 0; i < poolTokens.length; i++) {
+            initialArray.push('0');
+            tokenHeaders += `,reserve_${poolTokens[i]}`;
+        }
+        lastBlockData = initialArray;
+        fs.writeFileSync(historyFileName, `${tokenHeaders}\n${initialArray}\n`);
+    }
 
 
-
-    let results = [];
-    let lastBlockData = [];
     /// THIS IS WHERE STUFF HAPPENS, FROM START BLOCK TO END BLOCK
     for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += stepBlock) {
         let dataToWrite = [];
+        dataToWrite.push(lastBlockData);
         let toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
         if (toBlock > currentBlock) {
             toBlock = currentBlock;
@@ -140,21 +162,6 @@ async function main() {
         rangeData = await fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock);
         /////Compute block numbers from blockList(s)
         blockNumbersForRange = blockList(rangeData);
-        // if this is the first loop, initialize values
-            if (firstRun) {
-                const initialArray = [];
-                initialArray.push(startBlock);
-                let tokenHeaders = 'blocknumber';
-                for (let i = 0; i < poolTokens.length; i++) {
-                    initialArray.push('0');
-                    tokenHeaders += `,reserve_${poolTokens[i]}`;
-                }
-                dataToWrite.push(initialArray);
-        }
-        else {
-            const initialArray = lastBlockData;
-            dataToWrite.push(initialArray);
-        }
         /// Construct historical data for each blockNumbersForRange entry
         for (let block = 0; block < blockNumbersForRange.length; block++) {
             ///Take first block of blockNumberForRange and compute differences
@@ -184,14 +191,10 @@ async function main() {
             dataToWrite.push(arrayToPush);
         }
         lastBlockData = dataToWrite.at(-1);
-        if(firstRun){
-        results.push(dataToWrite)
+        const writing = dataToWrite.slice(1);
+        if(writing.length !== 0){
+        fs.appendFileSync(historyFileName, writing.join('\n') + '\n');
     }
-    else{
-        results.push(dataToWrite.slice(1))
-    }
-        firstRun = false;
-        console.log('results', results)
     }
     console.log('end');
 }
