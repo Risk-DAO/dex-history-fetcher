@@ -123,35 +123,14 @@ async function main() {
     catch (error) {
         console.log('Could not fetch tokens');
     }
-    ///if file exists, taking start block from file
-    if (fs.existsSync(historyFileName)) {
-        const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
-        const lastLine = fileContent[fileContent.length - 2];
-        startBlock = Number(lastLine.split(',')[0]);
-        console.log('startblock from file is:', startBlock);
-    }
-    else{
-        console.log('startblock from contract is:', startBlock);
-    }
 
-    ///else creating data file
-    if (!fs.existsSync(historyFileName)) {
-        const initialArray = [];
-        initialArray.push(startBlock);
-        let tokenHeaders = 'blocknumber';
-        for (let i = 0; i < poolTokens.length; i++) {
-            initialArray.push('0');
-            tokenHeaders += `,reserve_${poolTokens[i]}`;
-        }
-        fs.writeFileSync(historyFileName, `${tokenHeaders}\n${initialArray}\n`);
-    }
 
-    
 
+    let results = [];
+    let lastBlockData = [];
     /// THIS IS WHERE STUFF HAPPENS, FROM START BLOCK TO END BLOCK
     for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += stepBlock) {
         let dataToWrite = [];
-        let lastBlockData = [];
         let toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
         if (toBlock > currentBlock) {
             toBlock = currentBlock;
@@ -159,16 +138,18 @@ async function main() {
         console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} `);
         ///Fetch each token events and store them in rangeData
         rangeData = await fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock);
-        ///Compute historical picture
         /////Compute block numbers from blockList(s)
         blockNumbersForRange = blockList(rangeData);
-
-        // if this is the first loop, load last line as first item of the array
-        if (firstRun) {
-            const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
-            let lastLine = fileContent[fileContent.length - 2];
-            lastLine = lastLine.split(',');
-            dataToWrite.push(lastLine);
+        // if this is the first loop, initialize values
+            if (firstRun) {
+                const initialArray = [];
+                initialArray.push(startBlock);
+                let tokenHeaders = 'blocknumber';
+                for (let i = 0; i < poolTokens.length; i++) {
+                    initialArray.push('0');
+                    tokenHeaders += `,reserve_${poolTokens[i]}`;
+                }
+                dataToWrite.push(initialArray);
         }
         else {
             const initialArray = lastBlockData;
@@ -202,18 +183,15 @@ async function main() {
             ///push array to data to be written
             dataToWrite.push(arrayToPush);
         }
-        // save last block
-        console.log('dataToWrite.at(-1)', dataToWrite.at(-1));
         lastBlockData = dataToWrite.at(-1);
-        if (firstRun) {
-            dataToWrite.shift();
-            fs.appendFileSync(historyFileName, dataToWrite.join('\n') + '\n');
-        }
-        else {
-            fs.appendFileSync(historyFileName, dataToWrite.join('\n') + '\n');
-        }
-        // switch first run to false
+        if(firstRun){
+        results.push(dataToWrite)
+    }
+    else{
+        results.push(dataToWrite.slice(1))
+    }
         firstRun = false;
+        console.log('results', results)
     }
     console.log('end');
 }
