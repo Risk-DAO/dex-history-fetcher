@@ -157,7 +157,7 @@ async function main() {
         if (toBlock > currentBlock) {
             toBlock = currentBlock;
         }
-        console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} `);
+        console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} -- max block ${currentBlock} `);
         ///Fetch each token events and store them in rangeData
         rangeData = await fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock);
         /////Compute block numbers from blockList(s)
@@ -196,7 +196,8 @@ async function main() {
         fs.appendFileSync(historyFileName, writing.join('\n') + '\n');
     }
     }
-    console.log('end');
+    console.log('CURVE HistoryFetcher: reached last block:', currentBlock);
+    console.log('CURVE HistoryFetcher: end');
 }
 
 main();
