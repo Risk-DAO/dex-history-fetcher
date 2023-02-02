@@ -3,19 +3,26 @@ const dotenv = require('dotenv');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const { sleep } = require('../utils/utils');
 const curvePoolABI = require('./curve.pool.abi.json');
+const susdABI = require('./susd.curve.pool.abi.json');
 const erc20ABI = require('./dai.erc20.abi.json');
 const fs = require('fs');
 const { isSetIterator } = require('util/types');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-const threePoolAddr = '0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7';
+const pool = ['0xDC24316b9AE028F1497c275EB9192a3Ea0f67022', 'erc20ABI'];
 
 
 /// for (pool) returns [poolTokens]
 async function getPoolTokens(pool) {
     const poolTokens = [];
-    const contract = new ethers.Contract(pool, curvePoolABI, web3Provider);
+    let contract = undefined;
+    if(pool[1] === 'susdABI'){
+    contract = new ethers.Contract(pool[0], susdABI, web3Provider);
+    }
+    else if(pool[1] === 'erc20ABI') {
+    contract = new ethers.Contract(pool[0], curvePoolABI, web3Provider);
+}
     let inRange = true;
     let range = 0;
 
@@ -23,7 +30,7 @@ async function getPoolTokens(pool) {
         try {
             const token = await contract.coins(range);
             poolTokens.push(token);
-            range += 1;
+            range += 1; 
 
         }
         catch (error) {
@@ -104,7 +111,7 @@ async function main() {
 
 
     /// function variables
-    let poolAddress = threePoolAddr;
+    let poolAddress = pool[0];
     const historyFileName = `./src/data/${poolAddress}_curve.csv`;
     const stepBlock = 5000;
     let poolTokens = undefined;
@@ -115,7 +122,7 @@ async function main() {
     /// Fetching tokens in pool
     console.log('--- fetching pool tokens ---');
     try {
-        poolTokens = await getPoolTokens(poolAddress);
+        poolTokens = await getPoolTokens(pool);
         console.log('Tokens found:', poolTokens.length);
         console.log('--- Pool tokens fetched ---');
 
@@ -157,7 +164,7 @@ async function main() {
         if (toBlock > currentBlock) {
             toBlock = currentBlock;
         }
-        console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} -- max block ${currentBlock} `);
+        console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} -- blocks to go ${currentBlock - toBlock} -- calls to go ${(currentBlock - toBlock)/5000} `);
         ///Fetch each token events and store them in rangeData
         rangeData = await fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock);
         /////Compute block numbers from blockList(s)
@@ -171,6 +178,11 @@ async function main() {
             for (let j = 0; j < poolTokens.length; j++) {
                 const token = poolTokens[j];
                 const tokenIndex = j + 1;
+                if(token === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'){
+                    const value = await web3Provider.getBalance(pool[0], currBlock)
+                    arrayToPush.push(value.toString());
+                }
+                else{
                 /// old value
                 const oldValue = BigNumber.from(dataToWrite[block][tokenIndex]);
                 let delta = BigNumber.from('0');
@@ -187,8 +199,10 @@ async function main() {
                 //push to array
                 arrayToPush.push(newValue.toString());
             }
+        }
             ///push array to data to be written
             dataToWrite.push(arrayToPush);
+        
         }
         lastBlockData = dataToWrite.at(-1);
         const writing = dataToWrite.slice(1);
