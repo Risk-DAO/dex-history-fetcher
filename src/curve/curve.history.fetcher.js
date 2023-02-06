@@ -10,7 +10,7 @@ const { isSetIterator } = require('util/types');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-const pool = ['0xDC24316b9AE028F1497c275EB9192a3Ea0f67022', 'erc20ABI'];
+const pool = ['0x4807862AA8b2bF68830e4C8dc86D0e9A998e085a', 'erc20ABI'];
 
 
 /// for (pool) returns [poolTokens]
@@ -115,6 +115,7 @@ async function main() {
     const historyFileName = `./src/data/${poolAddress}_curve.csv`;
     const stepBlock = 5000;
     let poolTokens = undefined;
+    let poolSymbols = [];
     let startBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
     const currentBlock = await web3Provider.getBlockNumber();
     let lastBlockData = [];
@@ -123,9 +124,17 @@ async function main() {
     console.log('--- fetching pool tokens ---');
     try {
         poolTokens = await getPoolTokens(pool);
+        for(let i = 0; i < poolTokens.length; i++){
+            const contractForSymbol = new ethers.Contract(poolTokens[i], erc20ABI, web3Provider);
+            const tokenSymbol = await contractForSymbol.symbol();
+            poolSymbols.push(tokenSymbol);
+        }
         console.log('Tokens found:', poolTokens.length);
+        for(let i = 0; i < poolSymbols.length; i++){
+            console.log(poolSymbols[i]);
+        }
         console.log('--- Pool tokens fetched ---');
-
+        
     }
     catch (error) {
         console.log('Could not fetch tokens');
@@ -149,7 +158,7 @@ async function main() {
         let tokenHeaders = 'blocknumber';
         for (let i = 0; i < poolTokens.length; i++) {
             initialArray.push('0');
-            tokenHeaders += `,reserve_${poolTokens[i]}`;
+            tokenHeaders += `,reserve_${poolSymbols[i]}_${poolTokens[i]}`;
         }
         lastBlockData = initialArray;
         fs.writeFileSync(historyFileName, `${tokenHeaders}\n${initialArray}\n`);
