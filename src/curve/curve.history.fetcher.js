@@ -17,12 +17,12 @@ const pool = ['0xDC24316b9AE028F1497c275EB9192a3Ea0f67022', 'erc20ABI'];
 async function getPoolTokens(pool) {
     const poolTokens = [];
     let contract = undefined;
-    if(pool[1] === 'susdABI'){
-    contract = new ethers.Contract(pool[0], susdABI, web3Provider);
+    if (pool[1] === 'susdABI') {
+        contract = new ethers.Contract(pool[0], susdABI, web3Provider);
     }
-    else if(pool[1] === 'erc20ABI') {
-    contract = new ethers.Contract(pool[0], curvePoolABI, web3Provider);
-}
+    else if (pool[1] === 'erc20ABI') {
+        contract = new ethers.Contract(pool[0], curvePoolABI, web3Provider);
+    }
     let inRange = true;
     let range = 0;
 
@@ -30,7 +30,7 @@ async function getPoolTokens(pool) {
         try {
             const token = await contract.coins(range);
             poolTokens.push(token);
-            range += 1; 
+            range += 1;
 
         }
         catch (error) {
@@ -78,7 +78,7 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange) {
     return results;
 }
 
-async function fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock){
+async function fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock) {
     results = [];
     for (let i = 0; i < poolTokens.length; i++) {
         console.log(`token ${i + 1}/${poolTokens.length}: ${poolTokens[i]}`);
@@ -89,7 +89,7 @@ async function fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock){
     return results;
 }
 
-function blockList(rangeData){
+function blockList(rangeData) {
     const concatenatedArrays = [];
     for (let y = 0; y < rangeData.length; y++) {
         for (let z = 0; z < rangeData[y]['blockList'].length; z++) {
@@ -130,7 +130,7 @@ async function main() {
     catch (error) {
         console.log('Could not fetch tokens');
     }
-///if file exists, taking start block and last block data from file
+    ///if file exists, taking start block and last block data from file
     if (fs.existsSync(historyFileName)) {
         const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
         const lastLine = fileContent[fileContent.length - 2];
@@ -138,7 +138,7 @@ async function main() {
         startBlock = Number(lastBlockData[0]) + 1;
         console.log('startblock from file is:', startBlock);
     }
-    else{
+    else {
         console.log('startblock from contract is:', startBlock);
     }
 
@@ -164,7 +164,7 @@ async function main() {
         if (toBlock > currentBlock) {
             toBlock = currentBlock;
         }
-        console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} -- blocks to go ${currentBlock - toBlock} -- calls to go ${(currentBlock - toBlock)/5000} `);
+        console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} -- blocks to go ${currentBlock - toBlock} -- calls to go ${(currentBlock - toBlock) / 5000} `);
         ///Fetch each token events and store them in rangeData
         rangeData = await fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock);
         /////Compute block numbers from blockList(s)
@@ -178,37 +178,37 @@ async function main() {
             for (let j = 0; j < poolTokens.length; j++) {
                 const token = poolTokens[j];
                 const tokenIndex = j + 1;
-                if(token === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'){
+                if (token === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') {
                     const value = await web3Provider.getBalance(pool[0], currBlock)
                     arrayToPush.push(value.toString());
                 }
-                else{
-                /// old value
-                const oldValue = BigNumber.from(dataToWrite[block][tokenIndex]);
-                let delta = BigNumber.from('0');
-                /// Compute new token value
-                ////adding tokens going to the pool
-                if (rangeData[j][token]['to'][currBlock]) {
-                    delta = delta.add(rangeData[j][token]['to'][currBlock]);
+                else {
+                    /// old value
+                    const oldValue = BigNumber.from(dataToWrite[block][tokenIndex]);
+                    let delta = BigNumber.from('0');
+                    /// Compute new token value
+                    ////adding tokens going to the pool
+                    if (rangeData[j][token]['to'][currBlock]) {
+                        delta = delta.add(rangeData[j][token]['to'][currBlock]);
+                    }
+                    ////substracting tokens leaving the pool
+                    if (rangeData[j][token]['from'][currBlock]) {
+                        delta = delta.add(rangeData[j][token]['from'][currBlock]);
+                    }
+                    const newValue = oldValue.add(delta);
+                    //push to array
+                    arrayToPush.push(newValue.toString());
                 }
-                ////substracting tokens leaving the pool
-                if (rangeData[j][token]['from'][currBlock]) {
-                    delta = delta.add(rangeData[j][token]['from'][currBlock]);
-                }
-                const newValue = oldValue.add(delta);
-                //push to array
-                arrayToPush.push(newValue.toString());
             }
-        }
             ///push array to data to be written
             dataToWrite.push(arrayToPush);
-        
+
         }
         lastBlockData = dataToWrite.at(-1);
         const writing = dataToWrite.slice(1);
-        if(writing.length !== 0){
-        fs.appendFileSync(historyFileName, writing.join('\n') + '\n');
-    }
+        if (writing.length !== 0) {
+            fs.appendFileSync(historyFileName, writing.join('\n') + '\n');
+        }
     }
     console.log('CURVE HistoryFetcher: reached last block:', currentBlock);
     console.log('CURVE HistoryFetcher: end');
