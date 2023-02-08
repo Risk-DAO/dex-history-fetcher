@@ -10,6 +10,8 @@ const { sleep } = require('../utils/utils');
 
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data'
+const MINIMUM_TO_APPEND = process.env.MINIMUM_TO_APPEND || 5000
+
 /**
  * Fetch all liquidity history from UniswapV2 pairs
  * The pairs to fetch are read from the config file './uniswap.v2.config'
@@ -116,7 +118,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
 
         console.log(`FetchHistoryForPair[${pairKey}]: from ${fromBlock} to ${toBlock}`);
         
-        if(liquidityValues.length >= 5000) {
+        if(liquidityValues.length >= MINIMUM_TO_APPEND) {
             const textToAppend = liquidityValues.map(_ => `${_.blockNumber},${_.reserve0},${_.reserve1}`);
             fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
             liquidityValues = [];
