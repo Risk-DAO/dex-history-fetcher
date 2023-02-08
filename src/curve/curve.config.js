@@ -26,13 +26,13 @@ const curvePairs = [
         poolAddress: '0x79a8C46DeA5aDa233ABaFFD40F3A0A2B1e5A4F27',
         poolName: 'BUSD',
         version: 1,
-        abi: 'erc20ABI'
+        abi: 'susdABI'
     },
     {
         poolAddress: '0xa5407eae9ba41422680e2e00537571bcc53efbfd',
         poolName: 'susd',
         version: 1,
-        abi: 'erc20ABI'
+        abi: 'susdABI'
     },
     {
         poolAddress: '0xd51a44d3fae010294c616388b506acda1bfaae46',
@@ -42,7 +42,7 @@ const curvePairs = [
     },
     {
         poolAddress: '0xc26b89a667578ec7b3f11b2f98d6fd15c07c54ba',
-        poolName: 'YFI/ETH',
+        poolName: 'YFI-ETH',
         version: 2,
         abi: 'erc20ABI'
     },
@@ -62,29 +62,30 @@ const curvePairs = [
         poolAddress: '0xb576491f1e6e5e62f1d8f26062ee822b40b0e0d4',
         poolName: 'cvxeth',
         version: 2,
-        abi: 'erc20ABI'
+        abi: 'erc20ABI',
+        wethIsEth:true
     },
     {
         poolAddress: '0x13b876c26ad6d21cb87ae459eaf6d7a1b788a113',
-        poolName: 'BADGER/FRAXBP',
+        poolName: 'BADGER-FRAXBP',
         version: 2,
         abi: 'erc20ABI'
     },
     {
         poolAddress: '0x50f3752289e1456bfa505afd37b241bca23e685d',
-        poolName: 'BADGER/WBTC',
+        poolName: 'BADGER-WBTC',
         version: 2,
         abi: 'erc20ABI'
     },
     {
         poolAddress: '0x9409280dc1e6d33ab7a8c6ec03e5763fb61772b5',
-        poolName: 'LDO/ETH',
+        poolName: 'LDO-ETH',
         version: 2,
         abi: 'erc20ABI'
     },
     {
         poolAddress: '0x4149d1038575ce235e03e03b39487a80fd709d31',
-        poolName: 'ALCX/FraxBP',
+        poolName: 'ALCX-FraxBP',
         version: 2,
         abi: 'erc20ABI'
     },
