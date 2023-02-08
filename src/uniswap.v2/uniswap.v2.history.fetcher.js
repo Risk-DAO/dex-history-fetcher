@@ -9,6 +9,8 @@ const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const { sleep } = require('../utils/utils');
 
 const RPC_URL = process.env.RPC_URL;
+const DATA_DIR = process.cwd() + '/data'
+const MINIMUM_TO_APPEND = process.env.MINIMUM_TO_APPEND || 5000
 
 /**
  * Fetch all liquidity history from UniswapV2 pairs
@@ -24,14 +26,12 @@ async function UniswapV2HistoryFetcher() {
 
     for(const pairKey of Object.keys(univ2Config.uniswapV2Pairs)) {
         console.log('Start fetching pair ' + pairKey);
-        await FetchHistoryForPair(web3Provider, pairKey, `./data/${pairKey}_uniswapv2.csv`);
+        await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/${pairKey}_uniswapv2.csv`);
         console.log('End fetching pair ' + pairKey);
     }
 
     console.log('UniswapV2HistoryFetcher: ending');
 }
-
-UniswapV2HistoryFetcher();
 
 /**
  * Fetches all history for a uniswap v2 pair (a pool)
@@ -53,6 +53,9 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
     let stepBlock = initStepBlock;
 
     let startBlock = undefined;
+    if (!fs.existsSync(DATA_DIR)){
+        fs.mkdirSync(DATA_DIR);
+    }
     if(!fs.existsSync(historyFileName)) {
         fs.writeFileSync(historyFileName, `blocknumber,reserve_${pairInfo[0].symbol}_${pairInfo[0].address},reserve_${pairInfo[1].symbol}_${pairInfo[1].address}\n`);
     } else {
@@ -115,7 +118,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
 
         console.log(`FetchHistoryForPair[${pairKey}]: from ${fromBlock} to ${toBlock}`);
         
-        if(liquidityValues.length >= 5000) {
+        if(liquidityValues.length >= MINIMUM_TO_APPEND) {
             const textToAppend = liquidityValues.map(_ => `${_.blockNumber},${_.reserve0},${_.reserve1}`);
             fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
             liquidityValues = [];
@@ -127,3 +130,5 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
         fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
     }
 }
+
+UniswapV2HistoryFetcher();
