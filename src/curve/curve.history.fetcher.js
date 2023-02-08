@@ -1,27 +1,25 @@
 const { ethers, BigNumber } = require('ethers');
 const dotenv = require('dotenv');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
-const { sleep } = require('../utils/utils');
-const curvePoolABI = require('./curve.pool.abi.json');
-const susdABI = require('./susd.curve.pool.abi.json');
-const erc20ABI = require('./dai.erc20.abi.json');
+const curvePoolABI = require('./ABIs/curve.pool.abi.json');
+const susdABI = require('./ABIs/susd.curve.pool.abi.json');
+const erc20ABI = require('./ABIs/dai.erc20.abi.json');
 const fs = require('fs');
-const { isSetIterator } = require('util/types');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-const pool = ['0x4807862AA8b2bF68830e4C8dc86D0e9A998e085a', 'erc20ABI'];
+
 
 
 /// for (pool) returns [poolTokens]
 async function getPoolTokens(pool) {
     const poolTokens = [];
     let contract = undefined;
-    if (pool[1] === 'susdABI') {
-        contract = new ethers.Contract(pool[0], susdABI, web3Provider);
+    if (pool['abi'] === 'susdABI') {
+        contract = new ethers.Contract(pool['poolAddress'], susdABI, web3Provider);
     }
-    else if (pool[1] === 'erc20ABI') {
-        contract = new ethers.Contract(pool[0], curvePoolABI, web3Provider);
+    else if (pool['abi'] === 'erc20ABI') {
+        contract = new ethers.Contract(pool['poolAddress'], curvePoolABI, web3Provider);
     }
     let inRange = true;
     let range = 0;
@@ -103,7 +101,7 @@ function blockList(rangeData) {
     return blockNumbersForRange;
 }
 
-async function main() {
+async function FetchHistory(pool) {
     if (!RPC_URL) {
         throw new Error('Could not find RPC_URL env variable');
     }
@@ -111,8 +109,8 @@ async function main() {
 
 
     /// function variables
-    let poolAddress = pool[0];
-    const historyFileName = `./src/data/${poolAddress}_curve.csv`;
+    let poolAddress = pool['poolAddress'];
+    const historyFileName = `./src/data/${pool['poolName']}_${poolAddress}_curve.csv`;
     const stepBlock = 5000;
     let poolTokens = undefined;
     let poolSymbols = [];
@@ -202,7 +200,7 @@ async function main() {
                     }
                     ////substracting tokens leaving the pool
                     if (rangeData[j][token]['from'][currBlock]) {
-                        delta = delta.add(rangeData[j][token]['from'][currBlock]);
+                        delta = delta.sub(rangeData[j][token]['from'][currBlock]);
                     }
                     const newValue = oldValue.add(delta);
                     //push to array
@@ -223,4 +221,4 @@ async function main() {
     console.log('CURVE HistoryFetcher: end');
 }
 
-main();
+module.exports = { FetchHistory };
