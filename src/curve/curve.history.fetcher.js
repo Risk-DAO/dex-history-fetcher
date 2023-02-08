@@ -56,17 +56,23 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange) {
     const filterTo = contract.filters.Transfer(null, poolAddress);
 
     const fromEvents = await contract.queryFilter(filterFrom, startBlock, lastBlock);
-
+    console.log('fromEvents', fromEvents);
     const toEvents = await contract.queryFilter(filterTo, startBlock, lastBlock);
-
+    console.log('toEvents', toEvents);
     for (let i = 0; i < fromEvents.length; i++) {
-        results[tokenAddress]['from'][fromEvents[i].blockNumber] = fromEvents[i].args[2];
+        if (!results[tokenAddress]['from'][fromEvents[i].blockNumber]) {
+            results[tokenAddress]['from'][fromEvents[i].blockNumber] = BigNumber.from(0);
+        }
+        results[tokenAddress]['from'][fromEvents[i].blockNumber] = results[tokenAddress]['from'][fromEvents[i].blockNumber].add(BigNumber.from(fromEvents[i].args[2]));
         if (!blockList.includes(fromEvents[i].blockNumber)) {
             blockList.push(fromEvents[i].blockNumber);
         }
     }
     for (let i = 0; i < toEvents.length; i++) {
-        results[tokenAddress]['to'][toEvents[i].blockNumber] = toEvents[i].args[2];
+        if (!results[tokenAddress]['to'][toEvents[i].blockNumber]) {
+            results[tokenAddress]['to'][toEvents[i].blockNumber] = BigNumber.from(0);
+        }
+        results[tokenAddress]['to'][toEvents[i].blockNumber] = results[tokenAddress]['to'][toEvents[i].blockNumber].add(BigNumber.from(toEvents[i].args[2]));
         if (!blockList.includes(toEvents[i].blockNumber)) {
             blockList.push(toEvents[i].blockNumber);
         }
@@ -122,17 +128,17 @@ async function FetchHistory(pool) {
     console.log('--- fetching pool tokens ---');
     try {
         poolTokens = await getPoolTokens(pool);
-        for(let i = 0; i < poolTokens.length; i++){
+        for (let i = 0; i < poolTokens.length; i++) {
             const contractForSymbol = new ethers.Contract(poolTokens[i], erc20ABI, web3Provider);
             const tokenSymbol = await contractForSymbol.symbol();
             poolSymbols.push(tokenSymbol);
         }
         console.log('Tokens found:', poolTokens.length);
-        for(let i = 0; i < poolSymbols.length; i++){
+        for (let i = 0; i < poolSymbols.length; i++) {
             console.log(poolSymbols[i]);
         }
         console.log('--- Pool tokens fetched ---');
-        
+
     }
     catch (error) {
         console.log('Could not fetch tokens');
