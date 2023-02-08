@@ -9,7 +9,7 @@ const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const { sleep } = require('../utils/utils');
 
 const RPC_URL = process.env.RPC_URL;
-
+const DATA_DIR = './data'
 /**
  * Fetch all liquidity history from UniswapV2 pairs
  * The pairs to fetch are read from the config file './uniswap.v2.config'
@@ -24,7 +24,7 @@ async function UniswapV2HistoryFetcher() {
 
     for(const pairKey of Object.keys(univ2Config.uniswapV2Pairs)) {
         console.log('Start fetching pair ' + pairKey);
-        await FetchHistoryForPair(web3Provider, pairKey, `./data/${pairKey}_uniswapv2.csv`);
+        await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/${pairKey}_uniswapv2.csv`);
         console.log('End fetching pair ' + pairKey);
     }
 
@@ -53,6 +53,9 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
     let stepBlock = initStepBlock;
 
     let startBlock = undefined;
+    if (!fs.existsSync(DATA_DIR)){
+        fs.mkdirSync(DATA_DIR);
+    }
     if(!fs.existsSync(historyFileName)) {
         fs.writeFileSync(historyFileName, `blocknumber,reserve_${pairInfo[0].symbol}_${pairInfo[0].address},reserve_${pairInfo[1].symbol}_${pairInfo[1].address}\n`);
     } else {
