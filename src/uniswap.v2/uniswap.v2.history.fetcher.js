@@ -1,5 +1,4 @@
 const { ethers } = require('ethers');
-const axios = require('axios');
 const fs = require('fs');
 const dotenv = require('dotenv');
 dotenv.config();
@@ -9,8 +8,8 @@ const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const { sleep } = require('../utils/utils');
 
 const RPC_URL = process.env.RPC_URL;
-const DATA_DIR = process.cwd() + '/data'
-const MINIMUM_TO_APPEND = process.env.MINIMUM_TO_APPEND || 5000
+const DATA_DIR = process.cwd() + '/data';
+const MINIMUM_TO_APPEND = process.env.MINIMUM_TO_APPEND || 5000;
 
 /**
  * Fetch all liquidity history from UniswapV2 pairs
