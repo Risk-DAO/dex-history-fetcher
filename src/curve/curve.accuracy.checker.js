@@ -16,7 +16,8 @@ async function main(historyFileName) {
     let accuracy = 0;
     if (fs.existsSync(historyFileName)) {
         fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
-        testInterval = Math.floor(fileContent.length / (numberOfTests));
+        testInterval = 1;
+        // testInterval = Math.floor(fileContent.length / (numberOfTests));
         if (testInterval === 0) {
             testInterval = 1;
         }
@@ -37,13 +38,13 @@ async function main(historyFileName) {
         const testResults = [];
         const line = fileContent[y].split(',');
         const blockNumber = Number(line[0]);
-        console.log('line', line);
-        console.log('blocknumber', blockNumber);
+        // console.log('line', line);
+        // console.log('blocknumber', blockNumber);
         for (let i = 0; i < 3; i++) {
             const r = await web3Provider.getStorageAt(threePoolAddr, bnPKeccak.add(i), blockNumber);
             const b = BigNumber.from(r);
             testResults.push(b);
-            console.log(i, ':', b.toString());
+            // console.log(i, ':', b.toString());
         }
         if (line[1] === testResults[0].toString()
             && line[2] === testResults[1].toString()
@@ -52,14 +53,27 @@ async function main(historyFileName) {
             if (!fs.existsSync('debug.csv')) {
                 let tokenHeaders = 'block, token1, token2, token3';
                 fs.writeFileSync('debug.csv', `${tokenHeaders}\n`);
+                fs.appendFileSync('debug.csv', 'faulty line:' + '\n');
+                fs.appendFileSync('debug.csv', line + '\n');
+                fs.appendFileSync('debug.csv', 'expected line:' + '\n');
+                fs.appendFileSync('debug.csv', `${blockNumber}, ${testResults[0]}, ${testResults[1]}, ${testResults[2]}`  + '\n');
+                fs.appendFileSync('debug.csv', '--------------------:' + '\n');
             }
             else{
+                fs.appendFileSync('debug.csv', 'faulty line:' + '\n');
                 fs.appendFileSync('debug.csv', line + '\n');
+                fs.appendFileSync('debug.csv', 'expected line:' + '\n');
+                fs.appendFileSync('debug.csv', `${blockNumber}, ${testResults[0]}, ${testResults[1]}, ${testResults[2]}`  + '\n');
+                fs.appendFileSync('debug.csv', '--------------------:' + '\n');
+
             }
         }
+        console.log('----------------------------');
+        console.log('test number', testCount, '/',numberOfTests);
+        console.log('blocknumber', blockNumber);
         console.log('file accuracy:', (accuracy / testCount) * 100, '%');
         console.log('accurate count:', accuracy);
-        console.log('testCount:', testCount);
+        console.log('Step:', testInterval);
         console.log('----------------------------');
     }
     console.log('Final file accuracy:', accuracy / testCount, '%');
