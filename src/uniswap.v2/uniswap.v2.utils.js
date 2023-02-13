@@ -52,7 +52,7 @@ async function getUniV2DataForBlockNumber(dataDir, fromSymbol, toSymbol, targetB
 
 
     let first = true;
-    let selectedValue = {};
+    let selectedValue = null;
     for await (const line of rl) {
         if(first) {
             first = false;
@@ -61,6 +61,15 @@ async function getUniV2DataForBlockNumber(dataDir, fromSymbol, toSymbol, targetB
             const blockNumber = Number(splitted[0]);
             const reserve0 = splitted[1];
             const reserve1 = splitted[2];
+
+            // init selected value with first line
+            if(!selectedValue) {
+                selectedValue = {
+                    blockNumber,
+                    reserve0,
+                    reserve1
+                };
+            }
 
             if(blockNumber == targetBlockNumber) {
                 // stop loop we found the exact block number
