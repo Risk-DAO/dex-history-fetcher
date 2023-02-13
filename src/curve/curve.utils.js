@@ -23,8 +23,9 @@ async function getCurvePriceAndLiquidity(dataDir, poolName, fromSymbol, toSymbol
     }
     console.log('reservesBigIntWei:', reservesBigIntWei);
 
-    const baseGetReturn = get_return(indexOfFrom, indexOfTo, BigInt(1e18), reservesBigIntWei, liquidityAtBlock.amplificationFactor);
-    const normalizedBasePrice = normalize(BigNumber.from(baseGetReturn), 18);
+    const baseQty = BigInt(1e10);
+    const baseGetReturn = get_return(indexOfFrom, indexOfTo, baseQty, reservesBigIntWei, liquidityAtBlock.amplificationFactor);
+    const normalizedBasePrice = normalize(BigNumber.from(baseGetReturn), 18) * 1e8;
     console.log(`getCurvePriceAndLiquidity: 1 ${fromSymbol} = ${normalizedBasePrice} ${toSymbol} at block ${liquidityAtBlock.blockNumber}`);
 
     const result = {
@@ -41,7 +42,7 @@ async function getCurvePriceAndLiquidity(dataDir, poolName, fromSymbol, toSymbol
         const targetSlippage = i/100;
         const targetPrice = normalizedBasePrice - (normalizedBasePrice * targetSlippage);
         console.log(`Computing liquidity for ${i}% slippage`);
-        const amountOfFromForSlippage = computeLiquidityForSlippageCurvePool(fromSymbol, toSymbol, BigInt(1e18), targetPrice, reservesBigIntWei, indexOfFrom, indexOfTo, liquidityAtBlock.amplificationFactor);
+        const amountOfFromForSlippage = computeLiquidityForSlippageCurvePool(fromSymbol, toSymbol, baseQty, targetPrice, reservesBigIntWei, indexOfFrom, indexOfTo, liquidityAtBlock.amplificationFactor);
         result.slippageMap[i] = normalize(BigNumber.from(amountOfFromForSlippage), 18);
     }
 
@@ -168,46 +169,43 @@ function getCurveDataFile(dataDir, poolName) {
 function computeLiquidityForSlippageCurvePool(fromSymbol, toSymbol, baseQty, targetPrice, reserves, i, j, amplificationFactor) {
     let low = undefined;
     let high = undefined;
-    let mustContinue = true;
     let qtyFrom = baseQty * 2n;
-    let lastNormalizedFrom = normalize(BigNumber.from(qtyFrom), 18);
-    while(mustContinue) {
+    const exitBoundsDiff = 0.01/100; // exit binary search when low and high bound have less than this amount difference
+    // eslint-disable-next-line no-constant-condition
+    while(true) {
         const qtyTo = get_return(i, j, qtyFrom, reserves, amplificationFactor);
         const normalizedFrom = normalize(BigNumber.from(qtyFrom), 18);
         const normalizedTo = normalize(BigNumber.from(qtyTo), 18);
         const currentPrice = normalizedTo / normalizedFrom;
-        const lowSym = low ? normalize(BigNumber.from(low), 18) : '0';
-        const highSym = high ? normalize(BigNumber.from(high), 18) : '+∞';
-        // console.log(`DAI Qty: [${lowSym} <-> ${highSym}]. Current price: 1 ${fromSymbol} = ${currentPrice} ${toSymbol}, targetPrice: ${targetPrice}. Try qty: ${normalizedFrom} ${fromSymbol} = ${normalizedTo} ${toSymbol}`);
 
-        if(low && high && Math.abs(lastNormalizedFrom - normalizedFrom) < 10) {
-            mustContinue = false;
-            return qtyFrom;
-        } else {
-            lastNormalizedFrom = normalizedFrom;
-
-            if (currentPrice > targetPrice) {
-                // current price too high, must increase qtyFrom
-                low = qtyFrom;
-
-                if(!high) {
-                    // if high is undefined, just double value
-                    qtyFrom = qtyFrom * 2n;
-                } else {
-                    qtyFrom = qtyFrom + ((high - low) / 2n);
-                }
-            } else {
-                // current price too low, must decrease qtyFrom
-                high = qtyFrom;
-
-                if(!low) {
-                    // if low is undefined, just divide by 2 value
-                    qtyFrom = qtyFrom / 2n;
-                } else {
-                    qtyFrom = qtyFrom - ((high - low) / 2n);
-                }
+        const variation = (Number(high) / Number(low)) - 1;
+        // console.log(`DAI Qty: [${low ? normalize(BigNumber.from(low), 18) : '0'} <-> ${high ? normalize(BigNumber.from(high), 18) : '+∞'}]. Current price: 1 ${fromSymbol} = ${currentPrice} ${toSymbol}, targetPrice: ${targetPrice}. Try qty: ${normalizedFrom} ${fromSymbol} = ${normalizedTo} ${toSymbol}. variation: ${variation * 100}%`);
+        if(low && high) {
+            if(variation < exitBoundsDiff) {
+                return qtyFrom;
             }
+        } 
 
+        if (currentPrice > targetPrice) {
+            // current price too high, must increase qtyFrom
+            low = qtyFrom;
+
+            if(!high) {
+                // if high is undefined, just double next try qty
+                qtyFrom = qtyFrom * 2n;
+            } else {
+                qtyFrom = qtyFrom + ((high - low) / 2n);
+            }
+        } else {
+            // current price too low, must decrease qtyFrom
+            high = qtyFrom;
+
+            if(!low) {
+                // if low is undefined, next try qty = qty / 2
+                qtyFrom = qtyFrom / 2n;
+            } else {
+                qtyFrom = qtyFrom - ((high - low) / 2n);
+            }
         }
     }
 }
