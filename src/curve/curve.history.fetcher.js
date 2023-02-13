@@ -63,7 +63,6 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange) {
             results[tokenAddress]['from'][fromEvents[i].blockNumber] = BigNumber.from(0);
         }
         results[tokenAddress]['from'][fromEvents[i].blockNumber] = results[tokenAddress]['from'][fromEvents[i].blockNumber].add(BigNumber.from(fromEvents[i].args[2]));
-        console.log('from', fromEvents[i].args[2].toString());
         if (!blockList.includes(fromEvents[i].blockNumber)) {
             blockList.push(fromEvents[i].blockNumber);
         }
@@ -73,7 +72,6 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange) {
             results[tokenAddress]['to'][toEvents[i].blockNumber] = BigNumber.from(0);
         }
         results[tokenAddress]['to'][toEvents[i].blockNumber] = results[tokenAddress]['to'][toEvents[i].blockNumber].add(BigNumber.from(toEvents[i].args[2]));
-        console.log('to', toEvents[i].args[2].toString());
         if (!blockList.includes(toEvents[i].blockNumber)) {
             blockList.push(toEvents[i].blockNumber);
         }
