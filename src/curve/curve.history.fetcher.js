@@ -119,7 +119,7 @@ async function FetchHistory(pool) {
     /// function variables
     let poolAddress = pool['poolAddress'];
     const historyFileName = `./src/data/${pool['poolName']}_${poolAddress}_curve.csv`;
-    const stepBlock = 1;
+    const stepBlock = 20000;
     let poolTokens = undefined;
     let poolSymbols = [];
     let startBlock = undefined;
