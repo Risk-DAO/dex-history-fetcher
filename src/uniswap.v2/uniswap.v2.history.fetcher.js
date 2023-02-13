@@ -52,7 +52,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
     const pairContract = new ethers.Contract(pairAddress, univ2Config.uniswapV2PairABI, web3Provider);
     const currentBlock = await web3Provider.getBlockNumber();
 
-    const initStepBlock = 5000;
+    const initStepBlock = 50000;
     let stepBlock = initStepBlock;
 
     let startBlock = undefined;
