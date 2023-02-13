@@ -1,14 +1,16 @@
 const { ethers } = require('ethers');
-const axios = require('axios');
 const fs = require('fs');
 const dotenv = require('dotenv');
 dotenv.config();
 
 const univ2Config = require('./uniswap.v2.config');
+const { tokens } = require('../global.config');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const { sleep } = require('../utils/utils');
 
 const RPC_URL = process.env.RPC_URL;
+const DATA_DIR = process.cwd() + '/data';
+const MINIMUM_TO_APPEND = process.env.MINIMUM_TO_APPEND || 5000;
 
 /**
  * Fetch all liquidity history from UniswapV2 pairs
@@ -22,16 +24,14 @@ async function UniswapV2HistoryFetcher() {
     console.log('UniswapV2HistoryFetcher: starting');
     const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 
-    for(const pairKey of Object.keys(univ2Config.uniswapV2Pairs)) {
+    for(const pairKey of univ2Config.uniswapV2Pairs) {
         console.log('Start fetching pair ' + pairKey);
-        await FetchHistoryForPair(web3Provider, pairKey, `./data/${pairKey}_uniswapv2.csv`);
+        await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/${pairKey}_uniswapv2.csv`);
         console.log('End fetching pair ' + pairKey);
     }
 
     console.log('UniswapV2HistoryFetcher: ending');
 }
-
-UniswapV2HistoryFetcher();
 
 /**
  * Fetches all history for a uniswap v2 pair (a pool)
@@ -42,19 +42,25 @@ UniswapV2HistoryFetcher();
  * @param {string} pairKey
  */
 async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
-    const pairInfo = univ2Config.uniswapV2Pairs[pairKey];
+    const token0Symbol = pairKey.split('-')[0];
+    const token0Address = tokens[token0Symbol].address;
+    const token1Symbol = pairKey.split('-')[1];
+    const token1Address = tokens[token1Symbol].address;
     const factoryContract = new ethers.Contract(univ2Config.uniswapV2FactoryAddress, univ2Config.uniswapV2FactoryABI, web3Provider);
-    const pairAddress = await factoryContract.getPair(pairInfo[0].address, pairInfo[1].address);
+    const pairAddress = await factoryContract.getPair(token0Address, token1Address);
 
     const pairContract = new ethers.Contract(pairAddress, univ2Config.uniswapV2PairABI, web3Provider);
     const currentBlock = await web3Provider.getBlockNumber();
 
-    const initStepBlock = 5000;
+    const initStepBlock = 50000;
     let stepBlock = initStepBlock;
 
     let startBlock = undefined;
+    if (!fs.existsSync(DATA_DIR)){
+        fs.mkdirSync(DATA_DIR);
+    }
     if(!fs.existsSync(historyFileName)) {
-        fs.writeFileSync(historyFileName, `blocknumber,reserve_${pairInfo[0].symbol}_${pairInfo[0].address},reserve_${pairInfo[1].symbol}_${pairInfo[1].address}\n`);
+        fs.writeFileSync(historyFileName, `blocknumber,reserve_${token0Symbol}_${token0Address},reserve_${token1Symbol}_${token1Address}\n`);
     } else {
         const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
         const lastLine = fileContent[fileContent.length-2];
@@ -115,7 +121,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
 
         console.log(`FetchHistoryForPair[${pairKey}]: from ${fromBlock} to ${toBlock}`);
         
-        if(liquidityValues.length >= 5000) {
+        if(liquidityValues.length >= MINIMUM_TO_APPEND) {
             const textToAppend = liquidityValues.map(_ => `${_.blockNumber},${_.reserve0},${_.reserve1}`);
             fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
             liquidityValues = [];
@@ -127,3 +133,5 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
         fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
     }
 }
+
+UniswapV2HistoryFetcher();
