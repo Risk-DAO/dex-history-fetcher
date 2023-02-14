@@ -2,6 +2,8 @@ const { ethers, BigNumber } = require('ethers');
 const dotenv = require('dotenv');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const curvePoolABI = require('./ABIs/curve.pool.abi.json');
+const newParamsABI = require('./ABIs/newParams.abi.json');
+const rampAgammaABI = require('./ABIs/rampAgamma.abi.json');
 const susdABI = require('./ABIs/susd.curve.pool.abi.json');
 const erc20ABI = require('./ABIs/dai.erc20.abi.json');
 const curveConfig = require('./curve.config');
@@ -20,12 +22,30 @@ const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
  */
 async function fetchRampA(pool, fromBlock, toBlock) {
     const results = {};
-    const poolContract = new ethers.Contract(pool, curvePoolABI, web3Provider);
-    let events = await poolContract.queryFilter('RampA',fromBlock, toBlock);
-    for(let i = 0; i < events.length; i++){
-        results[events[i].blockNumber] = events[i].args['new_A'].toString();
+    if (pool.ampType === 'RampA') {
+        const poolContract = new ethers.Contract(pool.poolAddress, curvePoolABI, web3Provider);
+        let events = await poolContract.queryFilter(pool.ampType, fromBlock, toBlock);
+        for (let i = 0; i < events.length; i++) {
+            results[events[i].blockNumber] = events[i].args['new_A'].toString();
+        }
+        return results;
     }
-    return results; 
+    if (pool.ampType === 'NewParameters') {
+        const poolContract = new ethers.Contract(pool.poolAddress, newParamsABI, web3Provider);
+        let events = await poolContract.queryFilter(pool.ampType, fromBlock, toBlock);
+        for (let i = 0; i < events.length; i++) {
+            results[events[i].blockNumber] = events[i].args['A'].toString();
+        }
+        return results;
+    }
+    if (pool.ampType === 'RampAgamma') {
+        const poolContract = new ethers.Contract(pool.poolAddress, rampAgammaABI, web3Provider);
+        let events = await poolContract.queryFilter(pool.ampType, fromBlock, toBlock);
+        for (let i = 0; i < events.length; i++) {
+            results[events[i].blockNumber] = events[i].args['future_A'].toString();
+        }
+        return results;
+    }
 }
 
 
@@ -141,7 +161,7 @@ function blockList(rangeData, ampFactors) {
             concatenatedArrays.push(rangeData[y]['blockList'][z]);
         }
     }
-    for(const element in ampFactors){
+    for (const element in ampFactors) {
         concatenatedArrays.push(element);
     }
     let blockNumbersForRange = [... new Set(concatenatedArrays)];
@@ -230,7 +250,7 @@ async function FetchHistory(pool) {
         ///Fetch each token events and store them in rangeData
         const rangeData = await fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock);
         /// fetch amp factors modifications
-        const ampFactors = await fetchRampA(poolAddress, fromBlock, toBlock);
+        const ampFactors = await fetchRampA(pool, fromBlock, toBlock);
         /////Compute block numbers from blockList(s)
         const blockNumbersForRange = blockList(rangeData, ampFactors);
         /// Construct historical data for each blockNumbersForRange entry
@@ -239,11 +259,11 @@ async function FetchHistory(pool) {
             const currBlock = blockNumbersForRange[block];
             const arrayToPush = [];
             arrayToPush.push(currBlock);
-            if(currBlock in ampFactors){
+            if (currBlock in ampFactors) {
                 arrayToPush.push(ampFactors[currBlock]);
                 currentAmpFactor = ampFactors[currBlock];
             }
-            else{
+            else {
                 arrayToPush.push(currentAmpFactor);
             }
             for (let j = 0; j < poolTokens.length; j++) {
