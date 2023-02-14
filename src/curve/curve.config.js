@@ -8,7 +8,8 @@ const curvePairs = [
         poolAddress: '0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7',
         poolName: '3Pool',
         version: 1,
-        abi: 'erc20ABI'
+        abi: 'erc20ABI',
+        ampFactor: 1
     },
     {
         poolAddress: '0x4807862AA8b2bF68830e4C8dc86D0e9A998e085a',

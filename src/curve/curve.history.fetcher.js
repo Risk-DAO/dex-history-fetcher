@@ -10,7 +10,16 @@ dotenv.config();
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 
-
+//Getting rampA events
+async function fetchRampA(pool, fromBlock, toBlock) {
+    const results = {};
+    const poolContract = new ethers.Contract(pool, curvePoolABI, web3Provider);
+    let events = await poolContract.queryFilter('RampA',fromBlock, toBlock);
+    for(let i = 0; i < events.length; i++){
+        results[events[i].blockNumber] = events[i].args['new_A'].toString();
+    }
+    return results; 
+}
 
 /// for (pool) returns [poolTokens]
 async function getPoolTokens(pool) {
@@ -92,12 +101,15 @@ async function fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock) {
     return results;
 }
 
-function blockList(rangeData) {
+function blockList(rangeData, ampFactors) {
     const concatenatedArrays = [];
     for (let y = 0; y < rangeData.length; y++) {
         for (let z = 0; z < rangeData[y]['blockList'].length; z++) {
             concatenatedArrays.push(rangeData[y]['blockList'][z]);
         }
+    }
+    for(const element in ampFactors){
+        concatenatedArrays.push(element);
     }
     let blockNumbersForRange = [... new Set(concatenatedArrays)];
     blockNumbersForRange = blockNumbersForRange.sort((a, b) => {
@@ -123,6 +135,7 @@ async function FetchHistory(pool) {
     let startBlock = undefined;
     const currentBlock = await web3Provider.getBlockNumber();
     let lastBlockData = [];
+    let currentAmpFactor = pool.ampFactor;
 
     /// Fetching tokens in pool
     console.log('--- fetching pool tokens ---');
@@ -156,7 +169,8 @@ async function FetchHistory(pool) {
         console.log('startblock from contract is:', startBlock);
         const initialArray = [];
         initialArray.push(startBlock);
-        let tokenHeaders = 'blocknumber';
+        let tokenHeaders = 'blocknumber, ampfactor';
+        initialArray.push(pool.ampFactor);
         for (let i = 0; i < poolTokens.length; i++) {
             initialArray.push('0');
             tokenHeaders += `,reserve_${poolSymbols[i]}_${poolTokens[i]}`;
@@ -177,17 +191,26 @@ async function FetchHistory(pool) {
         console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} -- blocks to go ${currentBlock - toBlock} -- calls to go ${Math.ceil((currentBlock - toBlock) / stepBlock)} `);
         ///Fetch each token events and store them in rangeData
         rangeData = await fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock);
+        /// fetch amp factors modifications
+        const ampFactors = await fetchRampA(poolAddress, fromBlock, toBlock);
         /////Compute block numbers from blockList(s)
-        blockNumbersForRange = blockList(rangeData);
+        blockNumbersForRange = blockList(rangeData, ampFactors);
         /// Construct historical data for each blockNumbersForRange entry
         for (let block = 0; block < blockNumbersForRange.length; block++) {
             ///Take first block of blockNumberForRange and compute differences
             const currBlock = blockNumbersForRange[block];
             const arrayToPush = [];
             arrayToPush.push(currBlock);
+            if(currBlock in ampFactors){
+                arrayToPush.push(ampFactors[currBlock]);
+                currentAmpFactor = ampFactors[currBlock];
+            }
+            else{
+                arrayToPush.push(currentAmpFactor);
+            }
             for (let j = 0; j < poolTokens.length; j++) {
                 const token = poolTokens[j];
-                const tokenIndex = j + 1;
+                const tokenIndex = j + 2;
                 if (token === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' || (token === '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' && pool['wethIsEth'] === true)) {
                     const value = await web3Provider.getBalance(pool['poolAddress'], currBlock);
                     arrayToPush.push(value.toString());
