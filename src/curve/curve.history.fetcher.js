@@ -11,6 +11,13 @@ const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 
 //Getting rampA events
+/**
+ * for(pool, fromBlock, toBlock) returns {results}
+ * @param {string} pool 
+ * @param {number} fromBlock 
+ * @param {number} toBlock 
+ * @returns 
+ */
 async function fetchRampA(pool, fromBlock, toBlock) {
     const results = {};
     const poolContract = new ethers.Contract(pool, curvePoolABI, web3Provider);
@@ -21,7 +28,12 @@ async function fetchRampA(pool, fromBlock, toBlock) {
     return results; 
 }
 
-/// for (pool) returns [poolTokens]
+
+/**
+ * for (pool) returns [poolTokens]
+ * @param {{}} pool 
+ * @returns [poolTokens]
+ */
 async function getPoolTokens(pool) {
     const poolTokens = [];
     let contract = undefined;
@@ -48,7 +60,14 @@ async function getPoolTokens(pool) {
     return poolTokens;
 }
 
-/// for (tokenAddress), (pooladdress) and [blockrange] returns historical data and blocklist
+
+/**
+ * for (tokenAddress), (pooladdress) and [blockrange] returns historical data and blocklist
+ * @param {string} tokenAddress 
+ * @param {string} poolAddress 
+ * @param {[]} blockRange 
+ * @returns []
+ */
 async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange) {
     const contract = new ethers.Contract(tokenAddress, erc20ABI, web3Provider);
     const startBlock = blockRange[0];
@@ -90,8 +109,16 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange) {
     return results;
 }
 
+/**
+ * takes [poolTokens], poolAddress, fromBlock and toBlock and returns events for given blocks
+ * @param {*} poolTokens 
+ * @param {*} poolAddress 
+ * @param {*} fromBlock 
+ * @param {*} toBlock 
+ * @returns 
+ */
 async function fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock) {
-    results = [];
+    const results = [];
     for (let i = 0; i < poolTokens.length; i++) {
         console.log(`token ${i + 1}/${poolTokens.length}`);
         const tokenData = await getTokenBalancesInRange(poolTokens[i], poolAddress, [fromBlock, toBlock])
@@ -101,6 +128,12 @@ async function fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock) {
     return results;
 }
 
+/**
+ * takes token events and ampfactors events and return consolidated blocklist
+ * @param {*} rangeData 
+ * @param {*} ampFactors 
+ * @returns 
+ */
 function blockList(rangeData, ampFactors) {
     const concatenatedArrays = [];
     for (let y = 0; y < rangeData.length; y++) {
@@ -118,6 +151,10 @@ function blockList(rangeData, ampFactors) {
     return blockNumbersForRange;
 }
 
+/**
+ * Takes a pool from curve.config.js and outputs liquidity file in /data
+ * @param {{}} pool 
+ */
 async function FetchHistory(pool) {
     if (!RPC_URL) {
         throw new Error('Could not find RPC_URL env variable');
@@ -191,11 +228,11 @@ async function FetchHistory(pool) {
         }
         console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} -- blocks to go ${currentBlock - toBlock} -- calls to go ${Math.ceil((currentBlock - toBlock) / stepBlock)} `);
         ///Fetch each token events and store them in rangeData
-        rangeData = await fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock);
+        const rangeData = await fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock);
         /// fetch amp factors modifications
         const ampFactors = await fetchRampA(poolAddress, fromBlock, toBlock);
         /////Compute block numbers from blockList(s)
-        blockNumbersForRange = blockList(rangeData, ampFactors);
+        const blockNumbersForRange = blockList(rangeData, ampFactors);
         /// Construct historical data for each blockNumbersForRange entry
         for (let block = 0; block < blockNumbersForRange.length; block++) {
             ///Take first block of blockNumberForRange and compute differences
@@ -250,4 +287,3 @@ async function FetchHistory(pool) {
 }
 
 module.exports = { FetchHistory };
-FetchHistory(curveConfig.curvePairs[0]);
