@@ -162,6 +162,7 @@ async function FetchHistory(pool) {
         const lastLine = fileContent[fileContent.length - 2];
         lastBlockData = lastLine.split(',');
         startBlock = Number(lastBlockData[0]) + 1;
+        currentAmpFactor = lastBlockData[1];
         console.log('startblock from file is:', startBlock);
     }
     else {
