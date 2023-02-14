@@ -19,6 +19,14 @@ async function getUniswapAveragePriceAndLiquidity(dataDir, fromSymbol, toSymbol,
     return result;
 }
 
+/**
+ * 
+ * @param {string} dataDir 
+ * @param {string} fromSymbol 
+ * @param {string} toSymbol 
+ * @param {number} targetBlockNumber 
+ * @returns 
+ */
 async function getUniswapPriceAndLiquidity(dataDir, fromSymbol, toSymbol, targetBlockNumber) {
     const liquidityAtBlock = await getUniV2DataForBlockNumber(dataDir, fromSymbol, toSymbol, targetBlockNumber);
     const result = computePriceAndLiquidity(fromSymbol, toSymbol, liquidityAtBlock);
@@ -273,11 +281,11 @@ function computeLiquidityUniV2Pool(fromSymbol, fromReserve, toSymbol, toReserve,
 
 module.exports = { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity };
 
-async function test() {
-    // computeLiquidityUniV2Pool('ETH', 28345.5, 'USDC', 43920629, 10/100 );
-    const start = Date.now();
-    console.log(await getUniswapAveragePriceAndLiquidity('./data', 'ETH', 'USDC', 10000000, 18000000));
-    console.log('duration', Date.now() - start);
-}
+// async function test() {
+//     // computeLiquidityUniV2Pool('ETH', 28345.5, 'USDC', 43920629, 10/100 );
+//     const start = Date.now();
+//     console.log(await getUniswapAveragePriceAndLiquidity('./data', 'ETH', 'USDC', 10000000, 18000000));
+//     console.log('duration', Date.now() - start);
+// }
 
-test();
+// test();

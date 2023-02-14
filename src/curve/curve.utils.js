@@ -7,6 +7,8 @@ const { BigNumber } = require('ethers');
 
 
 async function getCurvePriceAndLiquidity(dataDir, poolName, fromSymbol, toSymbol, targetBlockNumber) {
+    const start = Date.now();
+
     const liquidityAtBlock = await getCurveDataForBlockNumber(dataDir, poolName, targetBlockNumber);
 
     console.log(liquidityAtBlock);
@@ -21,7 +23,7 @@ async function getCurvePriceAndLiquidity(dataDir, poolName, fromSymbol, toSymbol
         const reserveInWei = reserve + ''.padEnd(18 - decimals, '0');
         reservesBigIntWei.push(BigInt(reserveInWei));
     }
-    console.log('reservesBigIntWei:', reservesBigIntWei);
+    // console.log('reservesBigIntWei:', reservesBigIntWei);
 
     const baseQty = BigInt(1e10);
     const baseGetReturn = get_return(indexOfFrom, indexOfTo, baseQty, reservesBigIntWei, liquidityAtBlock.amplificationFactor);
@@ -41,12 +43,13 @@ async function getCurvePriceAndLiquidity(dataDir, poolName, fromSymbol, toSymbol
     for(let i = 1; i < 100; i++) {
         const targetSlippage = i/100;
         const targetPrice = normalizedBasePrice - (normalizedBasePrice * targetSlippage);
-        console.log(`Computing liquidity for ${i}% slippage`);
+        // console.log(`Computing liquidity for ${i}% slippage`);
         const amountOfFromForSlippage = computeLiquidityForSlippageCurvePool(fromSymbol, toSymbol, baseQty, targetPrice, reservesBigIntWei, indexOfFrom, indexOfTo, liquidityAtBlock.amplificationFactor);
         result.slippageMap[i] = normalize(BigNumber.from(amountOfFromForSlippage), 18);
     }
 
-    console.log(result);
+    // console.log(result);
+    console.log('getCurvePriceAndLiquidity: duration for pool', poolName, ':', Date.now() - start);
     return result;
 }
 
@@ -298,27 +301,29 @@ function toWei(n) {
     return BigInt(n) * 10n **18n;
 }
 
-function test() {
-    getCurvePriceAndLiquidity('./data', '3pool', 'DAI', 'USDC', 15487);
-    // const daiQty = BigInt('226606265000000000000000000' + ''.padEnd(18 - 18, '0'));
-    // const usdcQty = BigInt('232457084000000' + ''.padEnd(18 - 6, '0'));
-    // const usdtQty = BigInt('77289259000000' + ''.padEnd(18 - 6, '0'));
-    // const A = 2000;
+module.exports = { getCurvePriceAndLiquidity };
 
-    // const reservePad = [
-    //     daiQty,
-    //     usdcQty,
-    //     usdtQty
-    // ];
+// function test() {
+//     getCurvePriceAndLiquidity('./data', '3pool', 'DAI', 'USDC', 15487);
+//     // const daiQty = BigInt('226606265000000000000000000' + ''.padEnd(18 - 18, '0'));
+//     // const usdcQty = BigInt('232457084000000' + ''.padEnd(18 - 6, '0'));
+//     // const usdtQty = BigInt('77289259000000' + ''.padEnd(18 - 6, '0'));
+//     // const A = 2000;
+
+//     // const reservePad = [
+//     //     daiQty,
+//     //     usdcQty,
+//     //     usdtQty
+//     // ];
 
 
-    // const tokenToExchange = 1;
-    // const r = getReturn(0, 1, toWei(tokenToExchange), reservePad, A);
-    // const norm = Number(r/(10n**18n));
-    // console.log(norm);
-    // const fees = 0.01/100;
-    // const feesVal = norm * fees;
-    // console.log(norm-feesVal);
-}
+//     // const tokenToExchange = 1;
+//     // const r = getReturn(0, 1, toWei(tokenToExchange), reservePad, A);
+//     // const norm = Number(r/(10n**18n));
+//     // console.log(norm);
+//     // const fees = 0.01/100;
+//     // const feesVal = norm * fees;
+//     // console.log(norm-feesVal);
+// }
 
-test();
+// test();

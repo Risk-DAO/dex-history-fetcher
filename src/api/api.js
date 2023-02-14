@@ -1,5 +1,6 @@
 const express = require('express');
 const fs = require('fs');
+const { getCurvePriceAndLiquidity } = require('../curve/curve.utils');
 const { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity } = require('../uniswap.v2/uniswap.v2.utils');
 const app = express();
 const port = 3000;
@@ -30,7 +31,7 @@ app.get('/api/available', (req, res) => {
     res.json(available);    
 });
 
-// getprice?platform=uniswapv2&from=ETH&to=USDC&blockNumber=124874157
+// getprice?platform=uniswapv2&from=ETH&to=USDC&blockNumber=124874157&poolName=3pool
 app.get('/api/getprice', async (req, res, next) => {
     try {
         const platform = req.query.platform;
@@ -47,6 +48,16 @@ app.get('/api/getprice', async (req, res, next) => {
             case 'uniswapv2':
                 res.json(await getUniswapPriceAndLiquidity(DATA_DIR, from, to, blockNumber));
                 break;
+            case 'curve': 
+            {
+                const poolName = req.query.poolName;
+                if(!poolName) {
+                    res.status(400).json({error: 'poolName required for curve'});
+                    next();
+                }
+                res.json(await getCurvePriceAndLiquidity(DATA_DIR, poolName, from, to, blockNumber));
+                break;
+            }
             default:
                 res.status(400).json({error: `Wrong platform: ${platform}`});
                 break;
