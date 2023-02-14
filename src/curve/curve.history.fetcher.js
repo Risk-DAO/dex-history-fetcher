@@ -31,7 +31,7 @@ async function fetchRampA(pool, fromBlock, toBlock) {
 
 /**
  * for (pool) returns [poolTokens]
- * @param {{}} pool 
+ * @param {{poolAddress: string, poolName: string, version: number, abi: string, ampFactor: number}} pool 
  * @returns [poolTokens]
  */
 async function getPoolTokens(pool) {
@@ -65,7 +65,7 @@ async function getPoolTokens(pool) {
  * for (tokenAddress), (pooladdress) and [blockrange] returns historical data and blocklist
  * @param {string} tokenAddress 
  * @param {string} poolAddress 
- * @param {[]} blockRange 
+ * @param {[number, number]} blockRange 
  * @returns []
  */
 async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange) {
@@ -111,10 +111,10 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange) {
 
 /**
  * takes [poolTokens], poolAddress, fromBlock and toBlock and returns events for given blocks
- * @param {*} poolTokens 
- * @param {*} poolAddress 
- * @param {*} fromBlock 
- * @param {*} toBlock 
+ * @param {string[]} poolTokens 
+ * @param {string} poolAddress 
+ * @param {number} fromBlock 
+ * @param {number} toBlock 
  * @returns 
  */
 async function fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock) {
@@ -130,8 +130,8 @@ async function fetchBlocks(poolTokens, poolAddress, fromBlock, toBlock) {
 
 /**
  * takes token events and ampfactors events and return consolidated blocklist
- * @param {*} rangeData 
- * @param {*} ampFactors 
+ * @param {{[key: string]: {to:{[blocknumber: number]: BigNumber}, from:{[blocknumber: number]: BigNumber}, blocklist: number[]}} rangeData 
+ * @param {{number: number}} ampFactors 
  * @returns 
  */
 function blockList(rangeData, ampFactors) {
@@ -153,7 +153,7 @@ function blockList(rangeData, ampFactors) {
 
 /**
  * Takes a pool from curve.config.js and outputs liquidity file in /data
- * @param {{}} pool 
+ * @param {{poolAddress: string, poolName: string, version: number, abi: string, ampFactor: number}} pool 
  */
 async function FetchHistory(pool) {
     if (!RPC_URL) {
