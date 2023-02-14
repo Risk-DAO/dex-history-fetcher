@@ -1,6 +1,6 @@
 const express = require('express');
 const fs = require('fs');
-const { getUniswapPriceAndLiquidity } = require('../uniswap.v2/uniswap.v2.utils');
+const { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity } = require('../uniswap.v2/uniswap.v2.utils');
 const app = express();
 const port = 3000;
 const DATA_DIR = process.cwd() + '/data';
@@ -36,11 +36,42 @@ app.get('/api/getprice', async (req, res, next) => {
         const platform = req.query.platform;
         const from = req.query.from;
         const to = req.query.to;
-        const blockNumber = req.query.blockNumber;
+        const blockNumber = Number(req.query.blockNumber);
+
+        if(!blockNumber) {
+            res.status(400).json({error: 'blockNumber required'});
+            next();
+        }
 
         switch(platform.toLowerCase()) {
             case 'uniswapv2':
                 res.json(await getUniswapPriceAndLiquidity(DATA_DIR, from, to, blockNumber));
+                break;
+            default:
+                res.status(400).json({error: `Wrong platform: ${platform}`});
+                break;
+        }
+    } catch(error) {
+        next(error);
+    }
+});
+
+// getprice?platform=uniswapv2&from=ETH&to=USDC&fromBlock=10008555&toBlock=11000000
+app.get('/api/getaverageprice', async (req, res, next) => {
+    try {
+        const platform = req.query.platform;
+        const from = req.query.from;
+        const to = req.query.to;
+        const fromBlock = Number(req.query.fromBlock);
+        const toBlock = Number(req.query.toBlock);
+
+        if(toBlock < fromBlock) {
+            res.status(400).json({error: 'toBlock must be greater than fromBlock'});
+            next();
+        }
+        switch(platform.toLowerCase()) {
+            case 'uniswapv2':
+                res.json(await getUniswapAveragePriceAndLiquidity(DATA_DIR, from, to, fromBlock, toBlock));
                 break;
             default:
                 res.status(400).json({error: `Wrong platform: ${platform}`});
