@@ -58,7 +58,7 @@ const curvePairs = [
         version: 2,
         abi: 'erc20ABI',
         ampType: 'RampAgamma',
-        ampFactor: 0
+        ampFactor: 400000 
     },
     {
         poolAddress: '0xdcef968d416a41cdac0ed8702fac8128a64241a2',
@@ -91,7 +91,7 @@ const curvePairs = [
         version: 2,
         abi: 'erc20ABI',
         ampType: 'RampAgamma',
-        ampFactor: 0
+        ampFactor: 400000 
     },
     {
         poolAddress: '0x50f3752289e1456bfa505afd37b241bca23e685d',
@@ -99,7 +99,7 @@ const curvePairs = [
         version: 2,
         abi: 'erc20ABI',
         ampType: 'RampAgamma',
-        ampFactor: 0
+        ampFactor: 400000 
     },
     {
         poolAddress: '0x9409280dc1e6d33ab7a8c6ec03e5763fb61772b5',
@@ -107,7 +107,7 @@ const curvePairs = [
         version: 2,
         abi: 'erc20ABI',
         ampType: 'RampAgamma',
-        ampFactor: 0
+        ampFactor: 400000
     },
     {
         poolAddress: '0x4149d1038575ce235e03e03b39487a80fd709d31',
@@ -115,7 +115,7 @@ const curvePairs = [
         version: 2,
         abi: 'erc20ABI',
         ampType: 'RampAgamma',
-        ampFactor: 0
+        ampFactor: 400000 
     },
     {
         poolAddress: '0xdc24316b9ae028f1497c275eb9192a3ea0f67022',
