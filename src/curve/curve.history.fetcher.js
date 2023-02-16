@@ -8,9 +8,32 @@ const susdABI = require('./ABIs/susd.curve.pool.abi.json');
 const erc20ABI = require('./ABIs/dai.erc20.abi.json');
 const curveConfig = require('./curve.config');
 const fs = require('fs');
+const { sleep } = require('../utils/utils');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
+
+async function main() {
+    const errors = [];
+
+    for (let i = 0; i < curveConfig.curvePairs.length; i++) {
+        try {
+            await FetchHistory(curveConfig.curvePairs[i]);
+        }
+        catch (error) {
+            errors.push(curveConfig.curvePairs[i].poolName);
+            console.log('error fetching pool', curveConfig.curvePairs[i].poolName);
+            console.log('error fetching pool', error);
+        }
+        await sleep(5000);
+    }
+    console.log('errorlog', errors);
+
+}
+
+
+
+main();
 
 //Getting rampA events
 /**
@@ -305,5 +328,3 @@ async function FetchHistory(pool) {
     console.log('CURVE HistoryFetcher: end');
     console.log('-------------------------------');
 }
-
-module.exports = { FetchHistory };
