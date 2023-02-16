@@ -21,12 +21,18 @@ async function UniswapV2HistoryFetcher() {
         throw new Error('Could not find RPC_URL env variable');
     }
 
+    
+    if(!fs.existsSync(`${DATA_DIR}/uniswapv2`)) {
+        fs.mkdirSync(`${DATA_DIR}/uniswapv2`);
+    }
+
+
     console.log('UniswapV2HistoryFetcher: starting');
     const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 
     for(const pairKey of univ2Config.uniswapV2Pairs) {
         console.log('Start fetching pair ' + pairKey);
-        await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/${pairKey}_uniswapv2.csv`);
+        await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`);
         console.log('End fetching pair ' + pairKey);
     }
 

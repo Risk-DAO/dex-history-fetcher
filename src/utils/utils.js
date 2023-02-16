@@ -2,7 +2,7 @@
 
 /**
  * 
- * @param {number} ms to sleep 
+ * @param {number} ms milliseconds to sleep 
  * @returns async promise
  */
 async function sleep(ms) {
