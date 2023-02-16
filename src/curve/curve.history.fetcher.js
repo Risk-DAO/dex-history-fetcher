@@ -1,11 +1,6 @@
 const { ethers, BigNumber } = require('ethers');
 const dotenv = require('dotenv');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
-const curvePoolABI = require('./ABIs/curve.pool.abi.json');
-const newParamsABI = require('./ABIs/newParams.abi.json');
-const rampAgammaABI = require('./ABIs/rampAgamma.abi.json');
-const susdABI = require('./ABIs/susd.curve.pool.abi.json');
-const erc20ABI = require('./ABIs/dai.erc20.abi.json');
 const curveConfig = require('./curve.config');
 const fs = require('fs');
 const { sleep } = require('../utils/utils');
@@ -46,7 +41,7 @@ main();
 async function fetchRampA(pool, fromBlock, toBlock) {
     const results = {};
     if (pool.ampType === 'RampA') {
-        const poolContract = new ethers.Contract(pool.poolAddress, curvePoolABI, web3Provider);
+        const poolContract = new ethers.Contract(pool.poolAddress, curveConfig.curvePoolAbi, web3Provider);
         let events = await poolContract.queryFilter(pool.ampType, fromBlock, toBlock);
         for (let i = 0; i < events.length; i++) {
             results[events[i].blockNumber] = events[i].args['new_A'].toString();
@@ -54,7 +49,7 @@ async function fetchRampA(pool, fromBlock, toBlock) {
         return results;
     }
     if (pool.ampType === 'NewParameters') {
-        const poolContract = new ethers.Contract(pool.poolAddress, newParamsABI, web3Provider);
+        const poolContract = new ethers.Contract(pool.poolAddress, curveConfig.newParamAbi, web3Provider);
         let events = await poolContract.queryFilter(pool.ampType, fromBlock, toBlock);
         for (let i = 0; i < events.length; i++) {
             results[events[i].blockNumber] = events[i].args['A'].toString();
@@ -62,7 +57,7 @@ async function fetchRampA(pool, fromBlock, toBlock) {
         return results;
     }
     if (pool.ampType === 'RampAgamma') {
-        const poolContract = new ethers.Contract(pool.poolAddress, rampAgammaABI, web3Provider);
+        const poolContract = new ethers.Contract(pool.poolAddress, curveConfig.rampAGammaAbi, web3Provider);
         let events = await poolContract.queryFilter(pool.ampType, fromBlock, toBlock);
         for (let i = 0; i < events.length; i++) {
             results[events[i].blockNumber] = events[i].args['future_A'].toString();
@@ -81,10 +76,10 @@ async function getPoolTokens(pool) {
     const poolTokens = [];
     let contract = undefined;
     if (pool['abi'] === 'susdABI') {
-        contract = new ethers.Contract(pool['poolAddress'], susdABI, web3Provider);
+        contract = new ethers.Contract(pool['poolAddress'], curveConfig.susdCurvePoolAbi, web3Provider);
     }
     else if (pool['abi'] === 'erc20ABI') {
-        contract = new ethers.Contract(pool['poolAddress'], curvePoolABI, web3Provider);
+        contract = new ethers.Contract(pool['poolAddress'], curveConfig.curvePoolAbi, web3Provider);
     }
     let inRange = true;
     let range = 0;
@@ -112,7 +107,7 @@ async function getPoolTokens(pool) {
  * @returns []
  */
 async function getTokenBalancesInRange(tokenAddress, poolAddress, blockRange) {
-    const contract = new ethers.Contract(tokenAddress, erc20ABI, web3Provider);
+    const contract = new ethers.Contract(tokenAddress, curveConfig.erc20Abi, web3Provider);
     const startBlock = blockRange[0];
     const lastBlock = blockRange[1];
     const blockList = [];
@@ -223,7 +218,7 @@ async function FetchHistory(pool) {
         poolTokens = await getPoolTokens(pool);
         console.log('Tokens found:', poolTokens.length);
         for (let i = 0; i < poolTokens.length; i++) {
-            const contractForSymbol = new ethers.Contract(poolTokens[i], erc20ABI, web3Provider);
+            const contractForSymbol = new ethers.Contract(poolTokens[i], curveConfig.erc20Abi, web3Provider);
             const tokenSymbol = await contractForSymbol.symbol();
             poolSymbols.push(tokenSymbol);
         }
