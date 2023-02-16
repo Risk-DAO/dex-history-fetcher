@@ -35,8 +35,6 @@ async function CurveHistoryFetcher() {
 
 }
 
-CurveHistoryFetcher();
-
 /**
  * Takes a pool from curve.config.js and outputs liquidity file in /data
  * @param {{poolAddress: string, poolName: string, version: number, abi: string, ampFactor: number}} pool 
@@ -50,7 +48,7 @@ async function FetchHistory(pool) {
 
 
     /// function variables
-    let poolAddress = pool['poolAddress'];
+    let poolAddress = pool.poolAddress;
     const historyFileName = `${DATA_DIR}/curve/${pool.poolName}_curve.csv`;
     const stepBlock = 20000;
     let tokenAddresses = undefined;
@@ -144,7 +142,8 @@ async function FetchHistory(pool) {
             for (let j = 0; j < tokenAddresses.length; j++) {
                 const token = tokenAddresses[j];
                 const tokenIndexInCsv = j + 2;
-                if (token.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' || (token.toLowerCase() === '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2' && pool.wethIsEth === true)) {
+                if (token.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' 
+                    || (token.toLowerCase() === '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2' && pool.wethIsEth === true)) {
                     // THIS NEEDS AN ARCHIVAL NODE
                     const value = await web3Provider.getBalance(pool.poolAddress, currBlock);
                     arrayToPush.push(value.toString());
@@ -193,7 +192,7 @@ async function getPoolTokens(pool) {
     let contract = new ethers.Contract(pool['poolAddress'], curveConfig.curvePoolAbi, web3Provider);
 
     // if the config state that the abi is susdABI, use susd curve pool abi
-    if (pool['abi'] === 'susdABI') {
+    if (pool.abi === 'susdABI') {
         contract = new ethers.Contract(pool['poolAddress'], curveConfig.susdCurvePoolAbi, web3Provider);
     }
 
@@ -221,34 +220,34 @@ async function getPoolTokens(pool) {
  * @param {string} pool 
  * @param {number} fromBlock 
  * @param {number} toBlock 
- * @returns 
+ * @returns {Promise<{[blockNumber: number]: number}>}
  */
 async function fetchRampA(pool, fromBlock, toBlock) {
     const results = {};
-    if (pool.ampType === 'RampA') {
-        const poolContract = new ethers.Contract(pool.poolAddress, curveConfig.curvePoolAbi, web3Provider);
-        let events = await poolContract.queryFilter(pool.ampType, fromBlock, toBlock);
-        for (let i = 0; i < events.length; i++) {
-            results[events[i].blockNumber] = events[i].args['new_A'].toString();
-        }
-        return results;
+    let poolContract = new ethers.Contract(pool.poolAddress, curveConfig.curvePoolAbi, web3Provider);
+    let argName = 'new_A';
+
+    switch (pool.ampType.toLowerCase()) {
+        case 'rampa':
+            // do nothing, this is the default values
+            break;
+        case 'newparameters':
+            poolContract = new ethers.Contract(pool.poolAddress, curveConfig.newParamAbi, web3Provider);
+            argName = 'A';
+            break;
+        case 'rampagamma':
+            poolContract = new ethers.Contract(pool.poolAddress, curveConfig.rampAGammaAbi, web3Provider);
+            argName = 'future_A';
+            break;
+        default: 
+            throw new Error('Invalid ampType:', pool.ampType);
     }
-    if (pool.ampType === 'NewParameters') {
-        const poolContract = new ethers.Contract(pool.poolAddress, curveConfig.newParamAbi, web3Provider);
-        let events = await poolContract.queryFilter(pool.ampType, fromBlock, toBlock);
-        for (let i = 0; i < events.length; i++) {
-            results[events[i].blockNumber] = events[i].args['A'].toString();
-        }
-        return results;
+    
+    const events = await poolContract.queryFilter(pool.ampType, fromBlock, toBlock);
+    for (let i = 0; i < events.length; i++) {
+        results[events[i].blockNumber] = events[i].args[argName].toString();
     }
-    if (pool.ampType === 'RampAgamma') {
-        const poolContract = new ethers.Contract(pool.poolAddress, curveConfig.rampAGammaAbi, web3Provider);
-        let events = await poolContract.queryFilter(pool.ampType, fromBlock, toBlock);
-        for (let i = 0; i < events.length; i++) {
-            results[events[i].blockNumber] = events[i].args['future_A'].toString();
-        }
-        return results;
-    }
+    return results;
 }
 
 /**
@@ -277,24 +276,24 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, fromBlock, toB
     const toEvents = await contract.queryFilter(filterTo, fromBlock, toBlock);
     for (let i = 0; i < fromEvents.length; i++) {
         const fromEvent = fromEvents[i];
-        const amountTransfered = fromEvent.args[2];
+        const amountTransfered = fromEvent.args[2]; // this is a big number
         if (!results[tokenAddress]['from'][fromEvent.blockNumber]) {
             results[tokenAddress]['from'][fromEvent.blockNumber] = BigNumber.from(0);
         }
 
-        results[tokenAddress]['from'][fromEvent.blockNumber] = results[tokenAddress]['from'][fromEvent.blockNumber].add(BigNumber.from(amountTransfered));
+        results[tokenAddress]['from'][fromEvent.blockNumber] = results[tokenAddress]['from'][fromEvent.blockNumber].add(amountTransfered);
         if (!blockList.includes(fromEvent.blockNumber)) {
             blockList.push(fromEvent.blockNumber);
         }
     }
     for (let i = 0; i < toEvents.length; i++) {
         const toEvent = toEvents[i];
-        const amountTransfered = toEvent.args[2];
+        const amountTransfered = toEvent.args[2]; // this is a big number
         if (!results[tokenAddress]['to'][toEvent.blockNumber]) {
             results[tokenAddress]['to'][toEvent.blockNumber] = BigNumber.from(0);
         }
 
-        results[tokenAddress]['to'][toEvent.blockNumber] = results[tokenAddress]['to'][toEvent.blockNumber].add(BigNumber.from(amountTransfered));
+        results[tokenAddress]['to'][toEvent.blockNumber] = results[tokenAddress]['to'][toEvent.blockNumber].add(amountTransfered);
         if (!blockList.includes(toEvent.blockNumber)) {
             blockList.push(toEvent.blockNumber);
         }
@@ -325,6 +324,8 @@ function getSortedDeduplicatedBlockList(rangeData, ampFactors) {
             deduplicatedBlockList.push(Number(blockToAdd));
         }
     }
-    deduplicatedBlockList.sort((a, b) => { return a - b; });
-    return deduplicatedBlockList;
+
+    return deduplicatedBlockList.sort((a, b) => { return a - b; });
 }
+
+CurveHistoryFetcher();
