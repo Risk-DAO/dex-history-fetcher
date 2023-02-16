@@ -13,8 +13,12 @@ const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 /**
  * the main entrypoint of the script, will run the fetch against all pool in the config
  */
-async function main() {
+async function CurveHistoryFetcher() {
     const errors = [];
+
+    if(!fs.existsSync(`${DATA_DIR}/curve`)) {
+        fs.mkdirSync(`${DATA_DIR}/curve`);
+    }
 
     for (let i = 0; i < curveConfig.curvePairs.length; i++) {
         try {
@@ -31,7 +35,7 @@ async function main() {
 
 }
 
-main();
+CurveHistoryFetcher();
 
 /**
  * Takes a pool from curve.config.js and outputs liquidity file in /data
@@ -47,7 +51,7 @@ async function FetchHistory(pool) {
 
     /// function variables
     let poolAddress = pool['poolAddress'];
-    const historyFileName = `${DATA_DIR}/${pool['poolName']}_${poolAddress}_curve.csv`;
+    const historyFileName = `${DATA_DIR}/curve/${pool.poolName}_curve.csv`;
     const stepBlock = 20000;
     let tokenAddresses = undefined;
     let poolSymbols = [];
