@@ -66,6 +66,16 @@ const uniswapV2Pairs = {
             "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         }, 
     ],    
+    "MKR-ETH": [
+        {
+            "symbol": "MKR",
+            "address": "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2",
+        },
+        {
+            "symbol": "ETH",
+            "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        },
+    ],   
     "UNI-USDC": [
         {
             "symbol": "UNI",
@@ -75,6 +85,16 @@ const uniswapV2Pairs = {
             "symbol": "USDC",
             "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         }, 
+    ],    
+    "UNI-ETH": [
+        {
+            "symbol": "UNI",
+            "address": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+        },
+        {
+            "symbol": "ETH",
+            "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        },
     ],    
     "MANA-USDC": [
         {
@@ -86,6 +106,16 @@ const uniswapV2Pairs = {
             "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         }, 
     ],  
+    "MANA-ETH": [
+        {
+            "symbol": "MANA",
+            "address": "0x0f5d2fb29fb7d3cfee444a200298f468908cc942",
+        },
+        {
+            "symbol": "ETH",
+            "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        },
+    ],  
     "SNX-USDC": [
         {
             "symbol": "SNX",
@@ -95,6 +125,16 @@ const uniswapV2Pairs = {
             "symbol": "USDC",
             "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         }, 
+    ], 
+    "SNX-ETH": [
+        {
+            "symbol": "SNX",
+            "address": "0xc011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f",
+        },
+        {
+            "symbol": "ETH",
+            "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        },
     ],
 
     
