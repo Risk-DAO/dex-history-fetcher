@@ -1,4 +1,5 @@
 const { BigNumber, utils } = require('ethers');
+const {tokens} = require('../global.config');
 
 /**
  * Normalize a integer value to a number
@@ -20,4 +21,14 @@ function normalize(amount, decimals) {
         return Number(utils.formatEther(norm));
     }
 }
-module.exports = { normalize };
+
+function getTokenSymbolByAddress(address) {
+    for(let [tokenSymbol, tokenConf] of Object.entries(tokens)) {
+        if(tokenConf.address.toLowerCase() == address.toLowerCase()) {
+            return tokenSymbol;
+        }
+    }
+
+    return null;
+}
+module.exports = { normalize, getTokenSymbolByAddress };
