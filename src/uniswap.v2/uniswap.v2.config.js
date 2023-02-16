@@ -55,7 +55,28 @@ const uniswapV2Pairs = {
             "symbol": "USDC",
             "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         }, 
+    ],    
+    "MKR-USDC": [
+        {
+            "symbol": "MKR",
+            "address": "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2",
+        },
+        {
+            "symbol": "USDC",
+            "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        }, 
+    ],    
+    "UNI-USDC": [
+        {
+            "symbol": "UNI",
+            "address": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+        },
+        {
+            "symbol": "USDC",
+            "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        }, 
     ],
+
     
 }
 
