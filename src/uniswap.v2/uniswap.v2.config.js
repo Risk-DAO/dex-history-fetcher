@@ -75,6 +75,26 @@ const uniswapV2Pairs = {
             "symbol": "USDC",
             "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         }, 
+    ],    
+    "MANA-USDC": [
+        {
+            "symbol": "MANA",
+            "address": "0x0f5d2fb29fb7d3cfee444a200298f468908cc942",
+        },
+        {
+            "symbol": "USDC",
+            "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        }, 
+    ],  
+    "SNX-USDC": [
+        {
+            "symbol": "SNX",
+            "address": "0xc011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f",
+        },
+        {
+            "symbol": "USDC",
+            "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        }, 
     ],
 
     
