@@ -4,7 +4,7 @@ const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const curveConfig = require('./curve.config');
 const fs = require('fs');
 const { sleep } = require('../utils/utils');
-const { getTokenSymbolByAddress } = require('../utils/token.utils');
+const { getTokenSymbolByAddress, getConfTokenBySymbol, normalize } = require('../utils/token.utils');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
@@ -20,19 +20,25 @@ async function CurveHistoryFetcher() {
         fs.mkdirSync(`${DATA_DIR}/curve`);
     }
 
+    const lastResults = {};
     for (let i = 0; i < curveConfig.curvePairs.length; i++) {
+        if(i > 0) {
+            await sleep(5000);
+        }
         try {
-            await FetchHistory(curveConfig.curvePairs[i]);
+            const curvePair = curveConfig.curvePairs[i];
+            const lastData = await FetchHistory(curvePair);
+            lastResults[curvePair.poolName] = lastData;
         }
         catch (error) {
             errors.push(curveConfig.curvePairs[i].poolName);
             console.log('error fetching pool', curveConfig.curvePairs[i].poolName);
             console.log('error fetching pool', error);
         }
-        await sleep(5000);
     }
-    console.log('errorlog', errors);
 
+    fs.writeFileSync(`${DATA_DIR}/curve/curve_pools_summary.json`, JSON.stringify(lastResults, null, 2));
+    console.log('errorlog', errors);
 }
 
 /**
@@ -50,7 +56,7 @@ async function FetchHistory(pool) {
     /// function variables
     let poolAddress = pool.poolAddress;
     const historyFileName = `${DATA_DIR}/curve/${pool.poolName}_curve.csv`;
-    const stepBlock = 20000;
+    const stepBlock = 100000;
     let tokenAddresses = undefined;
     let poolSymbols = [];
     let startBlock = undefined;
@@ -65,7 +71,7 @@ async function FetchHistory(pool) {
         for (let i = 0; i < tokenAddresses.length; i++) {
             const tokenSymbol = getTokenSymbolByAddress(tokenAddresses[i]);
             if(!tokenSymbol) {
-                throw new Error('Could not find token in conf with address:', tokenAddresses[i]);
+                throw new Error('Could not find token in conf with address:' + tokenAddresses[i]);
             }
 
             poolSymbols.push(tokenSymbol);
@@ -94,7 +100,7 @@ async function FetchHistory(pool) {
         console.log('startblock from contract is:', startBlock);
         const initialArray = [];
         initialArray.push(startBlock);
-        let tokenHeaders = 'blocknumber, ampfactor';
+        let tokenHeaders = 'blocknumber,ampfactor';
         initialArray.push(pool.ampFactor);
         for (let i = 0; i < tokenAddresses.length; i++) {
             initialArray.push('0');
@@ -180,6 +186,15 @@ async function FetchHistory(pool) {
     console.log('CURVE HistoryFetcher: reached last block:', currentBlock);
     console.log('CURVE HistoryFetcher: end');
     console.log('-------------------------------');
+
+    // return the last liquidity fetched for the pool summary
+    const lastLiquidityData = {};
+    for(let i = 0; i < poolSymbols.length; i++) {
+        const tokenConf = getConfTokenBySymbol(poolSymbols[i]);
+        const normalizedLiquidity = normalize(lastBlockData[i+2], tokenConf.decimals);
+        lastLiquidityData[poolSymbols[i]] = normalizedLiquidity;
+    }
+    return lastLiquidityData;
 }
 
 /**

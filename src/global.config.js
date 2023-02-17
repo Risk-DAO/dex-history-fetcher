@@ -99,6 +99,10 @@ const tokens = {
         decimals: 18,
         address: '0xae78736Cd615f374D3085123A210448E74Fc6393'
     },
+    '3Crv': {
+        decimals: 18,
+        address: '0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490'
+    }
 };
 
 module.exports = { tokens };
