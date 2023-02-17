@@ -38,12 +38,15 @@ async function CurveHistoryFetcher() {
     }
 
     fs.writeFileSync(`${DATA_DIR}/curve/curve_pools_summary.json`, JSON.stringify(lastResults, null, 2));
-    console.log('errorlog', errors);
+
+    if(errors.length > 1) {
+        console.log('errors:', errors);
+    }
 }
 
 /**
  * Takes a pool from curve.config.js and outputs liquidity file in /data
- * @param {{poolAddress: string, poolName: string, version: number, abi: string, ampFactor: number}} pool 
+ * @param {{poolAddress: string, poolName: string, version: number, abi: string, ampFactor: number, additionnalTransferEvents: {[symbol: string]: string[]}}} pool 
  */
 async function FetchHistory(pool) {
     if (!RPC_URL) {
@@ -119,12 +122,17 @@ async function FetchHistory(pool) {
         if (toBlock > currentBlock) {
             toBlock = currentBlock;
         }
-        console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} -- blocks to go ${currentBlock - toBlock} -- calls to go ${Math.ceil((currentBlock - toBlock) / stepBlock)} `);
+        console.log(`FetchHistory[${pool.poolName}]: Fetching transfer events from block ${fromBlock} to block ${toBlock}. ${toBlock-fromBlock+1} blocks will be fetched. Remaining blocks to fetch: ${currentBlock - fromBlock}`);
         // Fetch each token events and store them in rangeData
         const rangeData = [];
         for (let i = 0; i < tokenAddresses.length; i++) {
             // console.log(`token ${i + 1}/${tokenAddresses.length}`);
-            const tokenData = await getTokenBalancesInRange(tokenAddresses[i], poolAddress, fromBlock, toBlock);
+            const tokenSymbol = poolSymbols[i];
+            let additionnalTransferEvents = []; 
+            if(pool.additionnalTransferEvents && pool.additionnalTransferEvents[tokenSymbol]) {
+                additionnalTransferEvents = pool.additionnalTransferEvents[tokenSymbol];
+            }
+            const tokenData = await getTokenBalancesInRange(tokenAddresses[i], poolAddress, fromBlock, toBlock, additionnalTransferEvents);
             rangeData.push(tokenData);
         }
 
@@ -271,10 +279,11 @@ async function fetchRampA(pool, fromBlock, toBlock) {
  * @param {string} poolAddress 
  * @param {number} fromBlock
  * @param {number} toBlock
+ * @param {string[]} additionalTransferAddresses
  * @returns {Promise<{[key: string]: {to:{[blocknumber: number]: BigNumber}, from:{[blocknumber: number]: BigNumber}, blocklist: number[]}>} rangeData
  */
-async function getTokenBalancesInRange(tokenAddress, poolAddress, fromBlock, toBlock) {
-    const contract = new ethers.Contract(tokenAddress, curveConfig.erc20Abi, web3Provider);
+async function getTokenBalancesInRange(tokenAddress, poolAddress, fromBlock, toBlock, additionalTransferAddresses) {
+    let contract = new ethers.Contract(tokenAddress, curveConfig.erc20Abi, web3Provider);
     const blockList = [];
 
     const results = {
@@ -289,6 +298,18 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, fromBlock, toB
 
     const fromEvents = await contract.queryFilter(filterFrom, fromBlock, toBlock);
     const toEvents = await contract.queryFilter(filterTo, fromBlock, toBlock);
+    for(let i = 0; i < additionalTransferAddresses.length; i++) {
+        const additionnalContractAddress = additionalTransferAddresses[i];
+        contract = new ethers.Contract(additionnalContractAddress, curveConfig.erc20Abi, web3Provider);
+        const additionalFromEvents = await contract.queryFilter(filterFrom, fromBlock, toBlock);
+        const additionalToEvents = await contract.queryFilter(filterTo, fromBlock, toBlock);
+
+        fromEvents.push(...additionalFromEvents);
+        toEvents.push(...additionalToEvents);
+
+        console.log(`Added additional ${additionalFromEvents.length} fromEvents and ${additionalToEvents.length} toEvents`);
+    }
+
     for (let i = 0; i < fromEvents.length; i++) {
         const fromEvent = fromEvents[i];
         const amountTransfered = fromEvent.args[2]; // this is a big number
