@@ -6,6 +6,27 @@ const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 const curveConfig = require('./curve.config');
 
+async function historicalCoins(curvePoolAddress, blocknumber, coinCount) {
+    let abi = [
+        'function coins(int128 index)'
+    ];
+
+    // Create function call data -- eth_call
+    let iface = new ethers.utils.Interface(abi);
+    for(let i = 0; i < coinCount; i++) {
+        let data = iface.encodeFunctionData('coins', [i]);
+        // Get balance at a particular block -- usage of eth_call
+        let coinAddr = await web3Provider.call({
+            to: curvePoolAddress,
+            data: data,
+        }, blocknumber);
+
+        const decoded = ethers.utils.defaultAbiCoder.decode(['address'], coinAddr);
+        console.log(`at block ${blocknumber}, coin[${i}]: ${decoded.toString()}`);
+    }
+
+   
+}
 async function FetchTokenBalance(token, blocknumber, poolAddress = '0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7' /*default to 3pool*/ ) {
 
     const tokenContract = token;
@@ -26,11 +47,9 @@ async function FetchTokenBalance(token, blocknumber, poolAddress = '0xbebc44782c
     }, blocknumber);
 
     const decoded = ethers.utils.defaultAbiCoder.decode(['uint256'], balance);
-    console.log(decoded.toString());
+    // console.log(decoded.toString());
     return decoded.toString();
 }
-3314010044115397471026936
-3312979204115397471126936
 
 async function main(historyFileName) {
     const acceptableDeviation = 0.003;
@@ -158,7 +177,7 @@ async function main(historyFileName) {
 }
 
 async function test() {
-    const contract = new ethers.Contract('0x57Ab1ec28D129707052df4dF418D58a2D46d5f51', curveConfig.susdERC20Abi, web3Provider);
+    const contract = new ethers.Contract('0x57Ab1E02fEE23774580C119740129eAC7081e9D3', curveConfig.susdERC20Abi, web3Provider);
 
     const filterTo = contract.filters.Transfer(null, '0xa5407eae9ba41422680e2e00537571bcc53efbfd');
     // const filterIssued = contract.filters.Issued(null);
@@ -166,9 +185,15 @@ async function test() {
     const toEvents = await contract.queryFilter(filterTo, 9906598, 9906913);
     // const issuedEvent = await contract.queryFilter(filterIssued, 'earliest', 'latest');
     console.log(toEvents.length);
-    // console.log(issuedEvent.length);
-    await FetchTokenBalance('0x57Ab1ec28D129707052df4dF418D58a2D46d5f51', 9906904, '0xa5407eae9ba41422680e2e00537571bcc53efbfd');
-    await FetchTokenBalance('0x57Ab1ec28D129707052df4dF418D58a2D46d5f51', 9906913, '0xa5407eae9ba41422680e2e00537571bcc53efbfd');
+    // await FetchTokenBalance('0x57Ab1ec28D129707052df4dF418D58a2D46d5f51', 9906904, '0xa5407eae9ba41422680e2e00537571bcc53efbfd');
+    // await FetchTokenBalance('0x57Ab1ec28D129707052df4dF418D58a2D46d5f51', 9906913, '0xa5407eae9ba41422680e2e00537571bcc53efbfd');
+
+    // for(let i = 9906904; i <= 9906913; i++) {
+    //     const check = await FetchTokenBalance('0x57Ab1ec28D129707052df4dF418D58a2D46d5f51', i, '0xa5407eae9ba41422680e2e00537571bcc53efbfd');
+    //     console.log(`susd at block ${i}: ${check}`);
+    // }
+
+    // await historicalCoins('0xa5407eae9ba41422680e2e00537571bcc53efbfd', 9906913, 4);
 }
 
 // main('./src/data/3Pool_0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7_curve.csv');
