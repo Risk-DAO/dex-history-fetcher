@@ -1,7 +1,7 @@
 const tokens = {
     ETH: {
         decimals: 18,
-        address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2' // this is WETH
+        address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
     },
     WETH: {
         decimals: 18,
@@ -102,6 +102,10 @@ const tokens = {
     '3Crv': {
         decimals: 18,
         address: '0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490'
+    },
+    crvFRAX: {
+        decimals: 18,
+        address: '0x3175Df0976dFA876431C2E9eE6Bc45b65d3473CC'
     }
 };
 
