@@ -49,6 +49,9 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
     const pairContract = new ethers.Contract(pairAddress, univ2Config.uniswapV2PairABI, web3Provider);
     const currentBlock = await web3Provider.getBlockNumber();
 
+    const token0ContractAddress = (await pairContract.token0()).toLowerCase();
+    const token1ContractAddress = (await pairContract.token1()).toLowerCase();
+
     const initStepBlock = 5000;
     let stepBlock = initStepBlock;
 
@@ -72,6 +75,15 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
     console.log(`FetchHistoryForPair[${pairKey}]: start fetching data for ${currentBlock - startBlock} blocks to reach current block: ${currentBlock}`);
 
     let liquidityValues = [];
+    const storeLiquidityValues = (blockNumber, reserve0, reserve1) => {
+        const values = {
+            blockNumber, 
+            [token0ContractAddress]: reserve0, 
+            [token1ContractAddress]: reserve1
+        }
+        liquidityValues.push(values)
+    }
+
     for(let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += stepBlock) {
         let toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
         if(toBlock > currentBlock) {
@@ -95,22 +107,13 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
         
         for(let i = 1; i < events.length; i++) {
             const workingEvent = events[i];
-            
             if(workingEvent.blockNumber != previousEvent.blockNumber) {
-                liquidityValues.push({
-                    blockNumber: previousEvent.blockNumber,
-                    reserve0: previousEvent.args.reserve0.toString(),
-                    reserve1: previousEvent.args.reserve1.toString()
-                });
+                storeLiquidityValues(previousEvent.blockNumber,  workingEvent.args.reserve0.toString(), previousEvent.args.reserve1.toString());
             }
             
             if(i == events.length -1) {
                 // always save the last event
-                liquidityValues.push({
-                    blockNumber: workingEvent.blockNumber,
-                    reserve0: workingEvent.args.reserve0.toString(),
-                    reserve1: workingEvent.args.reserve1.toString()
-                });
+                storeLiquidityValues(previousEvent.blockNumber,  workingEvent.args.reserve0.toString(), previousEvent.args.reserve1.toString());
             }
 
             previousEvent = workingEvent;
@@ -119,14 +122,14 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
         console.log(`FetchHistoryForPair[${pairKey}]: from ${fromBlock} to ${toBlock}`);
         
         if(liquidityValues.length >= MINIMUM_TO_APPEND) {
-            const textToAppend = liquidityValues.map(_ => `${_.blockNumber},${_.reserve0},${_.reserve1}`);
+            const textToAppend = liquidityValues.map(_ => `${_.blockNumber},${_[pairInfo[0].address.toLowerCase()]},${_[pairInfo[1].address.toLowerCase()]}`);
             fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
             liquidityValues = [];
         }
     }
     
     if(liquidityValues.length > 0) {
-        const textToAppend = liquidityValues.map(_ => `${_.blockNumber},${_.reserve0},${_.reserve1}`);
+        const textToAppend = liquidityValues.map(_ => `${_.blockNumber},${_[pairInfo[0].address.toLowerCase()]},${_[pairInfo[1].address.toLowerCase()]}`);
         fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
     }
 }
