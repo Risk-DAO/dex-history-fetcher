@@ -57,7 +57,7 @@ async function getCurvePriceAndLiquidity(dataDir, poolName, fromSymbol, toSymbol
 async function getCurveDataForBlockNumber(dataDir, poolName, targetBlockNumber) {
     const filePath = getCurveDataFile(dataDir, poolName);
     if(!filePath) {
-        throw new Error(`Could not find pool data in ${dataDir}/${poolName} for curve`);
+        throw new Error(`Could not find pool data in ${dataDir}/curve/${poolName} for curve`);
     }
     
     const fileStream = fs.createReadStream(filePath);
@@ -148,7 +148,7 @@ async function getCurveDataForBlockNumber(dataDir, poolName, targetBlockNumber) 
 }
 
 function getCurveDataFile(dataDir, poolName) {
-    let path = `${dataDir}/${poolName}_curve.csv`;
+    let path = `${dataDir}/curve/${poolName}_curve.csv`;
 
     if(fs.existsSync(path)) {
         return path;
