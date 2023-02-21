@@ -2,7 +2,9 @@ const express = require('express');
 const fs = require('fs');
 const { getCurvePriceAndLiquidity } = require('../curve/curve.utils');
 const { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity } = require('../uniswap.v2/uniswap.v2.utils');
+var cors = require('cors');
 const app = express();
+app.use(cors());
 const port = process.env.API_PORT || 3000;
 const DATA_DIR = process.cwd() + '/data';
 
