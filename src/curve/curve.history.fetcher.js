@@ -14,33 +14,38 @@ const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
  * the main entrypoint of the script, will run the fetch against all pool in the config
  */
 async function CurveHistoryFetcher() {
-    const errors = [];
+    // eslint-disable-next-line no-constant-condition
+    while(true) {
+        const errors = [];
 
-    if(!fs.existsSync(`${DATA_DIR}/curve`)) {
-        fs.mkdirSync(`${DATA_DIR}/curve`);
-    }
-
-    const lastResults = {};
-    for (let i = 0; i < curveConfig.curvePairs.length; i++) {
-        if(i > 0) {
-            await sleep(5000);
+        if(!fs.existsSync(`${DATA_DIR}/curve`)) {
+            fs.mkdirSync(`${DATA_DIR}/curve`);
         }
-        try {
-            const curvePair = curveConfig.curvePairs[i];
-            const lastData = await FetchHistory(curvePair);
-            lastResults[curvePair.poolName] = lastData;
-        }
-        catch (error) {
-            errors.push(curveConfig.curvePairs[i].poolName);
-            console.log('error fetching pool', curveConfig.curvePairs[i].poolName);
-            console.log('error fetching pool', error);
-        }
-    }
 
-    fs.writeFileSync(`${DATA_DIR}/curve/curve_pools_summary.json`, JSON.stringify(lastResults, null, 2));
+        const lastResults = {};
+        for (let i = 0; i < curveConfig.curvePairs.length; i++) {
+            if(i > 0) {
+                await sleep(5000);
+            }
+            try {
+                const curvePair = curveConfig.curvePairs[i];
+                const lastData = await FetchHistory(curvePair);
+                lastResults[curvePair.poolName] = lastData;
+            }
+            catch (error) {
+                errors.push(curveConfig.curvePairs[i].poolName);
+                console.log('error fetching pool', curveConfig.curvePairs[i].poolName);
+                console.log('error fetching pool', error);
+            }
+        }
 
-    if(errors.length > 1) {
-        console.log('errors:', errors);
+        fs.writeFileSync(`${DATA_DIR}/curve/curve_pools_summary.json`, JSON.stringify(lastResults, null, 2));
+
+        if(errors.length > 1) {
+            console.log('errors:', errors);
+        }
+
+        await sleep(1000 * 600);
     }
 }
 
