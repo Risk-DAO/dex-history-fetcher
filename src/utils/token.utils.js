@@ -22,6 +22,20 @@ function normalize(amount, decimals) {
     }
 }
 
+/**
+ * get a token configuration object searching by symbol
+ * @param {string} symbol 
+ * @returns {{decimals: number, address: string}} token configuration
+ */
+function getConfTokenBySymbol(symbol) {
+    return tokens[symbol];
+}
+
+/**
+ * Get a token symbol from the configuration, searching by address
+ * @param {string} address 
+ * @returns {string} token symbol
+ */
 function getTokenSymbolByAddress(address) {
     for(let [tokenSymbol, tokenConf] of Object.entries(tokens)) {
         if(tokenConf.address.toLowerCase() == address.toLowerCase()) {
@@ -31,4 +45,4 @@ function getTokenSymbolByAddress(address) {
 
     return null;
 }
-module.exports = { normalize, getTokenSymbolByAddress };
+module.exports = { normalize, getTokenSymbolByAddress, getConfTokenBySymbol};

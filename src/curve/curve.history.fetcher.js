@@ -4,7 +4,7 @@ const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const curveConfig = require('./curve.config');
 const fs = require('fs');
 const { sleep } = require('../utils/utils');
-const { getTokenSymbolByAddress } = require('../utils/token.utils');
+const { getTokenSymbolByAddress, getConfTokenBySymbol, normalize } = require('../utils/token.utils');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
@@ -14,30 +14,44 @@ const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
  * the main entrypoint of the script, will run the fetch against all pool in the config
  */
 async function CurveHistoryFetcher() {
-    const errors = [];
+    // eslint-disable-next-line no-constant-condition
+    while(true) {
+        const errors = [];
 
-    if(!fs.existsSync(`${DATA_DIR}/curve`)) {
-        fs.mkdirSync(`${DATA_DIR}/curve`);
-    }
-
-    for (let i = 0; i < curveConfig.curvePairs.length; i++) {
-        try {
-            await FetchHistory(curveConfig.curvePairs[i]);
+        if(!fs.existsSync(`${DATA_DIR}/curve`)) {
+            fs.mkdirSync(`${DATA_DIR}/curve`);
         }
-        catch (error) {
-            errors.push(curveConfig.curvePairs[i].poolName);
-            console.log('error fetching pool', curveConfig.curvePairs[i].poolName);
-            console.log('error fetching pool', error);
-        }
-        await sleep(5000);
-    }
-    console.log('errorlog', errors);
 
+        const lastResults = {};
+        for (let i = 0; i < curveConfig.curvePairs.length; i++) {
+            if(i > 0) {
+                await sleep(5000);
+            }
+            try {
+                const curvePair = curveConfig.curvePairs[i];
+                const lastData = await FetchHistory(curvePair);
+                lastResults[curvePair.poolName] = lastData;
+            }
+            catch (error) {
+                errors.push(curveConfig.curvePairs[i].poolName);
+                console.log('error fetching pool', curveConfig.curvePairs[i].poolName);
+                console.log('error fetching pool', error);
+            }
+        }
+
+        fs.writeFileSync(`${DATA_DIR}/curve/curve_pools_summary.json`, JSON.stringify(lastResults, null, 2));
+
+        if(errors.length > 1) {
+            console.log('errors:', errors);
+        }
+
+        await sleep(1000 * 600);
+    }
 }
 
 /**
  * Takes a pool from curve.config.js and outputs liquidity file in /data
- * @param {{poolAddress: string, poolName: string, version: number, abi: string, ampFactor: number}} pool 
+ * @param {{poolAddress: string, poolName: string, version: number, abi: string, ampFactor: number, additionnalTransferEvents: {[symbol: string]: string[]}}} pool 
  */
 async function FetchHistory(pool) {
     if (!RPC_URL) {
@@ -50,7 +64,7 @@ async function FetchHistory(pool) {
     /// function variables
     let poolAddress = pool.poolAddress;
     const historyFileName = `${DATA_DIR}/curve/${pool.poolName}_curve.csv`;
-    const stepBlock = 20000;
+    const stepBlock = 100000;
     let tokenAddresses = undefined;
     let poolSymbols = [];
     let startBlock = undefined;
@@ -65,7 +79,7 @@ async function FetchHistory(pool) {
         for (let i = 0; i < tokenAddresses.length; i++) {
             const tokenSymbol = getTokenSymbolByAddress(tokenAddresses[i]);
             if(!tokenSymbol) {
-                throw new Error('Could not find token in conf with address:', tokenAddresses[i]);
+                throw new Error('Could not find token in conf with address:' + tokenAddresses[i]);
             }
 
             poolSymbols.push(tokenSymbol);
@@ -94,7 +108,7 @@ async function FetchHistory(pool) {
         console.log('startblock from contract is:', startBlock);
         const initialArray = [];
         initialArray.push(startBlock);
-        let tokenHeaders = 'blocknumber, ampfactor';
+        let tokenHeaders = 'blocknumber,ampfactor';
         initialArray.push(pool.ampFactor);
         for (let i = 0; i < tokenAddresses.length; i++) {
             initialArray.push('0');
@@ -113,12 +127,17 @@ async function FetchHistory(pool) {
         if (toBlock > currentBlock) {
             toBlock = currentBlock;
         }
-        console.log(`Fetching transfer events from block ${fromBlock} to block ${toBlock} -- blocks to go ${currentBlock - toBlock} -- calls to go ${Math.ceil((currentBlock - toBlock) / stepBlock)} `);
+        console.log(`FetchHistory[${pool.poolName}]: Fetching transfer events from block ${fromBlock} to block ${toBlock}. ${toBlock-fromBlock+1} blocks will be fetched. Remaining blocks to fetch: ${currentBlock - fromBlock}`);
         // Fetch each token events and store them in rangeData
         const rangeData = [];
         for (let i = 0; i < tokenAddresses.length; i++) {
             // console.log(`token ${i + 1}/${tokenAddresses.length}`);
-            const tokenData = await getTokenBalancesInRange(tokenAddresses[i], poolAddress, fromBlock, toBlock);
+            const tokenSymbol = poolSymbols[i];
+            let additionnalTransferEvents = []; 
+            if(pool.additionnalTransferEvents && pool.additionnalTransferEvents[tokenSymbol]) {
+                additionnalTransferEvents = pool.additionnalTransferEvents[tokenSymbol];
+            }
+            const tokenData = await getTokenBalancesInRange(tokenAddresses[i], poolAddress, fromBlock, toBlock, additionnalTransferEvents);
             rangeData.push(tokenData);
         }
 
@@ -180,6 +199,15 @@ async function FetchHistory(pool) {
     console.log('CURVE HistoryFetcher: reached last block:', currentBlock);
     console.log('CURVE HistoryFetcher: end');
     console.log('-------------------------------');
+
+    // return the last liquidity fetched for the pool summary
+    const lastLiquidityData = {};
+    for(let i = 0; i < poolSymbols.length; i++) {
+        const tokenConf = getConfTokenBySymbol(poolSymbols[i]);
+        const normalizedLiquidity = normalize(lastBlockData[i+2], tokenConf.decimals);
+        lastLiquidityData[poolSymbols[i]] = normalizedLiquidity;
+    }
+    return lastLiquidityData;
 }
 
 /**
@@ -256,10 +284,11 @@ async function fetchRampA(pool, fromBlock, toBlock) {
  * @param {string} poolAddress 
  * @param {number} fromBlock
  * @param {number} toBlock
+ * @param {string[]} additionalTransferAddresses
  * @returns {Promise<{[key: string]: {to:{[blocknumber: number]: BigNumber}, from:{[blocknumber: number]: BigNumber}, blocklist: number[]}>} rangeData
  */
-async function getTokenBalancesInRange(tokenAddress, poolAddress, fromBlock, toBlock) {
-    const contract = new ethers.Contract(tokenAddress, curveConfig.erc20Abi, web3Provider);
+async function getTokenBalancesInRange(tokenAddress, poolAddress, fromBlock, toBlock, additionalTransferAddresses) {
+    let contract = new ethers.Contract(tokenAddress, curveConfig.erc20Abi, web3Provider);
     const blockList = [];
 
     const results = {
@@ -274,6 +303,18 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, fromBlock, toB
 
     const fromEvents = await contract.queryFilter(filterFrom, fromBlock, toBlock);
     const toEvents = await contract.queryFilter(filterTo, fromBlock, toBlock);
+    for(let i = 0; i < additionalTransferAddresses.length; i++) {
+        const additionnalContractAddress = additionalTransferAddresses[i];
+        contract = new ethers.Contract(additionnalContractAddress, curveConfig.erc20Abi, web3Provider);
+        const additionalFromEvents = await contract.queryFilter(filterFrom, fromBlock, toBlock);
+        const additionalToEvents = await contract.queryFilter(filterTo, fromBlock, toBlock);
+
+        fromEvents.push(...additionalFromEvents);
+        toEvents.push(...additionalToEvents);
+
+        console.log(`Added additional ${additionalFromEvents.length} fromEvents and ${additionalToEvents.length} toEvents`);
+    }
+
     for (let i = 0; i < fromEvents.length; i++) {
         const fromEvent = fromEvents[i];
         const amountTransfered = fromEvent.args[2]; // this is a big number

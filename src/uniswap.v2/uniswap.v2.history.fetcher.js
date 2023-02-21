@@ -17,26 +17,29 @@ const MINIMUM_TO_APPEND = process.env.MINIMUM_TO_APPEND || 5000;
  * The pairs to fetch are read from the config file './uniswap.v2.config'
  */
 async function UniswapV2HistoryFetcher() {
-    if(!RPC_URL) {
-        throw new Error('Could not find RPC_URL env variable');
+    // eslint-disable-next-line no-constant-condition
+    while(true) {
+        if(!RPC_URL) {
+            throw new Error('Could not find RPC_URL env variable');
+        }
+        
+        if(!fs.existsSync(`${DATA_DIR}/uniswapv2`)) {
+            fs.mkdirSync(`${DATA_DIR}/uniswapv2`);
+        }
+
+        console.log('UniswapV2HistoryFetcher: starting');
+        const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
+
+        for(const pairKey of univ2Config.uniswapV2Pairs) {
+            console.log('Start fetching pair ' + pairKey);
+            await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`);
+            console.log('End fetching pair ' + pairKey);
+        }
+
+        console.log('UniswapV2HistoryFetcher: ending');
+        
+        await sleep(1000 * 600);
     }
-
-    
-    if(!fs.existsSync(`${DATA_DIR}/uniswapv2`)) {
-        fs.mkdirSync(`${DATA_DIR}/uniswapv2`);
-    }
-
-
-    console.log('UniswapV2HistoryFetcher: starting');
-    const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-
-    for(const pairKey of univ2Config.uniswapV2Pairs) {
-        console.log('Start fetching pair ' + pairKey);
-        await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`);
-        console.log('End fetching pair ' + pairKey);
-    }
-
-    console.log('UniswapV2HistoryFetcher: ending');
 }
 
 /**

@@ -230,7 +230,7 @@ async function getUniV2DataForBlockNumber(dataDir, fromSymbol, toSymbol, targetB
 }
 
 function getUniV2DataFile(dataDir, fromSymbol, toSymbol) {
-    let path = `${dataDir}/${fromSymbol}-${toSymbol}_uniswapv2.csv`;
+    let path = `${dataDir}/uniswapv2/${fromSymbol}-${toSymbol}_uniswapv2.csv`;
     let reverse = false;
 
     if(fs.existsSync(path)) {
@@ -239,7 +239,7 @@ function getUniV2DataFile(dataDir, fromSymbol, toSymbol) {
             reverse: reverse
         };
     } else {
-        path = `${dataDir}/${toSymbol}-${fromSymbol}_uniswapv2.csv`;
+        path = `${dataDir}/uniswapv2/${toSymbol}-${fromSymbol}_uniswapv2.csv`;
         reverse = true;
         if(fs.existsSync(path)) {
             return {
