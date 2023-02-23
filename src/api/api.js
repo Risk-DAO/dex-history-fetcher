@@ -43,8 +43,8 @@ function getAvailableCurve() {
                     continue;
                 }
                 
-                available[token][tokenB] = {};
-                available[token][tokenB][poolName] = {};
+                available[token][tokenB] = available[token][tokenB] || {};
+                available[token][tokenB][poolName] = available[token][tokenB][poolName] || {};
                 available[token][tokenB][poolName][token] = reserveValue;
                 available[token][tokenB][poolName][tokenB] = reserveValueB;
             }
