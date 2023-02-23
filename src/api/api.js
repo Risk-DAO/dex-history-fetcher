@@ -3,6 +3,7 @@ const fs = require('fs');
 const { getCurvePriceAndLiquidity } = require('../curve/curve.utils');
 const { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity } = require('../uniswap.v2/uniswap.v2.utils');
 var cors = require('cors');
+const { default: axios } = require('axios');
 const app = express();
 app.use(cors());
 const port = process.env.API_PORT || 3000;
@@ -61,18 +62,25 @@ app.get('/api/available', (req, res) => {
     res.json(available);    
 });
 
-// getprice?platform=uniswapv2&from=ETH&to=USDC&blockNumber=124874157&poolName=3pool
+// getprice?platform=uniswapv2&from=ETH&to=USDC&timestamp=1658171864&poolName=3pool
 app.get('/api/getprice', async (req, res, next) => {
     try {
+        console.log('received getprice request', req);
         const platform = req.query.platform;
         const from = req.query.from;
         const to = req.query.to;
-        const blockNumber = Number(req.query.blockNumber);
+        const timestamp = Number(req.query.timestamp);
 
-        if(!blockNumber) {
-            res.status(400).json({error: 'blockNumber required'});
+        if(!timestamp) {
+            res.status(400).json({error: 'timestamp required'});
             next();
         }
+
+        // get nearest blocknum from defillama
+        console.log(`calling defillama: https://coins.llama.fi/block/ethereum/${timestamp}`);
+        const defiLamaResp = await axios.get(`https://coins.llama.fi/block/ethereum/${timestamp}`);
+        const blockNumber = defiLamaResp.data.height;
+        console.log('defillama resp:', defiLamaResp.data);
 
         switch(platform.toLowerCase()) {
             case 'uniswapv2':
@@ -97,14 +105,27 @@ app.get('/api/getprice', async (req, res, next) => {
     }
 });
 
-// getprice?platform=uniswapv2&from=ETH&to=USDC&fromBlock=10008555&toBlock=11000000
+// getprice?platform=uniswapv2&from=ETH&to=USDC&fromTimestamp=10008555&toTimestamp=11000000
 app.get('/api/getaverageprice', async (req, res, next) => {
     try {
+        console.log('received getaverageprice request', req);
         const platform = req.query.platform;
         const from = req.query.from;
         const to = req.query.to;
-        const fromBlock = Number(req.query.fromBlock);
-        const toBlock = Number(req.query.toBlock);
+        const fromTimestamp = Number(req.query.fromTimestamp);
+        const toTimestamp = Number(req.query.toTimestamp);
+        
+        // get nearest blocknum from defillama
+        console.log(`calling defillama: https://coins.llama.fi/block/ethereum/${fromTimestamp}`);
+        let defiLamaResp = await axios.get(`https://coins.llama.fi/block/ethereum/${fromTimestamp}`);
+        console.log('defillama resp:', defiLamaResp.data);
+        const fromBlock = defiLamaResp.data.height;
+
+
+        console.log(`calling defillama: https://coins.llama.fi/block/ethereum/${toTimestamp}`);
+        defiLamaResp = await axios.get(`https://coins.llama.fi/block/ethereum/${toTimestamp}`);
+        console.log('defillama resp:', defiLamaResp.data);
+        const toBlock = defiLamaResp.data.height;
 
         if(toBlock < fromBlock) {
             res.status(400).json({error: 'toBlock must be greater than fromBlock'});
