@@ -1,5 +1,25 @@
 // various utils fct
 
+
+/**
+ * round a number to 'dec' decimals
+ * @param {number} num to round
+ * @param {number} dec how many decimals
+ * @returns 
+ */
+function roundTo(num, dec = 2) {
+    const pow = Math.pow(10, dec);
+    return Math.round((num + Number.EPSILON) * pow) / pow;
+}
+
+/**
+ * get caller function name
+ * @returns caller name
+ */
+function fnName() {
+    return fnName.caller.name;
+ }
+
 /**
  * 
  * @param {number} ms milliseconds to sleep 
@@ -36,4 +56,4 @@ async function retry(fn, params, retries = 0) {
     }
 }
 
-module.exports = { retry, sleep };
+module.exports = { retry, sleep, fnName, roundTo };
