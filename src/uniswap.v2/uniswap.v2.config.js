@@ -176,6 +176,86 @@ const uniswapV2Pairs = {
             "address": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
         },
     ],
+    "SUSD-USDC": [
+        {
+            "symbol": "SUSD",
+            "address": "0x57ab1ec28d129707052df4df418d58a2d46d5f51",
+        },
+        {
+            "symbol": "USDC",
+            "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        },
+    ], 
+    "SUSD-BTC": [
+        {
+            "symbol": "SUSD",
+            "address": "0x57ab1ec28d129707052df4df418d58a2d46d5f51",
+        },
+        {
+            "symbol": "BTC",
+            "address": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        },
+    ],
+    "SUSD-ETH": [
+        {
+            "symbol": "SUSD",
+            "address": "0x57ab1ec28d129707052df4df418d58a2d46d5f51",
+        },
+        {
+            "symbol": "ETH",
+            "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        },
+    ],
+    "USDC-ETH": [
+        {
+            "symbol": "USDC",
+            "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        }, 
+        {
+            "symbol": "ETH",
+            "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        },
+    ], 
+    "USDC-BTC": [
+        {
+            "symbol": "USDC",
+            "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        }, 
+        {
+            "symbol": "BTC",
+            "address": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        },
+    ], 
+    "USDT-ETH": [
+        {
+            "symbol": "USDT",
+            "address": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        }, 
+        {
+            "symbol": "ETH",
+            "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        },
+    ], 
+    "USDT-BTC": [
+        {
+            "symbol": "USDT",
+            "address": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        }, 
+        {
+            "symbol": "BTC",
+            "address": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        },
+    ],  
+    "USDT-USDC": [
+        {
+            "symbol": "USDT",
+            "address": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        }, 
+        {
+            "symbol": "USDC",
+            "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        },
+    ], 
 }
 
 module.exports = { uniswapV2FactoryAddress, uniswapV2FactoryABI, uniswapV2PairABI, uniswapV2Pairs };
