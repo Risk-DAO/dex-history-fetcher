@@ -29,7 +29,11 @@ function getVolumeForSlippage(targetSlippagePercent, zeroForOne, currentTick, ti
             const variation = high.div(low).minus(1);
             if(variation.lt(exitBoundsDiff)) {
                 // console.log(`current price: ${currentPrice}, effectiveSlippage: ${roundTo(Number(basePrice.div(currentPrice).minus(1).times(100)), 2)}%`);
-                return tryQty;
+                if(currentPrice.gt(targetPrice)) {
+                    return tryQty;
+                } else {
+                    return lastValidTryQty;
+                }
             }
         }
 
