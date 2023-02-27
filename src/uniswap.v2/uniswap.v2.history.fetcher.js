@@ -25,9 +25,15 @@ async function UniswapV2HistoryFetcher() {
     const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 
     for(const pairKey of Object.keys(univ2Config.uniswapV2Pairs)) {
-        console.log('Start fetching pair ' + pairKey);
-        await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/${pairKey}_uniswapv2.csv`);
-        console.log('End fetching pair ' + pairKey);
+        try {
+            console.log('Start fetching pair ' + pairKey);
+            await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/${pairKey}_uniswapv2.csv`);
+            console.log('End fetching pair ' + pairKey);
+        } catch (err) {
+            console.error('Error fetching pair ' + pairKey)
+            console.error(err)
+            continue
+        }
     }
 
     console.log('UniswapV2HistoryFetcher: ending');
