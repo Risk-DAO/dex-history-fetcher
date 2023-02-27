@@ -1,6 +1,5 @@
 
 const BigNumber = require('bignumber.js');
-const { roundTo } = require('../utils/utils');
 
 module.exports = { getPrice, getPriceNormalized, getVolumeForSlippage };
 
