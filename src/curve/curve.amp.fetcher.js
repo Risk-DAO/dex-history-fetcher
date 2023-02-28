@@ -4,9 +4,7 @@ dotenv.config();
 const RPC_URL = process.env.RPC_URL;
 const { ethers } = require('ethers');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
-const curvePoolABI = require('./ABIs/curve.pool.abi.json');
-const newParamsABI = require('./ABIs/newParams.abi.json');
-const rampAgammaABI = require('./ABIs/rampAgamma.abi.json');
+const curveConf = require('./curve.config');
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 
 
@@ -31,14 +29,14 @@ const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 
 async function fetchRampA(pool, toBlock) {
     const fromBlock = await GetContractCreationBlockNumber(web3Provider, pool);
-    const poolContract = new ethers.Contract(pool, rampAgammaABI, web3Provider);
+    const poolContract = new ethers.Contract(pool, curveConf.curvePoolAbi, web3Provider);
     for (let i = fromBlock; i < toBlock; i += 200000) {
-        let events = await poolContract.queryFilter('RampAgamma', i, (i+200000));
+        let events = await poolContract.queryFilter('RampA', i, (i+200000));
         console.log('found ', events.length, ' events');
-        console.log('value', events[0]?.args['initial_A'].toString());
+        console.log('value', events[0]?.args['old_A'].toString());
     }
 }
 
 
 
-fetchRampA('0x4149d1038575ce235e03e03b39487a80fd709d31', 16627596);
+fetchRampA('0xed279fdd11ca84beef15af5d39bb4d4bee23f0ca', 16627596);

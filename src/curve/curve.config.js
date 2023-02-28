@@ -9,6 +9,14 @@ const susdCurvePoolAbi = [{"name":"TokenExchange","inputs":[{"type":"address","n
 
 const curvePairs = [
     {
+        poolAddress: '0xed279fdd11ca84beef15af5d39bb4d4bee23f0ca',
+        poolName: 'LUSD3CRV-f',
+        version: 1,
+        abi: 'erc20ABI',
+        ampType: 'RampA',
+        ampFactor: 1000
+    },
+    {
         poolAddress: '0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7',
         poolName: '3Pool',
         version: 1,
