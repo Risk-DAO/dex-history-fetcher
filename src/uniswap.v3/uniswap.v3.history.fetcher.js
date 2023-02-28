@@ -1,6 +1,5 @@
 const { ethers, Contract } = require('ethers');
 
-const axios = require('axios');
 const fs = require('fs');
 const dotenv = require('dotenv');
 dotenv.config();
@@ -8,10 +7,13 @@ dotenv.config();
 const univ3Config = require('./uniswap.v3.config');
 const globalConfig = require('../global.config');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
-const { fnName, logFnDuration } = require('../utils/utils');
-const { normalize, getTokenSymbolByAddress } = require('../utils/token.utils');
-const { getPriceNormalized, getVolumeForSlippage } = require('./uniswap.v3.utils');
+const { fnName, logFnDuration, sleep } = require('../utils/utils');
+const { getTokenSymbolByAddress, normalize } = require('../utils/token.utils');
+const { getPriceNormalized } = require('./uniswap.v3.utils');
 const { default: BigNumber } = require('bignumber.js');
+// save liqiudity data every 'CHECKPOINT_INTERVAL' blocks
+const CHECKPOINT_INTERVAL = 100_000;
+const CONSTANT_1e18 = new BigNumber(10).pow(18);
 
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
@@ -23,114 +25,28 @@ UniswapV3HistoryFetcher();
  * The pairs to fetch are read from the config file './uniswap.v2.config'
  */
 async function UniswapV3HistoryFetcher() {
-    if(!RPC_URL) {
-        throw new Error('Could not find RPC_URL env variable');
+    // eslint-disable-next-line no-constant-condition
+    while(true) {
+        if(!RPC_URL) {
+            throw new Error('Could not find RPC_URL env variable');
+        }
+
+        if(!fs.existsSync(`${DATA_DIR}/uniswapv3`)) {
+            fs.mkdirSync(`${DATA_DIR}/uniswapv3`);
+        }
+
+        console.log(`${fnName()}: starting`);
+        const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
+        const univ3Factory = new Contract(univ3Config.uniswapFactoryV3Address, univ3Config.uniswapFactoryV3Abi, web3Provider);
+        const currentBlock = await web3Provider.getBlockNumber();
+
+        for(const pairToFetch of univ3Config.pairsToFetch) {
+            await FetchUniswapV3HistoryForPair(pairToFetch, web3Provider, univ3Factory, currentBlock);
+        }
+
+        console.log('UniswapV3HistoryFetcher: ending');
+        await sleep(1000 * 600);
     }
-
-    if(!fs.existsSync(`${DATA_DIR}/uniswapv3`)) {
-        fs.mkdirSync(`${DATA_DIR}/uniswapv3`);
-    }
-
-    console.log(`${fnName()}: starting`);
-    const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-    const univ3Factory = new Contract(univ3Config.uniswapFactoryV3Address, univ3Config.uniswapFactoryV3Abi, web3Provider);
-    const currentBlock = await web3Provider.getBlockNumber();
-
-    for(const pairToFetch of univ3Config.pairsToFetch) {
-        await FetchUniswapV3HistoryForPair(pairToFetch, web3Provider, univ3Factory, currentBlock);
-    }
-
-    // const pairToFetch = univ3Config.pairsToFetch[0];
-    // const token0 = globalConfig.tokens[pairToFetch.token0];
-    // if(!token0) {
-    //     throw new Error('Cannot find token in global config with symbol: ' + pairToFetch.token0);
-    // }
-    // const token1 = globalConfig.tokens[pairToFetch.token1];
-    // if(!token1) {
-    //     throw new Error('Cannot find token in global config with symbol: ' + pairToFetch.token1);
-    // }
-    // const poolAddress = await univ3Factory.getPool(token0.address, token1.address, pairToFetch.fees);
-    // // console.log(poolAddress);
-    // // const currentBlock = await web3Provider.getBlockNumber();
-    // const deployedBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
-    // const endBlock = deployedBlock + 1499;
-
-    // // univ3Factory.queryFilter()
-
-    // // const topicBurn = ethers.utils.id('Burn(address,int24,int24,uint128,uint256,uint256)');
-    // // const topicMint = ethers.utils.id('Mint(address,address,int24,int24,uint128,uint256,uint256)');
-    // const univ3PairContract = new Contract(poolAddress, univ3Config.uniswapV3PairAbi, web3Provider);
-    // const mintEvents = await univ3PairContract.queryFilter('Mint', deployedBlock, endBlock);
-    // const burnEvents = await univ3PairContract.queryFilter('Burn', deployedBlock, endBlock);
-    // // const filterBurn = univ3PairContract.filters.Burn();
-    // // const filterMint = univ3PairContract.filters.Mint();
-    // // const filterSwap = univ3PairContract.filters.Swap();
-
-    // // let iface = new ethers.utils.Interface(univ3Config.uniswapV3PairAbi);
-    // // const events = await univ3PairContract.queryFilter({
-    // //     topics: [[
-    // //         filterBurn.topics[0],
-    // //         filterMint.topics[0],
-    // //         filterSwap.topics[0]]]
-    // // }, deployedBlock, deployedBlock + 1500);
-    
-    // // events.forEach(_ => {
-    // //     try {
-    // //         _.parsed = iface.parseLog(_);
-    // //         // if(parsed.name == 'Swap') {
-    // //         //     console.log(`Block [${_.blockNumber}]: ${parsed.name}, liquidity: ${parsed.args.liquidity}`);
-    // //         // } else {
-    // //         //     console.log(`Block [${_.blockNumber}]: ${parsed.name}, liquidity: ${parsed.args.amount}`);
-    // //         // }
-    // //     }
-    // //     catch(e) {
-    // //         console.log(e);
-    // //     }
-    // // });
-
-    // const liquidity = {};
-    // mintEvents.forEach((mintEvent) => {
-    //     const upperTick = Number(mintEvent.args.tickUpper);
-    //     const lowerTick = Number(mintEvent.args.tickLower);
-    //     const addedOrRemovedLiquidity = normalize(mintEvent.args.amount, 18);
-
-    //     for(let tick = lowerTick ; tick <= upperTick ; tick++) {
-    //         if(!liquidity[tick]) {
-    //             liquidity[tick] = 0;
-    //         }
-    //         liquidity[tick] += addedOrRemovedLiquidity;
-    //     }
-    // });
-
-    
-    // burnEvents.forEach((burnEvent) => {
-    //     const upperTick = Number(burnEvent.args.tickUpper);
-    //     const lowerTick = Number(burnEvent.args.tickLower);
-    //     const addedOrRemovedLiquidity = normalize(burnEvent.args.amount, 18);
-
-    //     for(let tick = lowerTick ; tick <= upperTick ; tick++) {
-    //         if(!liquidity[tick]) {
-    //             liquidity[tick] = 0;
-    //         }
-    //         liquidity[tick] -= addedOrRemovedLiquidity;
-    //     }
-    // });
-
-    // // console.log(`Liquidity at end of block ${deployedBlock + 1500}: `, liquidity);
-    // fs.writeFileSync('liquidity.json', JSON.stringify(liquidity));
-
-    // let pairInterface = new ethers.utils.Interface(univ3Config.uniswapV3PairAbi);
-
-    // let slot0Data = await web3Provider.call({
-    //     to: poolAddress,
-    //     data: pairInterface.encodeFunctionData('slot0'),
-    // }, endBlock);
-
-    // const decodedSlot0Data = pairInterface.decodeFunctionResult('slot0', slot0Data);
-
-
-
-    console.log('UniswapV3HistoryFetcher: ending');
 }
 
 async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Factory, currentBlock) {
@@ -160,7 +76,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
 
     console.log(`${fnName()}: pool address found: ${poolAddress} with pair ${pairConfig.token0}-${pairConfig.token1}`);
     // try to find the json file representation of the pool latest value already fetched
-    const latestDataFilePath = `${DATA_DIR}/uniswapv3/${pairConfig.token0}-${pairConfig.token0}-${poolAddress}-latestdata.json`;
+    const latestDataFilePath = `${DATA_DIR}/uniswapv3/${pairConfig.token0}-${pairConfig.token1}-${poolAddress}-latestdata.json`;
     let latestData = undefined;
 
     if(fs.existsSync(latestDataFilePath)) {
@@ -212,30 +128,66 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
 
         console.log(`${fnName()}: [${fromBlock} - ${toBlock}] found ${events.length} Mint/Burn/Swap events after ${cptError} errors (fetched ${toBlock-fromBlock+1} blocks)`);
         
-        // try to find the blockstep to reach 9000 events per call as the RPC limit is 10 000, 
-        // this try to change the blockstep by increasing it when the pool is not very used
-        // or decreasing it when the pool is very used
-        const ratioEvents = 9000 / events.length;
-        blockStep = Math.round(blockStep * ratioEvents);
-        cptError = 0;
-        await processEvents(events, iface, latestData, token0, token1, latestDataFilePath, web3Provider, poolAddress);
+        if(events.length != 0) {
+            processEvents(events, iface, latestData, token0, token1, latestDataFilePath, web3Provider, poolAddress);
+
+            // try to find the blockstep to reach 9000 events per call as the RPC limit is 10 000, 
+            // this try to change the blockstep by increasing it when the pool is not very used
+            // or decreasing it when the pool is very used
+            const ratioEvents = 9000 / events.length;
+            blockStep = Math.round(blockStep * ratioEvents);
+            cptError = 0;
+        }
         fromBlock = toBlock +1;
     }
 }
 
-async function processEvents(events, iface, latestData, token0, token1, latestDataFilePath) {
+async function fetchInitializeData(web3Provider, poolAddress, univ3PairContract) {
+    // if the file does not exists, it means we start from the beginning
+    // fetch the deployed block number for the pool
+    const deployedBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
+    let fromBlock = deployedBlock;
+    let toBlock = deployedBlock + 100000;
+    let latestData = undefined;
+    while (!latestData) {
+        console.log(`${fnName()}: searching Initialize event between blocks [${fromBlock} - ${toBlock}]`);
+        const initEvents = await univ3PairContract.queryFilter('Initialize', fromBlock, toBlock);
+        if (initEvents.length > 0) {
+            if (initEvents > 1) {
+                throw new Error('More than 1 Initialize event found???');
+            }
+
+            console.log(`${fnName()}: found Initialize event at block ${initEvents[0].blockNumber}`);
+
+            latestData = {
+                currentTick: initEvents[0].args.tick,
+                currentSqrtPriceX96: initEvents[0].args.sqrtPriceX96.toString(),
+                blockNumber: initEvents[0].blockNumber - 1, // set to blocknumber -1 to be sure to fetch mint/burn events on same block as initialize,
+                tickSpacing: await univ3PairContract.tickSpacing(),
+                lastCheckpoint: 0, // set to 0 to save liquidity check point at the begining
+                ticks: {}
+            };
+
+            // fs.appendFileSync('logs.txt', `Initialized at ${initEvents[0].blockNumber}. base tick ${latestData.currentTick}. base price: ${latestData.currentSqrtPriceX96}\n`);
+
+        } else {
+            console.log(`${fnName()}: Initialize event not found between blocks [${fromBlock} - ${toBlock}]`);
+            fromBlock = toBlock + 1;
+            toBlock = fromBlock + 100000;
+        }
+    }
+    return latestData;
+}
+
+function processEvents(events, iface, latestData, token0, token1, latestDataFilePath) {
     const dtStart = Date.now();
-    const dataToWriteZeroToOne = [];
-    const dataToWriteOneToZero = [];
+    const priceData = [];
+    const checkpointData = [];
     let lastBlock = events[0].blockNumber;
-    let lastBlockWritten = latestData.blockNumber;
     for (const event of events) {
         const parsedEvent = iface.parseLog(event);
-        if(lastBlock != event.blockNumber
-            // maximum write every 1000 blocks because very time consuming
-            && lastBlock > lastBlockWritten + 1000) {
-            savePriceAndSlippageData(token0, token1, latestData, dataToWriteZeroToOne, dataToWriteOneToZero);
-            lastBlockWritten = lastBlock;
+        if(lastBlock != event.blockNumber) {
+            savePriceAndLiquidityData(token0, token1, latestData, priceData, checkpointData);
         }
 
         lastBlock = event.blockNumber;
@@ -261,119 +213,51 @@ async function processEvents(events, iface, latestData, token0, token1, latestDa
     }
     
     // at the end, write the last data
-    savePriceAndSlippageData(token0, token1, latestData, dataToWriteZeroToOne, dataToWriteOneToZero);
+    savePriceAndLiquidityData(token0, token1, latestData, priceData, checkpointData);
 
     const token0Symbol = getTokenSymbolByAddress(token0.address);
     const token1Symbol = getTokenSymbolByAddress(token1.address);
-    const t0t1FileName = `${DATA_DIR}/uniswapv3/${token0Symbol}-${token1Symbol}_uniswapv3.csv`;
-    const t1t0FileName = `${DATA_DIR}/uniswapv3/${token1Symbol}-${token0Symbol}_uniswapv3.csv`;
-    if(!fs.existsSync(t0t1FileName)) {
-        fs.writeFileSync(t0t1FileName, 'blocknumber,data');
-        fs.writeFileSync(t1t0FileName, 'blocknumber,data');
+    const priceFilename = `${DATA_DIR}/uniswapv3/${token0Symbol}-${token1Symbol}_prices.csv`;
+    const checkpointFileName = `${DATA_DIR}/uniswapv3/${token0Symbol}-${token1Symbol}_liquidity_checkpoint.csv`;
+    if(!fs.existsSync(priceFilename)) {
+        fs.writeFileSync(priceFilename, `blocknumber,price ${token1Symbol}/${token0Symbol},price ${token0Symbol}/${token1Symbol}\n`);
     }
-    fs.appendFileSync(t0t1FileName, dataToWriteZeroToOne.join(''));
-    fs.appendFileSync(t1t0FileName, dataToWriteOneToZero.join(''));
+    if(!fs.existsSync(checkpointFileName)) {
+        fs.writeFileSync(checkpointFileName, 'blocknumber,liquidity data\n');
+    }
+
+    fs.appendFileSync(priceFilename, priceData.join(''));
+    fs.appendFileSync(checkpointFileName, checkpointData.join(''));
     fs.writeFileSync(latestDataFilePath, JSON.stringify(latestData));
-    logFnDuration(dtStart, dataToWriteZeroToOne.length);
+    logFnDuration(dtStart, priceData.length, 'events');
 }
 
 function updateLatestDataLiquidity(latestData, blockNumber, tickLower, tickUpper, amount, tickSpacing) {
-    // console.log(`${fnName()}: updating ${amount} liquidity to ticks ${tickLower} to ${tickUpper} at block ${blockNumber}`);
-
-    // fs.appendFileSync('logs.txt', `[${blockNumber}] [${amount < 0 ? 'BURN': 'MINT'}]: lqty change: ${amount} from ${tickLower} to ${tickUpper}\n`);
+    const amountNorm = amount.div(CONSTANT_1e18).toNumber();
     for(let tick = tickLower ; tick <= tickUpper ; tick += tickSpacing) {
         if(!latestData.ticks[tick]) {
-            latestData.ticks[tick] = new BigNumber(0);
+            latestData.ticks[tick] = 0;
         }
 
-        // always add because for burn events amount will be < 0
-        latestData.ticks[tick] = new BigNumber(latestData.ticks[tick]).plus(amount).toString();
+        // always add because for burn events, amount value will be < 0
+        latestData.ticks[tick] += amountNorm;
     }
 
     latestData.blockNumber = blockNumber;
 }
 
-
-function savePriceAndSlippageData(token0, token1, latestData, zeroToOneArrayData, oneToZeroArrayData) {
-    const dtStart = Date.now();
-    const nextLowestTick = (Math.floor(latestData.currentTick / latestData.tickSpacing)) * latestData.tickSpacing;
-
-    // SAVE token0->token1 data
+function savePriceAndLiquidityData(token0, token1, latestData, priceData, checkpointData) {
+    // Compute token0->token1 price
     let zeroToOne = true;
-    const p0 = getPriceNormalized(zeroToOne, nextLowestTick, latestData.tickSpacing, latestData.currentSqrtPriceX96.toString(), latestData.ticks, new BigNumber('1'), token0.decimals, token1.decimals);
-    const t0t1SlippageObj = {};
-    t0t1SlippageObj.price = p0;
-    t0t1SlippageObj.slippage = {};
-    let lastVolume = undefined;
-    const maxSlippage = 20;
-    for(let slippagePercent = 1; slippagePercent <= maxSlippage; slippagePercent++) {
-        const volume1ForSlippage = getVolumeForSlippage(slippagePercent, zeroToOne, nextLowestTick, latestData.tickSpacing, latestData.currentSqrtPriceX96.toString(), latestData.ticks);
-        const normalized = normalize(volume1ForSlippage.toString(), token0.decimals);
-        if(lastVolume && lastVolume == normalized) {
-            break;
-        } 
+    const p0 = getPriceNormalized(zeroToOne, latestData.currentTick, latestData.tickSpacing, latestData.currentSqrtPriceX96.toString(), latestData.ticks, new BigNumber('1'), token0.decimals, token1.decimals);
 
-        // console.log(`volume for slippage: ${normalized} ${getTokenSymbolByAddress(token0.address)}`);
-        t0t1SlippageObj.slippage[slippagePercent] = normalized;
-        lastVolume = normalized;
-    }
-
-    zeroToOneArrayData.push(`${latestData.blockNumber},${JSON.stringify(t0t1SlippageObj)}\n`);
-
-    // SAVE token1->token0 data
+    // Compute token1->token0 price
     zeroToOne = false;
-    const p1 = getPriceNormalized(zeroToOne, nextLowestTick, latestData.tickSpacing, latestData.currentSqrtPriceX96.toString(), latestData.ticks, new BigNumber('1'), token0.decimals, token1.decimals);
-    const t1t0SlippageObj = {};
-    t1t0SlippageObj.price = p1;
-    t1t0SlippageObj.slippage = {};
-    lastVolume = undefined;
-    for(let slippagePercent = 1; slippagePercent <= maxSlippage; slippagePercent++) {
-        const volume1ForSlippage = getVolumeForSlippage(slippagePercent, zeroToOne, nextLowestTick, latestData.tickSpacing, latestData.currentSqrtPriceX96.toString(), latestData.ticks);
-        const normalized = normalize(volume1ForSlippage.toString(), token1.decimals);
-        if(lastVolume && lastVolume == normalized) {
-            break;
-        } 
-        // console.log(`volume for slippage: ${normalized} ${getTokenSymbolByAddress(token1.address)}`);
-        t1t0SlippageObj.slippage[slippagePercent] = normalized;
-        lastVolume = normalized;
+    const p1 = getPriceNormalized(zeroToOne, latestData.currentTick, latestData.tickSpacing, latestData.currentSqrtPriceX96.toString(), latestData.ticks, new BigNumber('1'), token0.decimals, token1.decimals);
+    priceData.push(`${latestData.blockNumber},${p0},${p1}\n`);
+
+    if(latestData.blockNumber >= latestData.lastCheckpoint + CHECKPOINT_INTERVAL) {
+        checkpointData.push(`${latestData.blockNumber},${JSON.stringify(latestData)}\n`);
+        latestData.lastCheckpoint = latestData.blockNumber;
     }
-
-    oneToZeroArrayData.push(`${latestData.blockNumber},${JSON.stringify(t1t0SlippageObj)}\n`);
-    logFnDuration(dtStart);
-}
-
-async function fetchInitializeData(web3Provider, poolAddress, univ3PairContract) {
-    // if the file does not exists, it means we start from the beginning
-    // fetch the deployed block number for the pool
-    const deployedBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
-    let fromBlock = deployedBlock;
-    let toBlock = deployedBlock + 100000;
-    let latestData = undefined;
-    while (!latestData) {
-        console.log(`${fnName()}: searching Initialize event between blocks [${fromBlock} - ${toBlock}]`);
-        const initEvents = await univ3PairContract.queryFilter('Initialize', fromBlock, toBlock);
-        if (initEvents.length > 0) {
-            if (initEvents > 1) {
-                throw new Error('More than 1 Initialize event found???');
-            }
-
-            console.log(`${fnName()}: found Initialize event at block ${initEvents[0].blockNumber}`);
-
-            latestData = {
-                currentTick: initEvents[0].args.tick,
-                currentSqrtPriceX96: initEvents[0].args.sqrtPriceX96.toString(),
-                blockNumber: initEvents[0].blockNumber - 1, // set to blocknumber -1 to be sure to fetch mint/burn events on same block as initialize,
-                tickSpacing: await univ3PairContract.tickSpacing(),
-                ticks: {}
-            };
-
-            // fs.appendFileSync('logs.txt', `Initialized at ${initEvents[0].blockNumber}. base tick ${latestData.currentTick}. base price: ${latestData.currentSqrtPriceX96}\n`);
-
-        } else {
-            console.log(`${fnName()}: Initialize event not found between blocks [${fromBlock} - ${toBlock}]`);
-            fromBlock = toBlock + 1;
-            toBlock = fromBlock + 100000;
-        }
-    }
-    return latestData;
 }

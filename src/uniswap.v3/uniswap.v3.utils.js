@@ -1,15 +1,19 @@
 
 const BigNumber = require('bignumber.js');
+const { roundTo, logFnDuration } = require('../utils/utils');
 
-module.exports = { getPrice, getPriceNormalized, getVolumeForSlippage };
+module.exports = { getPrice, getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange};
+
+const CONSTANT_1e18 = new BigNumber(10).pow(18);
 
 function getVolumeForSlippage(targetSlippagePercent, zeroForOne, currentTick, tickSpacing, sqrtPriceX96, liquidity) {
+    const dtStart = Date.now();
     const priceFunction = zeroForOne ? get_dy : get_dx;
 
     const baseAmount = new BigNumber(1);
     const basePrice = priceFunction(currentTick, tickSpacing, sqrtPriceX96, liquidity, baseAmount);
     const targetPrice = basePrice.minus(basePrice.times(targetSlippagePercent).div(100));
-    // console.log(`base price: ${basePrice}, for ${targetSlippagePercent}% slippage, price: ${targetPrice}`);
+    // console.log(`base price: ${basePrice}, for ${targetSlippagePercent}% slippage, target price: ${targetPrice}`);
 
     let tryQty = baseAmount.times(2);
     let high = undefined;
@@ -18,49 +22,125 @@ function getVolumeForSlippage(targetSlippagePercent, zeroForOne, currentTick, ti
     const exitBoundsDiff = 1/100; // exit binary search when low and high bound have less than this amount difference
 
     let lastValidTryQty = undefined;
-    // eslint-disable-next-line no-constant-condition
-    while(true) {
-        const currentVolume = priceFunction(currentTick, tickSpacing, sqrtPriceX96, liquidity, tryQty);
-        const currentPrice = currentVolume.div(tryQty);
+    let lastEffectiveSlippage = undefined;
+    let lastCurrentPrice = undefined;
+    try {
+        // eslint-disable-next-line no-constant-condition
+        while(true) {
+            const currentVolume = priceFunction(currentTick, tickSpacing, sqrtPriceX96, liquidity, tryQty);
+            const currentPrice = currentVolume.div(tryQty);
 
-        // console.log(`[${low} - ${high}]: current price: ${currentPrice}, effectiveSlippage: ${roundTo(Number(basePrice.div(currentPrice).minus(1).times(100)), 2)}%`);
-        if(high && low) {
-            const variation = high.div(low).minus(1);
-            if(variation.lt(exitBoundsDiff)) {
-                // console.log(`current price: ${currentPrice}, effectiveSlippage: ${roundTo(Number(basePrice.div(currentPrice).minus(1).times(100)), 2)}%`);
-                if(currentPrice.gt(targetPrice)) {
-                    return tryQty;
+            const effectiveSlippage = roundTo(Number(basePrice.div(currentPrice).minus(1).times(100)), 2);
+            console.log(`TRY ${tryQty} [${low} - ${high}]: current price: ${currentPrice}, effectiveSlippage: ${effectiveSlippage}%`);
+            if(high && low) {
+                const variation = high.div(low).minus(1);
+                if(variation.lt(exitBoundsDiff)) {
+                    if(effectiveSlippage <= targetSlippagePercent) {
+                        console.log(`current price: ${currentPrice}, effectiveSlippage: ${effectiveSlippage}%, target: ${targetSlippagePercent}%`);
+                        return tryQty;
+                    } else {
+                        console.log(`current last valid value. Price: ${lastCurrentPrice}, effectiveSlippage: ${lastEffectiveSlippage}%, target: ${targetSlippagePercent}%`);
+                        return lastValidTryQty;
+                    }
+                }
+            }
+
+            if(effectiveSlippage < targetSlippagePercent) {
+                lastValidTryQty = tryQty;
+                lastEffectiveSlippage = effectiveSlippage;
+                lastCurrentPrice = currentPrice;
+                // if effective slippage too low, need to increase the next tryQty
+                // also we can set low = tryQty
+                low = tryQty;
+
+                if(high) {
+                    tryQty = tryQty.plus(high.minus(low).div(2));
                 } else {
-                    return lastValidTryQty;
+                    tryQty = tryQty.times(2);
+                }
+            } else {
+                // if effective slippage too high, need to decrease the next tryQty
+                // also we can set high = tryQty
+                high = tryQty;
+                
+                if(low) {
+                    tryQty = tryQty.minus(high.minus(low).div(2));
+                } else {
+                    tryQty = tryQty.div(2);
+                }
+            }
+        }
+    }
+    finally {
+        logFnDuration(dtStart);
+    }
+}
+
+function getVolumeForSlippageRange(minSlippage, maxSlippage, zeroForOne, currentTick, tickSpacing, sqrtPriceX96, liquidity, baseTokenDecimals) {
+    const dtStart = Date.now();
+    const priceFunction = zeroForOne ? get_dy : get_dx;
+
+    const baseAmount = new BigNumber(1);
+    const basePrice = priceFunction(currentTick, tickSpacing, sqrtPriceX96, liquidity, baseAmount);
+
+    let tryQty = baseAmount.times(2);
+    let high = undefined;
+    let low = baseAmount;
+
+    const acceptableRange = 1/100; // the effective slippage acceptable range. if 1% and target slippage is 10% then we accept a value between 9.9% 10.1% 
+    let targetSlippage = minSlippage;
+
+    const decimalFactor = new BigNumber(10).pow(baseTokenDecimals);
+    const slippageObj = {};
+    try {
+        // eslint-disable-next-line no-constant-condition
+        while(targetSlippage <= maxSlippage) {
+            const currentVolume = priceFunction(currentTick, tickSpacing, sqrtPriceX96, liquidity, tryQty);
+            const currentPrice = currentVolume.div(tryQty);
+
+            const effectiveSlippage = roundTo(Number(basePrice.div(currentPrice).minus(1).times(100)), 2);
+            // console.log(`TRY ${tryQty} [${low} - ${high}]: current price: ${currentPrice}, effectiveSlippage: ${effectiveSlippage}%`);
+
+            if(effectiveSlippage < targetSlippage * (1+acceptableRange) 
+                && effectiveSlippage > targetSlippage * (1-acceptableRange)) {
+
+                const qtyNorm = tryQty.div(decimalFactor).toNumber();
+                console.log(`Volume for slippage: ${qtyNorm}, effectiveSlippage: ${effectiveSlippage}%, target: ${targetSlippage}%`);
+                slippageObj[targetSlippage] = qtyNorm;
+                targetSlippage++;
+                high = undefined;
+                tryQty = tryQty.times(2);
+                continue;
+            }
+
+            if(effectiveSlippage < targetSlippage) {
+                // if effective slippage too low, need to increase the next tryQty
+                // also we can set low = tryQty
+                low = tryQty;
+
+                if(high) {
+                    tryQty = tryQty.plus(high.minus(low).div(2));
+                } else {
+                    tryQty = tryQty.times(2);
+                }
+            } else {
+                // if effective slippage too high, need to decrease the next tryQty
+                // also we can set high = tryQty
+                high = tryQty;
+                
+                if(low) {
+                    tryQty = tryQty.minus(high.minus(low).div(2));
+                } else {
+                    tryQty = tryQty.div(2);
                 }
             }
         }
 
-        if(currentPrice.gte(targetPrice)) {
-            lastValidTryQty = tryQty;
-            // if current price to high, need to increase the next tryQty
-            // also we can set low = tryQty
-            low = tryQty;
-
-            if(high) {
-                tryQty = tryQty.plus(high.minus(low).div(2));
-            } else {
-                tryQty = tryQty.times(2);
-            }
-        } else {
-            // if current price to low, need to decrease the next tryQty
-            // also we can set high = tryQty
-            high = tryQty;
-            
-            if(low) {
-                tryQty = tryQty.minus(high.minus(low).div(2));
-            } else {
-                tryQty = tryQty.div(2);
-            }
-        }
+        return slippageObj;
     }
-
-    return lastValidTryQty;
+    finally {
+        logFnDuration(dtStart);
+    }
 }
 
 /**
@@ -76,11 +156,9 @@ function getVolumeForSlippage(targetSlippagePercent, zeroForOne, currentTick, ti
  * @returns {BigNumber} amount receivable
  */
 function getPrice(zeroForOne, currentTick, tickSpacing, sqrtPriceX96, liquidity, amount) {
-    if(zeroForOne) {
-        return get_dy(currentTick, tickSpacing, sqrtPriceX96, liquidity, amount);
-    } else {
-        return get_dx(currentTick, tickSpacing, sqrtPriceX96, liquidity, amount);
-    }
+    return zeroForOne ? 
+        get_dy(currentTick, tickSpacing, sqrtPriceX96, liquidity, amount) :
+        get_dx(currentTick, tickSpacing, sqrtPriceX96, liquidity, amount);
 }
 
 
@@ -100,13 +178,21 @@ function getPrice(zeroForOne, currentTick, tickSpacing, sqrtPriceX96, liquidity,
 function getPriceNormalized(zeroForOne, currentTick, tickSpacing, sqrtPriceX96, liquidity, amount, token0Decimals, token1Decimals) {
     const token0DecimalFactor = new BigNumber(10).pow(new BigNumber(token0Decimals));
     const token1DecimalFactor = new BigNumber(10).pow(new BigNumber(token1Decimals));
-    if(zeroForOne) {
-        const bnAmountOfToken1 = get_dy(currentTick, tickSpacing, sqrtPriceX96, liquidity, amount);
-        return bnAmountOfToken1.times(token0DecimalFactor).div(token1DecimalFactor).toNumber();
-    } else {
-        const bnAmountOfToken0 = get_dx(currentTick, tickSpacing, sqrtPriceX96, liquidity, amount);
-        return bnAmountOfToken0.times(token1DecimalFactor).div(token0DecimalFactor).toNumber();
-    }
+    const bnAmount = getPrice(zeroForOne, currentTick, tickSpacing, sqrtPriceX96, liquidity, amount);
+    return zeroForOne ? 
+        bnAmount.times(token0DecimalFactor).div(token1DecimalFactor).toNumber() :
+        bnAmount.times(token1DecimalFactor).div(token0DecimalFactor).toNumber();
+
+}
+
+/**
+ * Get the next lower tick as the current tick returned can sometimes not be in the valid range
+ * @param {number} currentTick 
+ * @param {number} tickSpacing 
+ * @returns {number} Valid tick
+ */
+function getNextLowerTick(currentTick, tickSpacing) {
+    return (Math.floor(currentTick / tickSpacing)) * tickSpacing;
 }
 
 /**
@@ -128,7 +214,7 @@ function get_dy(currentTick, tickSpacing, sqrtPriceX96, liquidity, dx) {
     BigNumber.config({ POW_PRECISION: 10 });
     const _96bits = new BigNumber(2).pow(new BigNumber(96));
     let currSqrtPrice = new BigNumber(sqrtPriceX96).div(_96bits); 
-    let currTick = Number(currentTick);
+    let currTick = getNextLowerTick(Number(currentTick), tickSpacing);
 
     // when selling x, the price goes up
     while(remainingQty.gt(0)) {
@@ -136,7 +222,7 @@ function get_dy(currentTick, tickSpacing, sqrtPriceX96, liquidity, dx) {
         //console.log({base},{nextTick})
         const nextSqrtPrice = (base.pow(nextTick)).sqrt();
 
-        const L = new BigNumber(liquidity[currTick]);
+        const L = new BigNumber(liquidity[currTick]).times(CONSTANT_1e18);
         // console.log({currTick});
 
         // dx = L/d(sqrt(p))
@@ -195,7 +281,7 @@ function get_dx(currentTick, tickSpacing, sqrtPriceX96, liquidity, dy) {
     BigNumber.config({ POW_PRECISION: 10 });
     const _96bits = new BigNumber(2).pow(new BigNumber(96));
     let currSqrtPrice = new BigNumber(sqrtPriceX96).div(_96bits); 
-    let currTick = Number(currentTick);
+    let currTick = getNextLowerTick(Number(currentTick), tickSpacing);
 
     // when selling y, the price goes down
     while(remainingQty.gt(0)) {
@@ -203,7 +289,7 @@ function get_dx(currentTick, tickSpacing, sqrtPriceX96, liquidity, dy) {
         //console.log({base},{nextTick})
         const nextSqrtPrice = (base.pow(nextTick)).sqrt();
 
-        const L = new BigNumber(liquidity[currTick]);
+        const L = new BigNumber(liquidity[currTick]).times(CONSTANT_1e18);
         // console.log({currTick});
 
         // dx = L/d(sqrt(p))
