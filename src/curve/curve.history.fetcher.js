@@ -71,6 +71,10 @@ async function FetchHistory(pool) {
     console.log('--- fetching pool tokens ---');
     try {
         tokenAddresses = await getPoolTokens(pool);
+        if(tokenAddresses.length < 2) {
+            throw new Error(`Could not find enough tokens for pool ${pool.poolAddress}`);
+        }
+        
         for (let i = 0; i < tokenAddresses.length; i++) {
             const tokenSymbol = getTokenSymbolByAddress(tokenAddresses[i]);
             if(!tokenSymbol) {
@@ -284,11 +288,11 @@ function getCsvFromDataObj(dataObj, poolSymbols) {
  */
 async function getPoolTokens(pool) {
     // most pools are curve pool so init them by default
-    let contract = new ethers.Contract(pool['poolAddress'], curveConfig.curvePoolAbi, web3Provider);
+    let contract = new ethers.Contract(pool.poolAddress, curveConfig.curvePoolAbi, web3Provider);
 
     // if the config state that the abi is susdABI, use susd curve pool abi
     if (pool.abi === 'susdABI') {
-        contract = new ethers.Contract(pool['poolAddress'], curveConfig.susdCurvePoolAbi, web3Provider);
+        contract = new ethers.Contract(pool.poolAddress, curveConfig.susdCurvePoolAbi, web3Provider);
     }
 
     // there is no way to know how much tokens are in the pools so we must fetch the coins until it fails

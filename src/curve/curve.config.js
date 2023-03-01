@@ -50,7 +50,7 @@ const curvePairs = [
         lpTokenAddress: '0x8fdb0bB9365a46B145Db80D0B1C5C5e979C84190'
     },
     {
-        poolAddress: '0xc25a3a3b969415c80451098fa907ec722572917f',
+        poolAddress: '0xa5407eae9ba41422680e2e00537571bcc53efbfd',
         poolName: 'susd',
         version: 1,
         abi: 'susdABI',
