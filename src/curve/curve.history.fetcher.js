@@ -132,26 +132,26 @@ async function FetchHistory(pool) {
         fs.writeFileSync(historyFileName, `${headers}\n`);
     }
 
-    // here, we have the last data written in csv in the object 'lastData'
-    console.log('lastData', lastData);
+    // here, we have the last data that was in csv, in the object 'lastData'
+    // console.log('lastData', lastData);
 
-    // THIS IS WHERE STUFF HAPPENS, FROM START BLOCK TO END BLOCK
     const initBlockStep = 100000;
     let stepBlock = initBlockStep;
     let fromBlock =  lastData.blockNumber + 1;
     let toBlock = 0;
 
+    // we will fetch all required events to build the historical csv until currentBlock is reached
     while(toBlock < currentBlock) {
         toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
         if (toBlock > currentBlock) {
             toBlock = currentBlock;
         }
 
-        const rangeData = [];
+        const tokensChanges = {};
         let lpTokenSupplyEvents = undefined;
         let ampFactors = undefined;
         try {
-            // Fetch each token events and store them in rangeData
+            // Fetch each token events and store them in the rangeData object
             for (let i = 0; i < tokenAddresses.length; i++) {
             // console.log(`token ${i + 1}/${tokenAddresses.length}`);
                 const tokenSymbol = poolSymbols[i];
@@ -160,7 +160,7 @@ async function FetchHistory(pool) {
                     additionnalTransferEvents = pool.additionnalTransferEvents[tokenSymbol];
                 }
                 const tokenData = await getTokenBalancesInRange(tokenAddresses[i], poolAddress, fromBlock, toBlock, additionnalTransferEvents);
-                rangeData.push(tokenData);
+                tokensChanges[poolSymbols[i]] = tokenData;
             }
 
             // fetch lp token supply
@@ -183,7 +183,7 @@ async function FetchHistory(pool) {
         // Compute block numbers from blockList(s)
         // this will output an array of block numbers where each block number is a block number where at least something occured
         // it can be: ampFactor change and/or lp supply change and/or token reserve change
-        const blockNumbersForRange = getSortedDeduplicatedBlockList(rangeData, ampFactors, lpTokenSupplyEvents);
+        const blockNumbersForRange = getSortedDeduplicatedBlockList(tokensChanges, ampFactors, lpTokenSupplyEvents);
         const lpTokenEventsCount = Object.keys(lpTokenSupplyEvents).length;
         const ampFactorsCount = Object.keys(ampFactors).length;
         console.log(`${fnName()}[${pool.poolName}]: fetching range [${fromBlock} - ${toBlock}] (${toBlock-fromBlock+1} blocks). Events occured on ${blockNumbersForRange.length} blocks (${lpTokenEventsCount} lp token Mint/Burn event(s), ${ampFactorsCount} amp factor event(s))`);
@@ -213,9 +213,9 @@ async function FetchHistory(pool) {
             }
 
             // adding reserves
-            for (let j = 0; j < tokenAddresses.length; j++) {
-                const token = tokenAddresses[j];
-                const tokenSymbol = poolSymbols[j];
+            for (let i = 0; i < tokenAddresses.length; i++) {
+                const token = tokenAddresses[i];
+                const tokenSymbol = poolSymbols[i];
                 if (token.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' 
                     || (token.toLowerCase() === '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2' && pool.wethIsEth === true)) {
                     // THIS NEEDS AN ARCHIVE NODE AND IS VERY SLOW
@@ -223,21 +223,10 @@ async function FetchHistory(pool) {
                     currBlockData.reserves[tokenSymbol] = value;
                 }
                 else {
-                    // old value
-                    const oldValue = currBlockData.reserves[tokenSymbol];
-                    let delta = BigNumber.from('0');
-                    // Compute new token value
-                    // adding tokens going to the pool
-                    if (rangeData[j][token]['to'][currBlock]) {
-                        delta = delta.add(rangeData[j][token]['to'][currBlock]);
+                    const tokenChange = tokensChanges[tokenSymbol][currBlock];
+                    if(tokenChange) {
+                        currBlockData.reserves[tokenSymbol] = currBlockData.reserves[tokenSymbol].add(tokenChange);
                     }
-                    // substracting tokens leaving the pool
-                    if (rangeData[j][token]['from'][currBlock]) {
-                        delta = delta.sub(rangeData[j][token]['from'][currBlock]);
-                    }
-                    const newValue = oldValue.add(delta);
-                    // push to array
-                    currBlockData.reserves[tokenSymbol] = newValue;
                 }
             }
 
@@ -356,24 +345,23 @@ async function fetchRampA(pool, fromBlock, toBlock) {
  * @param {number} fromBlock
  * @param {number} toBlock
  * @param {string[]} additionalTransferAddresses
- * @returns {Promise<{[key: string]: {to:{[blocknumber: number]: BigNumber}, from:{[blocknumber: number]: BigNumber}, blocklist: number[]}>} rangeData
+ * @returns {Promise<{[blockNumber: number]: BigNumber}>} rangeData
  */
 async function getTokenBalancesInRange(tokenAddress, poolAddress, fromBlock, toBlock, additionalTransferAddresses) {
     let contract = new ethers.Contract(tokenAddress, curveConfig.erc20Abi, web3Provider);
-    const blockList = [];
 
-    const results = {
-        [tokenAddress]: {
-            from: {},
-            to: {}
-        }
-    };
+    // result will hold, per block, the variation of token as a big number
+    // will be positive or negative
+    const results = {};
 
     const filterFrom = contract.filters.Transfer(poolAddress);
     const filterTo = contract.filters.Transfer(null, poolAddress);
 
     const fromEvents = await contract.queryFilter(filterFrom, fromBlock, toBlock);
     const toEvents = await contract.queryFilter(filterTo, fromBlock, toBlock);
+
+    // sometimes (for susd for example), the erc20 address changed (because proxy?) so the events should 
+    // be fetched from additionnal addresses
     for(let i = 0; i < additionalTransferAddresses.length; i++) {
         const additionnalContractAddress = additionalTransferAddresses[i];
         contract = new ethers.Contract(additionnalContractAddress, curveConfig.erc20Abi, web3Provider);
@@ -389,48 +377,45 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, fromBlock, toB
     for (let i = 0; i < fromEvents.length; i++) {
         const fromEvent = fromEvents[i];
         const amountTransfered = fromEvent.args[2]; // this is a big number
-        if (!results[tokenAddress]['from'][fromEvent.blockNumber]) {
-            results[tokenAddress]['from'][fromEvent.blockNumber] = BigNumber.from(0);
+        if (!results[fromEvent.blockNumber]) {
+            results[fromEvent.blockNumber] = BigNumber.from(0);
         }
 
-        results[tokenAddress]['from'][fromEvent.blockNumber] = results[tokenAddress]['from'][fromEvent.blockNumber].add(amountTransfered);
-        if (!blockList.includes(fromEvent.blockNumber)) {
-            blockList.push(fromEvent.blockNumber);
-        }
+        // the 'from' events mean that the pool has less tokens after, so substract 'amountTransfered'
+        results[fromEvent.blockNumber] = results[fromEvent.blockNumber].sub(amountTransfered);
     }
     for (let i = 0; i < toEvents.length; i++) {
         const toEvent = toEvents[i];
         const amountTransfered = toEvent.args[2]; // this is a big number
-        if (!results[tokenAddress]['to'][toEvent.blockNumber]) {
-            results[tokenAddress]['to'][toEvent.blockNumber] = BigNumber.from(0);
+        if (!results[toEvent.blockNumber]) {
+            results[toEvent.blockNumber] = BigNumber.from(0);
         }
 
-        results[tokenAddress]['to'][toEvent.blockNumber] = results[tokenAddress]['to'][toEvent.blockNumber].add(amountTransfered);
-        if (!blockList.includes(toEvent.blockNumber)) {
-            blockList.push(toEvent.blockNumber);
-        }
+        // the 'to' events mean that the pool has more tokens after, so add 'amountTransfered'
+        results[toEvent.blockNumber] =results[toEvent.blockNumber].add(amountTransfered);
     }
 
-    results['blockList'] = blockList;
     return results;
 }
 
 /**
  * get the blocklist (sorted, deduplicated)
- * @param {{[key: string]: {to:{[blocknumber: number]: BigNumber}, from:{[blocknumber: number]: BigNumber}, blocklist: number[]}} rangeData 
+ * @param {number[]} baseBlockNumbers the base block numbers
  * @param {{number: number}} ampFactors 
+ * @param {{number: number}} lpTokenSupplyEvents 
  * @returns 
  */
-function getSortedDeduplicatedBlockList(rangeData, ampFactors, lpTokenSupplyEvents) {
+function getSortedDeduplicatedBlockList(tokenChanges, ampFactors, lpTokenSupplyEvents) {
     const deduplicatedBlockList = [];
-    for (let y = 0; y < rangeData.length; y++) {
-        for (let z = 0; z < rangeData[y]['blockList'].length; z++) {
-            const blockNumberToAdd = rangeData[y]['blockList'][z];
-            if(!deduplicatedBlockList.includes(blockNumberToAdd)) {
-                deduplicatedBlockList.push(blockNumberToAdd);
+
+    for(const symbol in tokenChanges) {
+        Object.keys(tokenChanges[symbol]).forEach(blockToAdd => {
+            if(!deduplicatedBlockList.includes(Number(blockToAdd))) {
+                deduplicatedBlockList.push(Number(blockToAdd));
             }
-        }
+        });
     }
+
     for (const blockToAdd in ampFactors) {
         if(!deduplicatedBlockList.includes(Number(blockToAdd))) {
             deduplicatedBlockList.push(Number(blockToAdd));
