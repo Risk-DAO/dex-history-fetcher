@@ -3,7 +3,7 @@ const dotenv = require('dotenv');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const curveConfig = require('./curve.config');
 const fs = require('fs');
-const { sleep } = require('../utils/utils');
+const { sleep, fnName } = require('../utils/utils');
 const { getTokenSymbolByAddress, getConfTokenBySymbol, normalize } = require('../utils/token.utils');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
@@ -63,15 +63,10 @@ async function FetchHistory(pool) {
 
     /// function variables
     let poolAddress = pool.poolAddress;
-    const historyFileName = `${DATA_DIR}/curve/${pool.poolName}_curve.csv`;
-    const stepBlock = 100000;
+    const historyFileName = `${DATA_DIR}/curve/${pool.poolName}_${pool.lpTokenName}_curve.csv`;
     let tokenAddresses = undefined;
     let poolSymbols = [];
-    let startBlock = undefined;
     const currentBlock = await web3Provider.getBlockNumber();
-    let lastBlockData = [];
-    let currentAmpFactor = pool.ampFactor;
-
     // Fetching tokens in pool
     console.log('--- fetching pool tokens ---');
     try {
@@ -93,83 +88,139 @@ async function FetchHistory(pool) {
         throw error;
     }
 
+    let lastData = {};
     if (fs.existsSync(historyFileName)) {
         // if file exists, taking start block and last block data from file
         const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
-        const lastLine = fileContent[fileContent.length - 2];
-        lastBlockData = lastLine.split(',');
-        startBlock = Number(lastBlockData[0]) + 1;
-        currentAmpFactor = lastBlockData[1];
-        console.log('startblock from file is:', startBlock);
+        // read last line
+        let lastLine = fileContent[fileContent.length - 1]; 
+        if(!lastLine) {
+            // last line can be just \n so if lastline empty, check previous line
+            lastLine = fileContent[fileContent.length - 2]; 
+        }
+        
+        const lastBlockDataSplt = lastLine.split(',');
+        lastData.blockNumber = Number(lastBlockDataSplt[0]);
+        lastData.ampFactor = Number(lastBlockDataSplt[1]);
+        lastData.lpTokenSupply = BigNumber.from(lastBlockDataSplt[2]);
+        lastData.reserves = {};
+        for(let i = 3; i < lastBlockDataSplt.length; i++) {
+            lastData.reserves[poolSymbols[i-3]] = BigNumber.from(lastBlockDataSplt[i]);
+        }
     }
     else {
-        // if no file found, get the contract creation block number and start fetching from here
-        startBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
-        console.log('startblock from contract is:', startBlock);
-        const initialArray = [];
-        initialArray.push(startBlock);
-        let tokenHeaders = 'blocknumber,ampfactor';
-        initialArray.push(pool.ampFactor);
+        // and get the contract creation block number and start fetching from here
+        const deployedBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
+        console.log('deployed block from contract is:', deployedBlock);
+
+        lastData.blockNumber = deployedBlock - 1; // init with -1 to fetch from the contract deployment, usefull if some events appears right from creation
+        lastData.ampFactor = pool.ampFactor;
+        lastData.lpTokenSupply = BigNumber.from(0);
+        lastData.reserves = {};
+
+        // create the csv with headers
+        let headers = `blocknumber,ampfactor,lp_supply_${pool.lpTokenAddress}`;
         for (let i = 0; i < tokenAddresses.length; i++) {
-            initialArray.push('0');
-            tokenHeaders += `,reserve_${poolSymbols[i]}_${tokenAddresses[i]}`;
+            headers += `,reserve_${poolSymbols[i]}_${tokenAddresses[i]}`;
+            lastData.reserves[poolSymbols[i]] = BigNumber.from(0);
         }
-        lastBlockData = initialArray;
-        fs.writeFileSync(historyFileName, `${tokenHeaders}\n${initialArray}\n`);
+
+        fs.writeFileSync(historyFileName, `${headers}\n`);
     }
 
+    // here, we have the last data written in csv in the object 'lastData'
+    console.log('lastData', lastData);
 
     // THIS IS WHERE STUFF HAPPENS, FROM START BLOCK TO END BLOCK
-    for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += stepBlock) {
-        let dataToWrite = [];
-        dataToWrite.push(lastBlockData);
-        let toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
+    const initBlockStep = 100000;
+    let stepBlock = initBlockStep;
+    let fromBlock =  lastData.blockNumber + 1;
+    let toBlock = 0;
+
+    while(toBlock < currentBlock) {
+        toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
         if (toBlock > currentBlock) {
             toBlock = currentBlock;
         }
-        console.log(`FetchHistory[${pool.poolName}]: Fetching transfer events from block ${fromBlock} to block ${toBlock}. ${toBlock-fromBlock+1} blocks will be fetched. Remaining blocks to fetch: ${currentBlock - fromBlock}`);
-        // Fetch each token events and store them in rangeData
+
         const rangeData = [];
-        for (let i = 0; i < tokenAddresses.length; i++) {
+        let lpTokenSupplyEvents = undefined;
+        let ampFactors = undefined;
+        try {
+            // Fetch each token events and store them in rangeData
+            for (let i = 0; i < tokenAddresses.length; i++) {
             // console.log(`token ${i + 1}/${tokenAddresses.length}`);
-            const tokenSymbol = poolSymbols[i];
-            let additionnalTransferEvents = []; 
-            if(pool.additionnalTransferEvents && pool.additionnalTransferEvents[tokenSymbol]) {
-                additionnalTransferEvents = pool.additionnalTransferEvents[tokenSymbol];
+                const tokenSymbol = poolSymbols[i];
+                let additionnalTransferEvents = []; 
+                if(pool.additionnalTransferEvents && pool.additionnalTransferEvents[tokenSymbol]) {
+                    additionnalTransferEvents = pool.additionnalTransferEvents[tokenSymbol];
+                }
+                const tokenData = await getTokenBalancesInRange(tokenAddresses[i], poolAddress, fromBlock, toBlock, additionnalTransferEvents);
+                rangeData.push(tokenData);
             }
-            const tokenData = await getTokenBalancesInRange(tokenAddresses[i], poolAddress, fromBlock, toBlock, additionnalTransferEvents);
-            rangeData.push(tokenData);
+
+            // fetch lp token supply
+            lpTokenSupplyEvents = await fetchLpTokenSupply(pool.lpTokenAddress, fromBlock, toBlock);
+
+            // fetch amp factors modifications
+            ampFactors = await fetchRampA(pool, fromBlock, toBlock);
+        }
+        catch(e) {
+            stepBlock = Math.round(stepBlock / 2);
+            if(stepBlock < 1000) {
+                stepBlock = 1000;
+            }
+            console.log(`${fnName()}[${pool.poolName}]: error fetching range [${fromBlock} - ${toBlock}], will retry with ${stepBlock} block range`);
+            toBlock = 0; // set toBlock to 0 to avoid exiting the while on the last loop if an error occurs
+            await sleep(2000);
+            continue;
         }
 
-        // fetch amp factors modifications
-        const ampFactors = await fetchRampA(pool, fromBlock, toBlock);
         // Compute block numbers from blockList(s)
-        const blockNumbersForRange = getSortedDeduplicatedBlockList(rangeData, ampFactors);
+        // this will output an array of block numbers where each block number is a block number where at least something occured
+        // it can be: ampFactor change and/or lp supply change and/or token reserve change
+        const blockNumbersForRange = getSortedDeduplicatedBlockList(rangeData, ampFactors, lpTokenSupplyEvents);
+        const lpTokenEventsCount = Object.keys(lpTokenSupplyEvents).length;
+        const ampFactorsCount = Object.keys(ampFactors).length;
+        console.log(`${fnName()}[${pool.poolName}]: fetching range [${fromBlock} - ${toBlock}] (${toBlock-fromBlock+1} blocks). Events occured on ${blockNumbersForRange.length} blocks (${lpTokenEventsCount} lp token Mint/Burn event(s), ${ampFactorsCount} amp factor event(s))`);
         // Construct historical data for each blockNumbersForRange entry
+        const dataToWrite = [];
         for (let block = 0; block < blockNumbersForRange.length; block++) {
             // Take first block of blockNumberForRange and compute differences
             const currBlock = blockNumbersForRange[block];
-            const arrayToPush = [];
-            arrayToPush.push(currBlock);
-            if (currBlock in ampFactors) {
-                arrayToPush.push(ampFactors[currBlock]);
-                currentAmpFactor = ampFactors[currBlock];
+            const currBlockData = {
+                blockNumber: currBlock,
+                ampFactor: lastData.ampFactor,
+                lpTokenSupply: lastData.lpTokenSupply,
+                reserves: lastData.reserves,
+            };
+
+            // check if there is an ampFactor change
+            const newAmpFactor = ampFactors[currBlock];
+            if(newAmpFactor) {
+                currBlockData.ampFactor = newAmpFactor;
             }
-            else {
-                arrayToPush.push(currentAmpFactor);
+
+            // check if there's lp supply change
+            const totalSupplyChange = lpTokenSupplyEvents[currBlock];
+            if(totalSupplyChange) {
+                // only use add, when burning total supply, totalSupplyChange will be negative
+                currBlockData.lpTokenSupply = currBlockData.lpTokenSupply.add(totalSupplyChange);
             }
+
+            // adding reserves
             for (let j = 0; j < tokenAddresses.length; j++) {
                 const token = tokenAddresses[j];
-                const tokenIndexInCsv = j + 2;
+                const tokenSymbol = poolSymbols[j];
                 if (token.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' 
                     || (token.toLowerCase() === '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2' && pool.wethIsEth === true)) {
-                    // THIS NEEDS AN ARCHIVAL NODE
+                    // THIS NEEDS AN ARCHIVE NODE AND IS VERY SLOW
                     const value = await web3Provider.getBalance(pool.poolAddress, currBlock);
-                    arrayToPush.push(value.toString());
+                    currBlockData.reserves[tokenSymbol] = value;
                 }
                 else {
                     // old value
-                    const oldValue = BigNumber.from(dataToWrite[block][tokenIndexInCsv]);
+                    const oldValue = currBlockData.reserves[tokenSymbol];
                     let delta = BigNumber.from('0');
                     // Compute new token value
                     // adding tokens going to the pool
@@ -182,18 +233,25 @@ async function FetchHistory(pool) {
                     }
                     const newValue = oldValue.add(delta);
                     // push to array
-                    arrayToPush.push(newValue.toString());
+                    currBlockData.reserves[tokenSymbol] = newValue;
                 }
             }
-            // push array to data to be written
-            dataToWrite.push(arrayToPush);
 
+            // add curr data to the array that will be written to csv
+            const csvVal = getCsvFromDataObj(currBlockData, poolSymbols);
+            dataToWrite.push(csvVal);
+            // update last data to be the current data
+            lastData = currBlockData;
         }
         
-        lastBlockData = dataToWrite.at(-1);
-        const writing = dataToWrite.slice(1);
-        if (writing.length !== 0) {
-            fs.appendFileSync(historyFileName, writing.join('\n') + '\n');
+        // here, we have all the data that need to be written in the dataToWrite array
+        if (dataToWrite.length !== 0) {
+            fs.appendFileSync(historyFileName, dataToWrite.join(''));
+        }
+
+        fromBlock = toBlock +1;
+        if(stepBlock < initBlockStep) {
+            stepBlock = stepBlock * 2;
         }
     }
     console.log('CURVE HistoryFetcher: reached last block:', currentBlock);
@@ -204,10 +262,19 @@ async function FetchHistory(pool) {
     const lastLiquidityData = {};
     for(let i = 0; i < poolSymbols.length; i++) {
         const tokenConf = getConfTokenBySymbol(poolSymbols[i]);
-        const normalizedLiquidity = normalize(lastBlockData[i+2], tokenConf.decimals);
+        const normalizedLiquidity = normalize(lastData.reserves[poolSymbols[i]], tokenConf.decimals);
         lastLiquidityData[poolSymbols[i]] = normalizedLiquidity;
     }
     return lastLiquidityData;
+}
+
+function getCsvFromDataObj(dataObj, poolSymbols) {
+    let csv = `${dataObj.blockNumber},${dataObj.ampFactor},${dataObj.lpTokenSupply.toString()}`;
+    for(let i = 0; i < poolSymbols.length; i++) {
+        csv += `,${dataObj.reserves[poolSymbols[i]].toString()}`;
+    }
+
+    return csv + '\n';
 }
 
 /**
@@ -350,7 +417,7 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, fromBlock, toB
  * @param {{number: number}} ampFactors 
  * @returns 
  */
-function getSortedDeduplicatedBlockList(rangeData, ampFactors) {
+function getSortedDeduplicatedBlockList(rangeData, ampFactors, lpTokenSupplyEvents) {
     const deduplicatedBlockList = [];
     for (let y = 0; y < rangeData.length; y++) {
         for (let z = 0; z < rangeData[y]['blockList'].length; z++) {
@@ -366,7 +433,47 @@ function getSortedDeduplicatedBlockList(rangeData, ampFactors) {
         }
     }
 
+    for(const blockToAdd in lpTokenSupplyEvents) {
+        if(!deduplicatedBlockList.includes(Number(blockToAdd))) {
+            deduplicatedBlockList.push(Number(blockToAdd));
+        }
+    }
+
     return deduplicatedBlockList.sort((a, b) => { return a - b; });
+}
+
+async function fetchLpTokenSupply(lpTokenAddress, fromBlock, toBlock) {
+    let lpTokenContract = new ethers.Contract(lpTokenAddress, curveConfig.erc20Abi, web3Provider);
+    /*event Transfer:
+    _from: indexed(address)
+    _to: indexed(address)
+    _value: uint256*/
+
+    const mintFilter = lpTokenContract.filters.Transfer(ethers.constants.AddressZero);
+    const burnFilter = lpTokenContract.filters.Transfer(null, ethers.constants.AddressZero);
+    const mintEvents = await lpTokenContract.queryFilter(mintFilter, fromBlock, toBlock);
+
+    const burnEvents = await lpTokenContract.queryFilter(burnFilter, fromBlock, toBlock);
+    
+    const tokenSupplyEvents = {};
+    for(const mintEvent of mintEvents) {
+        if(!tokenSupplyEvents[mintEvent.blockNumber]) {
+            tokenSupplyEvents[mintEvent.blockNumber] = BigNumber.from(0);
+        }
+
+        tokenSupplyEvents[mintEvent.blockNumber] = tokenSupplyEvents[mintEvent.blockNumber].add(mintEvent.args[2]);
+    }
+
+    
+    for(const burnEvent of burnEvents) {
+        if(!tokenSupplyEvents[burnEvent.blockNumber]) {
+            tokenSupplyEvents[burnEvent.blockNumber] = BigNumber.from(0);
+        }
+
+        tokenSupplyEvents[burnEvent.blockNumber] = tokenSupplyEvents[burnEvent.blockNumber].sub(burnEvent.args[2]);
+    }
+
+    return tokenSupplyEvents;
 }
 
 CurveHistoryFetcher();

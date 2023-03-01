@@ -9,20 +9,25 @@ const susdCurvePoolAbi = [{"name":"TokenExchange","inputs":[{"type":"address","n
 
 const curvePairs = [
     {
-        poolAddress: '0xed279fdd11ca84beef15af5d39bb4d4bee23f0ca',
-        poolName: 'LUSD3CRV-f',
-        version: 1,
-        abi: 'erc20ABI',
-        ampType: 'RampA',
-        ampFactor: 1000
-    },
-    {
         poolAddress: '0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7',
         poolName: '3Pool',
+        lpTokenName: '3Crv',
         version: 1,
         abi: 'erc20ABI',
         ampType: 'RampA',
-        ampFactor: 100
+        ampFactor: 100,
+        lpTokenName: '3Crv',
+        lpTokenAddress: '0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490'
+    },
+    {
+        poolAddress: '0xed279fdd11ca84beef15af5d39bb4d4bee23f0ca',
+        poolName: 'lusd',
+        version: 1,
+        abi: 'erc20ABI',
+        ampType: 'RampA',
+        ampFactor: 1000,
+        lpTokenName: 'LUSD3CRV-f',
+        lpTokenAddress: '0xed279fdd11ca84beef15af5d39bb4d4bee23f0ca'
     },
     {
         poolAddress: '0x4807862AA8b2bF68830e4C8dc86D0e9A998e085a',
@@ -30,7 +35,9 @@ const curvePairs = [
         version: 1,
         abi: 'erc20ABI',
         ampType: 'RampA',
-        ampFactor: 60000
+        ampFactor: 60000,
+        lpTokenName: 'BUSD3CRV-f',
+        lpTokenAddress: '0x4807862AA8b2bF68830e4C8dc86D0e9A998e085a'
     },
     {
         poolAddress: '0x8fdb0bB9365a46B145Db80D0B1C5C5e979C84190',
@@ -38,21 +45,46 @@ const curvePairs = [
         version: 1,
         abi: 'erc20ABI',
         ampType: 'RampA',
-        ampFactor: 20000
+        ampFactor: 20000,
+        lpTokenName: 'BUSDFRAXBP3CRV-f',
+        lpTokenAddress: '0x8fdb0bB9365a46B145Db80D0B1C5C5e979C84190'
     },
     {
-        poolAddress: '0xa5407eae9ba41422680e2e00537571bcc53efbfd',
+        poolAddress: '0xc25a3a3b969415c80451098fa907ec722572917f',
         poolName: 'susd',
         version: 1,
         abi: 'susdABI',
         ampType: 'NewParameters',
         ampFactor: 70,
+        lpTokenName: 'crvPlain3andSUSD',
+        lpTokenAddress: '0xc25a3a3b969415c80451098fa907ec722572917f',
         additionnalTransferEvents: {
             "sUSD": [
                 "0x57Ab1E02fEE23774580C119740129eAC7081e9D3"
             ]
         }
     },
+    {
+        poolAddress: '0xdcef968d416a41cdac0ed8702fac8128a64241a2',
+        poolName: 'fraxusdc',
+        version: 1,
+        abi: 'erc20ABI',
+        ampType: 'RampA',
+        ampFactor: 1500,
+        lpTokenName: 'crvFRAX',
+        lpTokenAddress: '0x3175df0976dfa876431c2e9ee6bc45b65d3473cc',
+    },
+    {
+        poolAddress: '0xdc24316b9ae028f1497c275eb9192a3ea0f67022',
+        poolName: 'steth',
+        version: 1,
+        abi: 'erc20ABI',
+        ampType: 'RampA',
+        ampFactor: 500,
+        lpTokenName: 'steCRV',
+        lpTokenAddress: '0x06325440D014e39736583c165C2963BA99fAf14E'
+    },
+    // NEXT TOKENS NOT AVAILABLE BECAUSE VERSION != 1
     // {
     //     poolAddress: '0xd51a44d3fae010294c616388b506acda1bfaae46',
     //     poolName: 'tricrypto2',
@@ -69,14 +101,6 @@ const curvePairs = [
     //     ampType: 'RampAgamma',
     //     ampFactor: 400000 
     // },
-    {
-        poolAddress: '0xdcef968d416a41cdac0ed8702fac8128a64241a2',
-        poolName: 'fraxusdc',
-        version: 1,
-        abi: 'erc20ABI',
-        ampType: 'RampA',
-        ampFactor: 1500
-    },
     // {
     //     poolAddress: '0x8301ae4fc9c624d1d396cbdaa1ed877821d7c511',
     //     poolName: 'crveth',
@@ -126,22 +150,6 @@ const curvePairs = [
     //     ampType: 'RampAgamma',
     //     ampFactor: 400000 
     // },
-    {
-        poolAddress: '0xdc24316b9ae028f1497c275eb9192a3ea0f67022',
-        poolName: 'steth',
-        version: 1,
-        abi: 'erc20ABI',
-        ampType: 'RampA',
-        ampFactor: 500
-    },
-    {
-        poolAddress: '0xf9440930043eb3997fc70e1339dbb11f341de7a8',
-        poolName: 'reth',
-        version: 1,
-        abi: 'erc20ABI',
-        ampType: 'RampA',
-        ampFactor: 10
-    },
 ]
 
 module.exports = { curveFactoryAddress, curvePairs, curvePoolAbi, erc20Abi, newParamAbi, rampAGammaAbi, susdCurvePoolAbi };
