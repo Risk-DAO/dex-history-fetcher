@@ -2,9 +2,10 @@
 const BigNumber = require('bignumber.js');
 const { roundTo, logFnDuration } = require('../utils/utils');
 
-module.exports = { getPrice, getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange};
+module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages};
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
+const CONSTANT_TARGET_SLIPPAGE = 50; // 50%
 
 function getVolumeForSlippage(targetSlippagePercent, zeroForOne, currentTick, tickSpacing, sqrtPriceX96, liquidity) {
     const dtStart = Date.now();
@@ -144,47 +145,39 @@ function getVolumeForSlippageRange(minSlippage, maxSlippage, zeroForOne, current
 }
 
 /**
- * For a pool with pair {token0}-{token1}, returns amount of token1 you will receive by trading in 'dx' amount of token0
- * Ex: for the USDC-WETH pool, dx is the amount of USDC to trade in and the function returns the amount of WETH you will receive
- * With uniswap vocabulary, this is the trade "ZeroForOne" -> trade token0 for token1
- * @param {boolean} zeroForOne whether to exchange token0->token1 or token1->token0
- * @param {number} currentTick the current price tick
- * @param {number} tickSpacing tick spacing
- * @param {string} sqrtPriceX96 string representation of sqrtPriceX96
- * @param {{[tick: number]: number}} liquidity liquidities, expressed as ticks
- * @param {BigNumber} dy amount to trade
- * @returns {BigNumber} amount receivable
+ * Calculate the price of token0 vs token1.
+ * @param {number} currentTick 
+ * @param {number} token0Decimals 
+ * @param {number} token1Decimals 
+ * @returns {number} the price of token0. which mean how much token1 can 1 token0 buy. 1/this result gives the price of token1 vs token0
  */
-function getPrice(zeroForOne, currentTick, tickSpacing, sqrtPriceX96, liquidity, amount) {
-    return zeroForOne ? 
-        get_dy(currentTick, tickSpacing, sqrtPriceX96, liquidity, amount) :
-        get_dx(currentTick, tickSpacing, sqrtPriceX96, liquidity, amount);
+function getPriceNormalized(currentTick, token0Decimals, token1Decimals) {
+    const token0DecimalFactor = 10 ** token0Decimals;
+    const token1DecimalFactor = 10 ** token1Decimals;
+    const price = getTickPrice(currentTick);
+    const priceToken0VsToken1 = price * token0DecimalFactor / token1DecimalFactor;
+    return priceToken0VsToken1;
 }
 
-
-/**
- * For a pool with pair {token0}-{token1}, returns amount of token1 you will receive by trading in 'dx' amount of token0
- * The result will be normalized as a number with the correct decimal place
- * Ex: for the USDC-WETH pool, dx is the amount of USDC to trade in and the function returns the amount of WETH you will receive
- * With uniswap vocabulary, this is the trade "ZeroForOne" -> trade token0 for token1
- * @param {boolean} zeroForOne whether to exchange token0->token1 or token1->token0
- * @param {number} currentTick the current price tick
- * @param {number} tickSpacing tick spacing
- * @param {string} sqrtPriceX96 string representation of sqrtPriceX96
- * @param {{[tick: number]: number}} liquidity liquidities, expressed as ticks
- * @param {BigNumber} dy amount to trade
- * @returns {BigNumber} amount receivable
- */
-function getPriceNormalized(zeroForOne, currentTick, tickSpacing, sqrtPriceX96, liquidity, amount, token0Decimals, token1Decimals) {
-    const token0DecimalFactor = new BigNumber(10).pow(new BigNumber(token0Decimals));
-    const token1DecimalFactor = new BigNumber(10).pow(new BigNumber(token1Decimals));
-    const bnAmount = getPrice(zeroForOne, currentTick, tickSpacing, sqrtPriceX96, liquidity, amount);
-    return zeroForOne ? 
-        bnAmount.times(token0DecimalFactor).div(token1DecimalFactor).toNumber() :
-        bnAmount.times(token1DecimalFactor).div(token0DecimalFactor).toNumber();
-
+function getTickPrice(tick) {
+    return 1.0001 ** tick;
 }
+// tick 206077
+// function test() {
+//     const currentTick = 202293;
+//     const p0 = 1/getPriceNormalized(currentTick, 6, 18);
+//     const p1 = 1/getPriceNormalized(currentTick + 100, 6, 18);
+//     console.log('p0',p0);
+//     console.log('p1', p1);
+//     const p0Slippage1 = p0 - (p0*1/100);
+//     console.log('p0Slippage1', p0Slippage1);
 
+//     // 1 tick++ is +0.01% price for token0vstoken1
+//     // 1 tick++ is -0.01% price for token1vstoken0
+
+//     // +100 ticks mean -1% price token1vstoken0
+// }
+// test();
 /**
  * Get the next lower tick as the current tick returned can sometimes not be in the valid range
  * @param {number} currentTick 
@@ -195,6 +188,132 @@ function getNextLowerTick(currentTick, tickSpacing) {
     return (Math.floor(currentTick / tickSpacing)) * tickSpacing;
 }
 
+function getSlippages(currentTick, tickSpacing, sqrtPriceX96, liquidity, token0Decimals, token1Decimals) {
+    const token0Slippage = get_dx_slippage(currentTick, tickSpacing, sqrtPriceX96, liquidity, token0Decimals);
+    const token1Slippage =  get_dy_slippage(currentTick, tickSpacing, sqrtPriceX96, liquidity, token1Decimals);
+
+    return {token0Slippage, token1Slippage};
+}
+
+
+/**
+ * For a pool with pair {token0}-{token1}, returns the slippage map for amounts of token0 tradable for x% slippage
+ * @param {number} currentTick the current price tick
+ * @param {number} tickSpacing tick spacing
+ * @param {string} sqrtPriceX96 string representation of sqrtPriceX96
+ * @param {{[tick: number]: number}} liquidity liquidities, expressed as ticks
+ * @param {number} tokenDecimals decimals number of token0
+ * @returns {BigNumber} amount receivable
+ */
+function get_dx_slippage(currentTick, tickSpacing, sqrtPriceX96, liquidity, tokenDecimals) {
+    const base = new BigNumber(1.0001);
+    const decimalFactor = new BigNumber(10).pow(tokenDecimals);
+    let dx = new BigNumber(0);
+    BigNumber.config({ POW_PRECISION: 10 });
+    const _96bits = new BigNumber(2).pow(new BigNumber(96));
+    let currSqrtPrice = new BigNumber(sqrtPriceX96).div(_96bits); 
+    let currTick = getNextLowerTick(Number(currentTick), tickSpacing);
+
+    // 100 ticks = 1% slippage according to whitepaper
+    //  'This has the desirable property of each tick being a .01% (1 basis point) price movement away from each of its neighboring ticks.'
+    let targetTick = getNextLowerTick(currTick + CONSTANT_TARGET_SLIPPAGE * 100, tickSpacing);
+    
+    // 'relevantTicks' will store ticks and the corresponding slippage percent
+    // [tick: number]: number
+    // {
+    //     "205970": 1,
+    //     "205870": 2,
+    //     "205770": 3,
+    // }
+    const relevantTicks = {};
+    for(let i = 1; i <= CONSTANT_TARGET_SLIPPAGE; i++) {
+        const tickForiPercentSlippage = getNextLowerTick(currTick + i * 100, tickSpacing);
+        relevantTicks[tickForiPercentSlippage] = i;
+    }
+
+    // 'slippageData' will store for each amount of slippage, the amount of y tradable
+    const slippageData = {};
+
+    // when selling y, the price goes down
+    while(currTick <= targetTick) {
+        const nextTick = currTick + Number(tickSpacing);
+        //console.log({base},{nextTick})
+        const nextSqrtPrice = (base.pow(nextTick)).sqrt();
+
+        const L = new BigNumber(liquidity[currTick]).times(CONSTANT_1e18);
+        dx = dx.plus(L.div(currSqrtPrice).minus(L.div(nextSqrtPrice)));
+
+        if(Object.keys(relevantTicks).map(_ => Number(_)).includes(currTick)) {
+            slippageData[relevantTicks[currTick]] = dx.div(decimalFactor).toNumber();
+        }
+
+        // move to next tick
+        currSqrtPrice = nextSqrtPrice;
+        currTick = nextTick;
+    }
+
+    return slippageData;
+}
+
+/**
+ * For a pool with pair {token0}-{token1}, returns the slippage map for amounts of token1 tradable for x% slippage
+ * @param {number} currentTick the current price tick
+ * @param {number} tickSpacing tick spacing
+ * @param {string} sqrtPriceX96 string representation of sqrtPriceX96
+ * @param {{[tick: number]: number}} liquidity liquidities, expressed as ticks
+ * @param {number} tokenDecimals decimals number of token1
+ * @returns {BigNumber} amount receivable
+ */
+function get_dy_slippage(currentTick, tickSpacing, sqrtPriceX96, liquidity, tokenDecimals) {
+    const base = new BigNumber(1.0001);
+    const decimalFactor = new BigNumber(10).pow(tokenDecimals);
+    let dy = new BigNumber(0);
+    BigNumber.config({ POW_PRECISION: 10 });
+    const _96bits = new BigNumber(2).pow(new BigNumber(96));
+    let currSqrtPrice = new BigNumber(sqrtPriceX96).div(_96bits); 
+    let currTick = getNextLowerTick(Number(currentTick), tickSpacing);
+    // 100 ticks = 1% slippage according to whitepaper
+    //  'This has the desirable property of each tick being a .01% (1 basis point) price movement away from each of its neighboring ticks.'
+    let targetTick = getNextLowerTick(currTick - CONSTANT_TARGET_SLIPPAGE * 100, tickSpacing);
+    
+    // 'relevantTicks' will store ticks and the corresponding slippage percent
+    // [tick: number]: number
+    // {
+    //     "205970": 1,
+    //     "205870": 2,
+    //     "205770": 3,
+    // }
+    const relevantTicks = {};
+    for(let i = 1; i <= CONSTANT_TARGET_SLIPPAGE; i++) {
+        const tickForiPercentSlippage = getNextLowerTick(currTick - i * 100, tickSpacing);
+        relevantTicks[tickForiPercentSlippage] = i;
+    }
+
+    // 'slippageData' will store for each amount of slippage, the amount of y tradable
+    const slippageData = {};
+
+    // when selling x, the price goes up
+    while(currTick >= targetTick) {
+        const nextTick = currTick - Number(tickSpacing);
+        const nextSqrtPrice = (base.pow(nextTick)).sqrt();
+
+        const L = new BigNumber(liquidity[currTick]).times(CONSTANT_1e18);
+        const dSqrtP = currSqrtPrice.minus(nextSqrtPrice);
+        dy = dy.plus(L.times(dSqrtP));
+
+        if(Object.keys(relevantTicks).map(_ => Number(_)).includes(currTick)) {
+            slippageData[relevantTicks[currTick]] = dy.div(decimalFactor).toNumber();
+        }
+
+        // move to next tick
+        currSqrtPrice = nextSqrtPrice;
+        currTick = nextTick;
+    }
+
+    return slippageData;
+}
+
+
 /**
  * For a pool with pair {token0}-{token1}, returns amount of token1 you will receive by trading in 'dx' amount of token0
  * Ex: for the USDC-WETH pool, dx is the amount of USDC to trade in and the function returns the amount of WETH you will receive
@@ -203,7 +322,7 @@ function getNextLowerTick(currentTick, tickSpacing) {
  * @param {number} tickSpacing tick spacing
  * @param {string} sqrtPriceX96 string representation of sqrtPriceX96
  * @param {{[tick: number]: number}} liquidity liquidities, expressed as ticks
- * @param {BigNumber} dy amount to trade
+ * @param {BigNumber} dx amount to trade
  * @returns {BigNumber} amount receivable
  */
 function get_dy(currentTick, tickSpacing, sqrtPriceX96, liquidity, dx) {

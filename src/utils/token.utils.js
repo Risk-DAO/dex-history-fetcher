@@ -28,7 +28,13 @@ function normalize(amount, decimals) {
  * @returns {{decimals: number, address: string}} token configuration
  */
 function getConfTokenBySymbol(symbol) {
-    return tokens[symbol];
+    const tokenConf = tokens[symbol];
+    if(!tokenConf) {
+        throw new Error(`Cannot find token with symbol ${symbol}`);
+    }
+    // add symbol to config
+    tokenConf.symbol = symbol;
+    return tokenConf;
 }
 
 /**
