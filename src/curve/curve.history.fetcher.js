@@ -92,9 +92,33 @@ async function FetchHistory(pool) {
         throw error;
     }
 
+    
+    /**
+     * lastData will hold the latest data we have on the curve pool
+     * {
+     *  blockNumber: number,
+     *  ampFactor: number,
+     *  lpTokenSupply: BigNumber,
+     *  reserves: [tokenSymbol: string]: BigNumber
+     * }
+     * 
+     * for example:     
+     * {
+     *  blockNumber: 14754214,
+     *  ampFactor: 200,
+     *  lpTokenSupply: 2000000000000000,
+     *  reserves: {
+     *      "DAI": 1487787454878454878,
+     *      "USDC": 14877874548,
+     *      "USDT": 2971574851
+     *  }
+     * }
+     * */ 
     let lastData = {};
+
+    // now we will try to fetch the old last data (from begining or from the csv file)
     if (fs.existsSync(historyFileName)) {
-        // if file exists, taking start block and last block data from file
+        // if file exists, we read the last line to get the lastData
         const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
         // read last line
         let lastLine = fileContent[fileContent.length - 1]; 
@@ -113,11 +137,13 @@ async function FetchHistory(pool) {
         }
     }
     else {
-        // and get the contract creation block number and start fetching from here
+        // if the file does not exists, we get the creation block number and start fetching from here
+        // all lastData will be empty or 0
         const deployedBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
         console.log('deployed block from contract is:', deployedBlock);
 
         lastData.blockNumber = deployedBlock - 1; // init with -1 to fetch from the contract deployment, usefull if some events appears right from creation
+        // the default ampFactor is fetched from the config
         lastData.ampFactor = pool.ampFactor;
         lastData.lpTokenSupply = BigNumber.from(0);
         lastData.reserves = {};
@@ -133,8 +159,6 @@ async function FetchHistory(pool) {
     }
 
     // here, we have the last data that was in csv, in the object 'lastData'
-    // console.log('lastData', lastData);
-
     const initBlockStep = 100000;
     let stepBlock = initBlockStep;
     let fromBlock =  lastData.blockNumber + 1;
@@ -147,6 +171,30 @@ async function FetchHistory(pool) {
             toBlock = currentBlock;
         }
 
+        /**
+         * tokensChanges will hold all the token changes that occured between fromBlock and toBlock
+         * 
+         * {[tokenSymbol: string]: {[blockNumber: number]: BigNumber}}
+         * 
+         * Example for the 3pool:
+         * {
+         *  "DAI": {
+         *      15784561: 10000,
+         *      15784562: -4000, 
+         *      15784563: 8000, 
+         *  },
+         *  "USDC": {
+         *      15784568: 1000000,
+         *      15784569: 40000, 
+         *      15784570: -80000, 
+         *  },
+         *  "USDT": {
+         *      15784561: 800000,
+         *      15784565: -9000000, 
+         *      15784569: 200000, 
+         *  }
+         * }
+         */
         const tokensChanges = {};
         let lpTokenSupplyEvents = undefined;
         let ampFactors = undefined;
@@ -180,18 +228,21 @@ async function FetchHistory(pool) {
             continue;
         }
 
-        // Compute block numbers from blockList(s)
+        // Get the list of blocks where at least one event occured
         // this will output an array of block numbers where each block number is a block number where at least something occured
         // it can be: ampFactor change and/or lp supply change and/or token reserve change
         const blockNumbersForRange = getSortedDeduplicatedBlockList(tokensChanges, ampFactors, lpTokenSupplyEvents);
         const lpTokenEventsCount = Object.keys(lpTokenSupplyEvents).length;
         const ampFactorsCount = Object.keys(ampFactors).length;
         console.log(`${fnName()}[${pool.poolName}]: fetching range [${fromBlock} - ${toBlock}] (${toBlock-fromBlock+1} blocks). Events occured on ${blockNumbersForRange.length} blocks (${lpTokenEventsCount} lp token Mint/Burn event(s), ${ampFactorsCount} amp factor event(s))`);
+        
         // Construct historical data for each blockNumbersForRange entry
         const dataToWrite = [];
-        for (let block = 0; block < blockNumbersForRange.length; block++) {
-            // Take first block of blockNumberForRange and compute differences
-            const currBlock = blockNumbersForRange[block];
+        for (let blockIndex = 0; blockIndex < blockNumbersForRange.length; blockIndex++) {
+            // For each block in the block list, we will check the changes and compute the 
+            // value at the block "currBlock"
+            const currBlock = blockNumbersForRange[blockIndex];
+            // initialize the current block data as the last value, only changing the block number value
             const currBlockData = {
                 blockNumber: currBlock,
                 ampFactor: lastData.ampFactor,
@@ -208,14 +259,17 @@ async function FetchHistory(pool) {
             // check if there's lp supply change
             const totalSupplyChange = lpTokenSupplyEvents[currBlock];
             if(totalSupplyChange) {
-                // only use add, when burning total supply, totalSupplyChange will be negative
+                // we only need to use add because event when burning total supply, totalSupplyChange will be negative
+                // so adding the change will lower the lpTokenSupply
                 currBlockData.lpTokenSupply = currBlockData.lpTokenSupply.add(totalSupplyChange);
             }
 
-            // adding reserves
+            // for eachs token, we now add the reserves changes
             for (let i = 0; i < tokenAddresses.length; i++) {
                 const token = tokenAddresses[i];
                 const tokenSymbol = poolSymbols[i];
+
+                // specific case for ETH, we can't have event about eth so we need to get the archival data
                 if (token.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' 
                     || (token.toLowerCase() === '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2' && pool.wethIsEth === true)) {
                     // THIS NEEDS AN ARCHIVE NODE AND IS VERY SLOW
@@ -223,17 +277,22 @@ async function FetchHistory(pool) {
                     currBlockData.reserves[tokenSymbol] = value;
                 }
                 else {
+                    // for tokens other than ETH, just take the value from the tokensChanges object, for the current block
                     const tokenChange = tokensChanges[tokenSymbol][currBlock];
                     if(tokenChange) {
+                        // if there is a token change for this token symbol at this block, simply add it to the old value we have
+                        // in the currBlockData.reserves[tokenSymbol]. Same as before, only need to add becausethe token change will be
+                        // negative if it's a burn event that created this tokenChange
                         currBlockData.reserves[tokenSymbol] = currBlockData.reserves[tokenSymbol].add(tokenChange);
                     }
                 }
             }
 
-            // add curr data to the array that will be written to csv
+            // transform currBlockData to csv representation
             const csvVal = getCsvFromDataObj(currBlockData, poolSymbols);
+            // add it to the array we will write at the end of the loop
             dataToWrite.push(csvVal);
-            // update last data to be the current data
+            // update last data to be the current data and proceed with the loop
             lastData = currBlockData;
         }
         
@@ -244,6 +303,9 @@ async function FetchHistory(pool) {
 
         fromBlock = toBlock +1;
         if(stepBlock < initBlockStep) {
+            // if the stepBlock is lower than initBlockStep, it means we encountered an exception when calling the RPC
+            // we always divide by 2 when lowering the blockStep so to reup progressively until we reach Init BlockStep
+            // we will multiply stepBlock by 2
             stepBlock = stepBlock * 2;
         }
     }
@@ -345,7 +407,7 @@ async function fetchRampA(pool, fromBlock, toBlock) {
  * @param {number} fromBlock
  * @param {number} toBlock
  * @param {string[]} additionalTransferAddresses
- * @returns {Promise<{[blockNumber: number]: BigNumber}>} rangeData
+ * @returns {Promise<{[blockNumber: number]: BigNumber}>} a dictionary mapping block number to change amount for this block number
  */
 async function getTokenBalancesInRange(tokenAddress, poolAddress, fromBlock, toBlock, additionalTransferAddresses) {
     let contract = new ethers.Contract(tokenAddress, curveConfig.erc20Abi, web3Provider);
@@ -403,7 +465,7 @@ async function getTokenBalancesInRange(tokenAddress, poolAddress, fromBlock, toB
  * @param {number[]} baseBlockNumbers the base block numbers
  * @param {{number: number}} ampFactors 
  * @param {{number: number}} lpTokenSupplyEvents 
- * @returns 
+ * @returns {number[]} deduplicatedBlockList sorted list of block number where at least one event occured
  */
 function getSortedDeduplicatedBlockList(tokenChanges, ampFactors, lpTokenSupplyEvents) {
     const deduplicatedBlockList = [];
@@ -431,17 +493,20 @@ function getSortedDeduplicatedBlockList(tokenChanges, ampFactors, lpTokenSupplyE
     return deduplicatedBlockList.sort((a, b) => { return a - b; });
 }
 
+/**
+ * Fetches the token movements for the pool lp tokens fromBlock toBlock
+ * @param {string} lpTokenAddress 
+ * @param {number} fromBlock 
+ * @param {number} toBlock 
+ * @returns {Promise<{[blockNumber: number]: BigNumber}>} a dictionary mapping block number to change amount for this block number
+ */
 async function fetchLpTokenSupply(lpTokenAddress, fromBlock, toBlock) {
     let lpTokenContract = new ethers.Contract(lpTokenAddress, curveConfig.erc20Abi, web3Provider);
-    /*event Transfer:
-    _from: indexed(address)
-    _to: indexed(address)
-    _value: uint256*/
 
     const mintFilter = lpTokenContract.filters.Transfer(ethers.constants.AddressZero);
     const burnFilter = lpTokenContract.filters.Transfer(null, ethers.constants.AddressZero);
-    const mintEvents = await lpTokenContract.queryFilter(mintFilter, fromBlock, toBlock);
 
+    const mintEvents = await lpTokenContract.queryFilter(mintFilter, fromBlock, toBlock);
     const burnEvents = await lpTokenContract.queryFilter(burnFilter, fromBlock, toBlock);
     
     const tokenSupplyEvents = {};
@@ -452,7 +517,6 @@ async function fetchLpTokenSupply(lpTokenAddress, fromBlock, toBlock) {
 
         tokenSupplyEvents[mintEvent.blockNumber] = tokenSupplyEvents[mintEvent.blockNumber].add(mintEvent.args[2]);
     }
-
     
     for(const burnEvent of burnEvents) {
         if(!tokenSupplyEvents[burnEvent.blockNumber]) {
