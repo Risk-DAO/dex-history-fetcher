@@ -99,7 +99,7 @@ async function FetchHistory(pool) {
      *  blockNumber: number,
      *  ampFactor: number,
      *  lpTokenSupply: BigNumber,
-     *  reserves: [tokenSymbol: string]: BigNumber
+     *  reserves: {[tokenSymbol: string]: BigNumber}
      * }
      * 
      * for example:     
