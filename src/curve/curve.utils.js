@@ -215,6 +215,27 @@ function computeLiquidityForSlippageCurvePool(fromSymbol, toSymbol, baseQty, tar
 
 /* CURVE PRICE ALGORITHM FUNCTIONS */
 
+/**
+ * get the virtual price
+ * @param {BigInt[]} xp array of balances, all in 'wei' (1e18)
+ * @param {BigInt} N_COINS number of coins
+ * @param {BigInt} A Amplification factor
+ * @param {number} tokenSupply normalized token total supply
+ * @returns {number} virtual price with good decimal place
+ */
+function get_virtual_price(xp, N_COINS, A, tokenSupply) {
+    const D = get_D(xp, N_COINS, A);
+    return normalize(D.toString(), 18) / tokenSupply;
+}
+
+
+/**
+ * 
+ * @param {BigInt[]} xp array of balances, all in 'wei' (1e18)
+ * @param {BigInt} N_COINS number of coins
+ * @param {BigInt} A Amplification factor
+ * @returns 
+ */
 function get_D(xp, N_COINS, A) {
     let S = 0n;
     for (const _x of xp) {
@@ -301,7 +322,7 @@ function toWei(n) {
     return BigInt(n) * 10n **18n;
 }
 
-module.exports = { getCurvePriceAndLiquidity };
+module.exports = { getCurvePriceAndLiquidity, get_return, get_virtual_price };
 
 // function test() {
 //     getCurvePriceAndLiquidity('./data', '3pool', 'DAI', 'USDC', 15487);

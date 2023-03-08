@@ -106,6 +106,10 @@ const tokens = {
     crvFRAX: {
         decimals: 18,
         address: '0x3175Df0976dFA876431C2E9eE6Bc45b65d3473CC'
+    },
+    LUSD: {
+        decimals: 18,
+        address: '0x5f98805A4E8be255a32880FDeC7F6728C6568bA0'
     }
 };
 
