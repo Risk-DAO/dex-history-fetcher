@@ -7,12 +7,12 @@ dotenv.config();
 const univ3Config = require('./uniswap.v3.config');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const { fnName, logFnDuration, sleep } = require('../utils/utils');
-const { getTokenSymbolByAddress, getConfTokenBySymbol } = require('../utils/token.utils');
+const { getConfTokenBySymbol } = require('../utils/token.utils');
 const { getPriceNormalized, getSlippages } = require('./uniswap.v3.utils');
 const { default: BigNumber } = require('bignumber.js');
 // save liqiudity data every 'CHECKPOINT_INTERVAL' blocks
-const CHECKPOINT_INTERVAL = 100_000;
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
+const CONSTANT_BLOCK_INTERVAL = 100;
 
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
@@ -75,7 +75,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
 
     console.log(`${fnName()} [${pairConfig.token0}-${pairConfig.token1}]: pool address found: ${poolAddress} with pair ${pairConfig.token0}-${pairConfig.token1}`);
     // try to find the json file representation of the pool latest value already fetched
-    const latestDataFilePath = `${DATA_DIR}/uniswapv3/${pairConfig.token0}-${pairConfig.token1}-${poolAddress}-latestdata.json`;
+    const latestDataFilePath = `${DATA_DIR}/uniswapv3/${pairConfig.token0}-${pairConfig.token1}-${pairConfig.fees}-latestdata.json`;
     let latestData = undefined;
 
     if(fs.existsSync(latestDataFilePath)) {
@@ -87,7 +87,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
         latestData = await fetchInitializeData(web3Provider, poolAddress, univ3PairContract);
     }
 
-    const dataFileName = `${DATA_DIR}/uniswapv3/${token0.symbol}-${token1.symbol}_data.csv`;
+    const dataFileName = `${DATA_DIR}/uniswapv3/${token0.symbol}-${token1.symbol}-${pairConfig.fees}-data.csv`;
     if(!fs.existsSync(dataFileName)) {
         fs.writeFileSync(dataFileName, 'blocknumber,data\n');
     }
@@ -193,7 +193,7 @@ function processEvents(events, iface, latestData, token0, token1, latestDataFile
         const parsedEvent = iface.parseLog(event);
 
         // this checks that we are crossing a new block, so we will save the price and maybe checkpoint data
-        if(lastBlock != event.blockNumber && lastBlock >= latestData.lastDataSave + 1000) {
+        if(lastBlock != event.blockNumber && lastBlock >= latestData.lastDataSave + CONSTANT_BLOCK_INTERVAL) {
             const newSaveData = getSaveData(token0, token1, latestData);
             saveData.push(newSaveData);
         }
