@@ -141,6 +141,15 @@ async function getUniV2AggregatedDataForBlockNumbers(dataDir, fromSymbol, toSymb
     return aggregatedLiquidity;
 }
 
+async function getUniV2DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange){
+    const results = {};
+    for(let i = 0; i < blockRange.length; i++){
+        let result = await getUniV2DataForBlockNumber(dataDir, fromSymbol, toSymbol, blockRange[i]);
+        results[blockRange[i]] = result; 
+    }
+    return results;
+}
+
 async function getUniV2DataForBlockNumber(dataDir, fromSymbol, toSymbol, targetBlockNumber) {
     const fileInfo = getUniV2DataFile(dataDir, fromSymbol, toSymbol);
     if(!fileInfo) {
@@ -279,7 +288,7 @@ function computeLiquidityUniV2Pool(fromSymbol, fromReserve, toSymbol, toReserve,
     return amountOfFromToExchange;
 }
 
-module.exports = { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity };
+module.exports = { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, getUniV2DataforBlockRange };
 
 // async function test() {
 //     // computeLiquidityUniV2Pool('ETH', 28345.5, 'USDC', 43920629, 10/100 );
