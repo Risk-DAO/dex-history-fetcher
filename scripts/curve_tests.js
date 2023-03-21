@@ -1,10 +1,11 @@
-const { ethers } = require('ethers');
+const { ethers, BigNumber } = require('ethers');
 const fs = require('fs');
 const dotenv = require('dotenv');
 dotenv.config();
 const {tokens} = require('../src/global.config');
-const { get_return, get_virtual_price } = require('../src/curve/curve.utils');
+const { get_return, get_virtual_price, computeLiquidityForSlippageCurvePool } = require('../src/curve/curve.utils');
 const { normalize } = require('../src/utils/token.utils');
+const curveConfig = require('../src/curve/curve.config');
 
 async function price3CrvUsdc() {
     
@@ -171,4 +172,99 @@ async function test() {
         }
     }
 }
-lusdvs3crvPrice();
+
+function norm3pool() {
+    const datafilePath = 'C:\\Users\\Emilien\\3pool_since_16817741.csv';
+    const destDatafilePath = 'C:\\Users\\Emilien\\3pool_since_16793760_output.csv';
+    const fileContent = fs.readFileSync(datafilePath, 'utf-8').split('\n');
+    const amount1000e18 = BigInt(1000) * (BigInt(10) ** BigInt(18));
+
+    /*usdt/usdc, usdt/dai, usdc/dai*/
+    if(!fs.existsSync(destDatafilePath)) {
+        fs.writeFileSync(destDatafilePath, 'block,ampFactor,lp supply,DAI reserve, USDC reserve, USDT reserve, price usdt/usdc, price usdt/dai, price usdc/dai,slippage 4% usdc/dai, slippage 4% usdc/usdt\n');
+    }
+    for(let i = 0; i < fileContent.length -1; i++) {
+        const splt = fileContent[i].split(',');
+
+        const block = splt[0];
+        const ampFactor = splt[1];
+        const lpSupply = splt[2];
+        const daiReserve = splt[3];
+        const usdcReserve = splt[4];
+        const usdtReserve = splt[5];
+
+        const reserveDAI18Decimals = BigInt(daiReserve);
+        const reserveUSDC18Decimals = BigInt(usdcReserve + ''.padEnd(18 - 6, '0'));
+        const reserveUSDT18Decimals = BigInt(usdtReserve + ''.padEnd(18 - 6, '0'));
+
+        // usdt/usdc
+        const amountUsdcFor1000usdt = get_return(2, 1, amount1000e18, [reserveDAI18Decimals, reserveUSDC18Decimals, reserveUSDT18Decimals], Number(ampFactor));
+        const priceUsdtInUsdc = normalize((amountUsdcFor1000usdt / 1000n).toString(), 18);
+
+        // usdt/dai
+        const amountDaiFor1000usdt = get_return(2, 0, amount1000e18, [reserveDAI18Decimals, reserveUSDC18Decimals, reserveUSDT18Decimals], Number(ampFactor));
+        const priceUsdtInDai = normalize((amountDaiFor1000usdt / 1000n).toString(), 18);
+
+        // usdc/dai
+        const amountDaiFor1000usdc = get_return(1, 0, amount1000e18, [reserveDAI18Decimals, reserveUSDC18Decimals, reserveUSDT18Decimals], Number(ampFactor));
+        const priceUsdcInDai = normalize((amountDaiFor1000usdc / 1000n).toString(), 18);
+
+        const reservesBigIntWei = [
+            reserveDAI18Decimals,
+            reserveUSDC18Decimals,
+            reserveUSDT18Decimals
+        ];
+        const targetSlippage = 4/100;
+        const baseQty = amount1000e18; // BigInt(1e10);
+
+        // slippage usdc to dai
+        const targetPriceUSDCDAI = priceUsdcInDai - (priceUsdcInDai * targetSlippage);
+        const amountOfFromForSlippageUSDCDAI = computeLiquidityForSlippageCurvePool('USDC', 'DAI', baseQty, targetPriceUSDCDAI, reservesBigIntWei, 1, 0, Number(ampFactor));
+        const normalizedVolumeUSDCDAI = normalize(BigNumber.from(amountOfFromForSlippageUSDCDAI), 18);
+
+
+        // slippage usdc to usdt
+        const amountUsdtFor1000usdc = get_return(1, 2, amount1000e18, [reserveDAI18Decimals, reserveUSDC18Decimals, reserveUSDT18Decimals], Number(ampFactor));
+        const priceUsdcInUsdt = normalize((amountUsdtFor1000usdc / 1000n).toString(), 18);
+        
+        const targetPriceUSDCUSDT = priceUsdcInUsdt - (priceUsdcInUsdt * targetSlippage);
+        const amountOfFromForSlippageUSDCUSDT = computeLiquidityForSlippageCurvePool('USDC', 'USDT', baseQty, targetPriceUSDCUSDT, reservesBigIntWei, 1, 2, Number(ampFactor));
+        const normalizedVolumeUSDCUSDT = normalize(BigNumber.from(amountOfFromForSlippageUSDCUSDT), 18);
+
+
+        let lineToAppend = `${splt[0]},${splt[1]},${normalize(splt[2], 18)},${normalize(splt[3], 18)},${normalize(splt[4], 6)},${normalize(splt[5], 6)}`;
+        lineToAppend += `,${priceUsdtInUsdc},${priceUsdtInDai},${priceUsdcInDai}`;
+        lineToAppend += `,${normalizedVolumeUSDCDAI},${normalizedVolumeUSDCUSDT}`;
+        lineToAppend += '\n';
+        fs.appendFileSync(destDatafilePath, lineToAppend);
+    }
+}
+
+async function getDyHistorical() {
+    const poolAddress = '0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7';
+    let abi = curveConfig.curvePoolAbi;
+
+    // Create function call data -- eth_call
+    let iface = new ethers.utils.Interface(abi);
+    const amount = BigNumber.from('218936000').mul(BigNumber.from(10).pow(6));
+
+    console.log(amount.toString(), 'INPUT');
+    
+    let data = iface.encodeFunctionData('get_dy', ['1', '0', amount.toString()]);
+    const web3Provider = new ethers.providers.StaticJsonRpcProvider('https://eth-archival.gateway.pokt.network/v1/lb/08011747108a1617e6db6ae2');
+
+    // Get balance at a particular block -- usage of eth_call
+    let dy = await web3Provider.call({
+        to: poolAddress,
+        data: data,
+    }, 16793760);
+
+    
+    const decoded = iface.decodeFunctionResult('get_dy', dy);
+    console.log(decoded.toString(), 'OUTPUT');
+}
+
+getDyHistorical();
+
+// norm3pool();
+// lusdvs3crvPrice();
