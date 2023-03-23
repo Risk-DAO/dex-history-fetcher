@@ -33,9 +33,9 @@ function logFnDuration(dtStart, jobCount = undefined, jobName = 'job') {
     if(!process.env.DEBUG_DURATION) return;
     const secDuration = (Date.now() - dtStart)/1000;
     if(jobCount) {
-        console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration)} s. ${jobCount/secDuration} ${jobName}/sec`);
+        console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration, 6)} s. ${jobCount/secDuration} ${jobName}/sec`);
     } else {
-        console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration)} s`);
+        console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration, 6)} s`);
     }
 }
 /**

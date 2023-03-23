@@ -6,7 +6,7 @@ dotenv.config();
 const univ2Config = require('./uniswap.v2.config');
 const { tokens } = require('../global.config');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
-const { sleep } = require('../utils/utils');
+const { sleep, fnName } = require('../utils/utils');
 
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
@@ -58,11 +58,22 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
     const factoryContract = new ethers.Contract(univ2Config.uniswapV2FactoryAddress, univ2Config.uniswapV2FactoryABI, web3Provider);
     const pairAddress = await factoryContract.getPair(token0Address, token1Address);
 
+    if(pairAddress == ethers.constants.AddressZero) {
+        throw new Error(`Could not find address with tokens  ${token0Symbol} and ${token1Symbol}`);
+    }
+
     const pairContract = new ethers.Contract(pairAddress, univ2Config.uniswapV2PairABI, web3Provider);
+    const contractToken0 = await pairContract.token0();
+    if(contractToken0.toLowerCase() != token0Address.toLowerCase()) {
+        throw new Error('Order mismatch between configuration and uniswapv2 pair');
+    }
+    const contractToken1 = await pairContract.token1();
+    if(contractToken1.toLowerCase() != token1Address.toLowerCase()) {
+        throw new Error('Order mismatch between configuration and uniswapv2 pair');
+    }
     const currentBlock = await web3Provider.getBlockNumber();
 
-    const initStepBlock = 50000;
-    let stepBlock = initStepBlock;
+    const initBlockStep = 10000;
 
     let startBlock = undefined;
     if (!fs.existsSync(DATA_DIR)){
@@ -84,57 +95,75 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
     console.log(`FetchHistoryForPair[${pairKey}]: start fetching data for ${currentBlock - startBlock} blocks to reach current block: ${currentBlock}`);
 
     let liquidityValues = [];
-    for(let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += stepBlock) {
-        let toBlock = fromBlock + stepBlock - 1; // add stepBlock -1 because the fromBlock counts in the number of block fetched
+
+    let blockStep = initBlockStep;
+    let fromBlock =  startBlock;
+    let toBlock = 0;
+    let cptError = 0;
+    while(toBlock < currentBlock) {
+
+        toBlock = fromBlock + blockStep - 1;
         if(toBlock > currentBlock) {
             toBlock = currentBlock;
         }
 
-        let events;
+        let events = undefined;
         try {
             events = await pairContract.queryFilter('Sync', fromBlock, toBlock); 
         } 
-        catch(err) {
-            fromBlock -= stepBlock;
-            stepBlock = stepBlock / 2;
-            console.log(`Exception: ${err.message}, will retry with new step: ${stepBlock}`);
-            await sleep(5000);
+        catch(e) {
+            // console.log(`query filter error: ${e.toString()}`);
+            blockStep = Math.round(blockStep / 2);
+            if(blockStep < 1000) {
+                blockStep = 1000;
+            }
+            toBlock = 0;
+            cptError++;
             continue;
         }
 
-        stepBlock = initStepBlock;
-        let previousEvent = events[0];
+        console.log(`${fnName()} [${pairKey}]: [${fromBlock} - ${toBlock}] found ${events.length} Sync events after ${cptError} errors (fetched ${toBlock-fromBlock+1} blocks)`);
+        cptError = 0;
         
-        for(let i = 1; i < events.length; i++) {
-            const workingEvent = events[i];
-            
-            if(workingEvent.blockNumber != previousEvent.blockNumber) {
-                liquidityValues.push({
-                    blockNumber: previousEvent.blockNumber,
-                    reserve0: previousEvent.args.reserve0.toString(),
-                    reserve1: previousEvent.args.reserve1.toString()
-                });
+        if(events.length > 0) {
+            let previousEvent = events[0];
+            // for each events, we will only save the last event of a block
+            for(let i = 1; i < events.length; i++) {
+                const workingEvent = events[i];
+                
+                // we save the 'previousEvent' when the workingEvent block number is different than the previousEvent
+                if(workingEvent.blockNumber != previousEvent.blockNumber) {
+                    liquidityValues.push({
+                        blockNumber: previousEvent.blockNumber,
+                        reserve0: previousEvent.args.reserve0.toString(),
+                        reserve1: previousEvent.args.reserve1.toString()
+                    });
+                }
+                
+                if(i == events.length -1) {
+                    // always save the last event
+                    liquidityValues.push({
+                        blockNumber: workingEvent.blockNumber,
+                        reserve0: workingEvent.args.reserve0.toString(),
+                        reserve1: workingEvent.args.reserve1.toString()
+                    });
+                }
+    
+                previousEvent = workingEvent;
             }
-            
-            if(i == events.length -1) {
-                // always save the last event
-                liquidityValues.push({
-                    blockNumber: workingEvent.blockNumber,
-                    reserve0: workingEvent.args.reserve0.toString(),
-                    reserve1: workingEvent.args.reserve1.toString()
-                });
+    
+            if(liquidityValues.length >= MINIMUM_TO_APPEND) {
+                const textToAppend = liquidityValues.map(_ => `${_.blockNumber},${_.reserve0},${_.reserve1}`);
+                fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
+                liquidityValues = [];
             }
-
-            previousEvent = workingEvent;
+            // try to find the blockstep to reach 8000 events per call as the RPC limit is 10 000, 
+            // this try to change the blockstep by increasing it when the pool is not very used
+            // or decreasing it when the pool is very used
+            blockStep = Math.min(100000, Math.round(blockStep * 8000 / events.length));
         }
 
-        console.log(`FetchHistoryForPair[${pairKey}]: from ${fromBlock} to ${toBlock}`);
-        
-        if(liquidityValues.length >= MINIMUM_TO_APPEND) {
-            const textToAppend = liquidityValues.map(_ => `${_.blockNumber},${_.reserve0},${_.reserve1}`);
-            fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
-            liquidityValues = [];
-        }
+        fromBlock = toBlock +1;
     }
     
     if(liquidityValues.length > 0) {

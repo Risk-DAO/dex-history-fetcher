@@ -23,4 +23,12 @@ async function GetContractCreationBlockNumber(web3Provider, contractAddress) {
     return receipt.blockNumber;
 }
 
-module.exports = { GetContractCreationBlockNumber };
+async function getBlocknumberForTimestamp(timestamp) {
+    console.log(`calling defillama: https://coins.llama.fi/block/ethereum/${timestamp}`);
+    const defiLamaResp = await axios.get(`https://coins.llama.fi/block/ethereum/${timestamp}`);
+    const blockNumber = defiLamaResp.data.height;
+    console.log('defillama resp:', defiLamaResp.data);
+    return blockNumber;
+}
+
+module.exports = { GetContractCreationBlockNumber, getBlocknumberForTimestamp };

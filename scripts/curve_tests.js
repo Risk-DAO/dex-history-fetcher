@@ -7,6 +7,32 @@ const { get_return, get_virtual_price, computeLiquidityForSlippageCurvePool } = 
 const { normalize } = require('../src/utils/token.utils');
 const curveConfig = require('../src/curve/curve.config');
 
+async function pricesgnogno() {
+    
+    const poolFilename = './data/curve/sGNO-GNO_sgnoCRV-f_curve.csv';
+    const poolContent = fs.readFileSync(poolFilename, 'utf-8').split('\n');
+    
+    const amount = BigInt(1) * (BigInt(10) ** BigInt(18));
+    fs.writeFileSync('./nocommit/sGNO-GNO_sgnoCRV-f_curve-withprice.csv', 'blocknumber,ampfactor,lp_supply_0xBdF4488Dcf7165788D438b62B4C8A333879B7078,reserve_sGNO_0xA4eF9Da5BA71Cc0D2e5E877a910A37eC43420445,reserve_GNO_0x9C58BAcC331c9aa871AFD802DB6379a98e80CEdb,price0-1,price1-0\n');
+    for(let i = 1; i < poolContent.length -1; i++) {
+        const splt = poolContent[i].split(',');
+        
+        const blockNumber = splt[0];
+        const ampFactor = splt[1];
+        const sgnoReserve = BigInt(splt[3]);
+        const gnoReserve = BigInt(splt[4]);
+
+
+        const price01 = get_return(0, 1, amount, [sgnoReserve, gnoReserve], Number(ampFactor));
+        const price10 = get_return(1, 0, amount, [sgnoReserve, gnoReserve], Number(ampFactor));
+        const priceSGNOInGNO = normalize(price01.toString(), 18);
+        const priceGNOInSGNO = normalize(price10.toString(), 18);
+
+        fs.appendFileSync('./nocommit/sGNO-GNO_sgnoCRV-f_curve-withprice.csv', `${blockNumber},${ampFactor},${splt[2]},${splt[3]},${splt[4]},${priceSGNOInGNO},${priceGNOInSGNO}\n`);
+    }
+}
+pricesgnogno();
+
 async function price3CrvUsdc() {
     
     const _3poolFilePath = './data/curve/3Pool_3Crv_curve.csv';
@@ -264,7 +290,7 @@ async function getDyHistorical() {
     console.log(decoded.toString(), 'OUTPUT');
 }
 
-getDyHistorical();
+// getDyHistorical();
 
 // norm3pool();
 // lusdvs3crvPrice();
