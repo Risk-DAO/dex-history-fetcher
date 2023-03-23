@@ -9,20 +9,14 @@ const TARGET_DATA_POINTS = Number(process.env.TARGET_DATA_POINTS || 50);
 const TARGET_SLIPPAGES = [1, 5, 10, 15, 20];
 
 
-async function main() {
+/**
+ * Precompute data for the risk oracle front
+ * @param {number} daysToFetch 
+ * @param {number} fetchEveryMinutes 
+ */
+async function precomputeData(daysToFetch, fetchEveryMinutes) {
     // eslint-disable-next-line no-constant-condition
     while(true) {
-        // number of days to fetch is passed in the args
-        const daysToFetch = Number(process.argv[2]);
-        if(!daysToFetch) {
-            throw new Error('Need to have a valid number as first command argument for daysToFetch');
-        }
-        // number of days to fetch is passed in the args
-        const fetchEveryMinutes = Number(process.argv[3]);
-        if(!fetchEveryMinutes) {
-            throw new Error('Need to have a valid number as second command argument for fetchEveryMinutes');
-        }
-
         console.log(`${fnName()}: Will precompute data for the last ${daysToFetch} day(s)`);
 
         const startDate = Math.round(Date.now()/1000) - daysToFetch * 24 * 60 * 60;
@@ -47,6 +41,22 @@ async function main() {
         console.log(`${fnName()}: sleeping ${fetchEveryMinutes} minutes before starting again`);
         await sleep(fetchEveryMinutes * 60 * 1000);
     }
+}
+
+async function main() {
+    // number of days to fetch is passed in the args
+    const daysToFetch = Number(process.argv[2]);
+    if(!daysToFetch) {
+        throw new Error('Need to have a valid number as first command argument for daysToFetch');
+    }
+
+    // number of days to fetch is passed in the args
+    const fetchEveryMinutes = Number(process.argv[3]);
+    if(!fetchEveryMinutes) {
+        throw new Error('Need to have a valid number as second command argument for fetchEveryMinutes');
+    }
+
+    await precomputeData(daysToFetch, fetchEveryMinutes);
 }
 
 main();
