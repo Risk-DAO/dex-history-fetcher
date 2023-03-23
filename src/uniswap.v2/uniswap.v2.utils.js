@@ -288,7 +288,7 @@ function computeLiquidityUniV2Pool(fromSymbol, fromReserve, toSymbol, toReserve,
     return amountOfFromToExchange;
 }
 
-module.exports = { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, getUniV2DataforBlockRange };
+module.exports = { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, getUniV2DataforBlockRange, computeLiquidityUniV2Pool };
 
 // async function test() {
 //     // computeLiquidityUniV2Pool('ETH', 28345.5, 'USDC', 43920629, 10/100 );
