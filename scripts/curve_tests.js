@@ -174,8 +174,8 @@ async function test() {
 }
 
 function norm3pool() {
-    const datafilePath = 'C:\\Users\\Emilien\\3pool_since_16817741.csv';
-    const destDatafilePath = 'C:\\Users\\Emilien\\3pool_since_16793760_output.csv';
+    const datafilePath = '3pool_since_16817741.csv';
+    const destDatafilePath = '3pool_since_16793760_output.csv';
     const fileContent = fs.readFileSync(datafilePath, 'utf-8').split('\n');
     const amount1000e18 = BigInt(1000) * (BigInt(10) ** BigInt(18));
 
@@ -251,7 +251,7 @@ async function getDyHistorical() {
     console.log(amount.toString(), 'INPUT');
     
     let data = iface.encodeFunctionData('get_dy', ['1', '0', amount.toString()]);
-    const web3Provider = new ethers.providers.StaticJsonRpcProvider('https://eth-archival.gateway.pokt.network/v1/lb/08011747108a1617e6db6ae2');
+    const web3Provider = new ethers.providers.StaticJsonRpcProvider('');
 
     // Get balance at a particular block -- usage of eth_call
     let dy = await web3Provider.call({
