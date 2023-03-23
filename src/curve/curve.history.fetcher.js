@@ -45,6 +45,7 @@ async function CurveHistoryFetcher() {
             console.log('errors:', errors);
         }
 
+        console.log('Sleeping 10 minutes before restarting');
         await sleep(1000 * 600);
     }
 }
@@ -139,7 +140,7 @@ async function FetchHistory(pool) {
     else {
         // if the file does not exists, we get the creation block number and start fetching from here
         // all lastData will be empty or 0
-        const deployedBlock = await GetContractCreationBlockNumber(web3Provider, poolAddress);
+        const deployedBlock = pool.deployBlock ? pool.deployBlock : await GetContractCreationBlockNumber(web3Provider, poolAddress);
         console.log('deployed block from contract is:', deployedBlock);
 
         lastData.blockNumber = deployedBlock - 1; // init with -1 to fetch from the contract deployment, usefull if some events appears right from creation
