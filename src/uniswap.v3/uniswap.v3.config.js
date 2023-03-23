@@ -11,7 +11,113 @@ const pairsToFetch = [
         "token0": "USDC",
         "token1": "WETH",
         "fees": 500
-    }
+    },
+    {
+        "token0": "WBTC",
+        "token1": "USDC",
+        "fees": 3000
+    },
+    {
+        "token0": "WBTC",
+        "token1": "WETH",
+        "fees": 500
+    },
+    {
+        "token0": "BUSD",
+        "token1": "USDC",
+        "fees": 100
+    },
+    {
+        "token0": "DAI",
+        "token1": "USDC",
+        "fees": 100
+    },
+    {
+        "token0": "DAI",
+        "token1": "WETH",
+        "fees": 500
+    },
+    {
+        "token0": "LINK",
+        "token1": "WETH",
+        "fees": 3000
+    },
+    {
+        "token0": "LINK",
+        "token1": "USDC",
+        "fees": 3000
+    },
+    {
+        "token0": "LINK",
+        "token1": "USDC",
+        "fees": 3000
+    },
+    {
+        "token0": "MANA",
+        "token1": "WETH",
+        "fees": 3000
+    },
+    {
+        "token0": "MANA",
+        "token1": "USDC",
+        "fees": 3000
+    },
+    {
+        "token0": "MKR",
+        "token1": "WETH",
+        "fees": 3000
+    },
+    {
+        "token0": "MKR",
+        "token1": "USDC",
+        "fees": 10000
+    },
+    {
+        "token0": "SNX",
+        "token1": "WETH",
+        "fees": 3000
+    },
+    {
+        "token0": "USDC",
+        "token1": "SNX",
+        "fees": 10000
+    },
+    {
+        "token0": "sUSD",
+        "token1": "USDC",
+        "fees": 100
+    },
+    {
+        "token0": "UNI",
+        "token1": "WETH",
+        "fees": 3000
+    },
+    {
+        "token0": "UNI",
+        "token1": "USDC",
+        "fees": 100
+    },
+    {
+        "token0": "UNI",
+        "token1": "WBTC",
+        "fees": 3000
+    },
+    {
+        "token0": "USDC",
+        "token1": "USDT",
+        "fees": 100
+    },
+    {
+        "token0": "WETH",
+        "token1": "USDT",
+        "fees": 500
+    },
+    {
+        "token0": "WBTC",
+        "token1": "USDT",
+        "fees": 3000
+    },
+
 ]
 
 module.exports = {

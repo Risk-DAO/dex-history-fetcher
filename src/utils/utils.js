@@ -1,3 +1,6 @@
+const dotenv = require('dotenv');
+dotenv.config();
+
 // various utils fct
 
 
@@ -24,11 +27,13 @@ function fnName() {
  * Logs the duration of a function
  * @param {number} dtStart unix timestamp ms
  * @param {number} jobCount the number of job done, to be displayed as nbjob/sec if set
+ * @param {number} jobName the name for the jobs done
  */
-function logFnDuration(dtStart, jobCount = undefined) {
+function logFnDuration(dtStart, jobCount = undefined, jobName = 'job') {
+    if(!process.env.DEBUG_DURATION) return;
     const secDuration = (Date.now() - dtStart)/1000;
     if(jobCount) {
-        console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration)} s. ${jobCount/secDuration} job/sec`);
+        console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration)} s. ${jobCount/secDuration} ${jobName}/sec`);
     } else {
         console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration)} s`);
     }
