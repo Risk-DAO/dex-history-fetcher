@@ -322,7 +322,7 @@ function toWei(n) {
     return BigInt(n) * 10n **18n;
 }
 
-module.exports = { getCurvePriceAndLiquidity, get_return, get_virtual_price };
+module.exports = { getCurvePriceAndLiquidity, get_return, get_virtual_price, computeLiquidityForSlippageCurvePool };
 
 // function test() {
 //     getCurvePriceAndLiquidity('./data', '3pool', 'DAI', 'USDC', 15487);

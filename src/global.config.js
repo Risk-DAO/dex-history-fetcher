@@ -110,6 +110,14 @@ const tokens = {
     LUSD: {
         decimals: 18,
         address: '0x5f98805A4E8be255a32880FDeC7F6728C6568bA0'
+    },
+    sGNO: {
+        decimals: 18,
+        address: '0xA4eF9Da5BA71Cc0D2e5E877a910A37eC43420445'
+    },
+    GNO: {
+        decimals: 18,
+        address: '0x9C58BAcC331c9aa871AFD802DB6379a98e80CEdb'
     }
 };
 
