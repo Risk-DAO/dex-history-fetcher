@@ -120,7 +120,8 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
     for (const [block, value] of Object.entries(resultsForRange)) {
         const liquidity = {};
         liquidity['blockNumber'] = Number(block);
-        liquidity['realBlockNumberDistance'] = Math.abs(Number(block) - value.blockNumber);
+        liquidity['realBlockNumber'] = value.blockNumber;
+        liquidity['blockNumberDistance'] = Math.abs(Number(block) - value.blockNumber);
         for (let i = 0; i < targetSlippages.length; i++) {
             const normalizedFrom = normalize(value.fromReserve, fromToken.decimals);
             const normalizedTo = normalize(value.toReserve, toToken.decimals);
@@ -128,6 +129,22 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
         }
         volumeForSlippage.push(liquidity);
     }
+
+    // if any empty blocks, fill with 0 ?
+    for(let i = 0; i< blockRange.length; i++) {
+        const block = blockRange[i];
+        if(!resultsForRange[block]) {
+            
+            const liquidity = {};
+            liquidity['blockNumber'] = Number(block);
+            liquidity['realBlockNumberDistance'] = -1;
+            for (let i = 0; i < targetSlippages.length; i++) {
+                liquidity[targetSlippages[i]] = 0;
+            }
+            volumeForSlippage.push(liquidity);
+        }
+    }
+
 
     const firstKey = Object.keys(resultsForRange)[0];
     const lastKey = Object.keys(resultsForRange)[Object.keys(resultsForRange).length - 1];

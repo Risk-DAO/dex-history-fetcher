@@ -6,7 +6,7 @@ dotenv.config();
 const univ2Config = require('./uniswap.v2.config');
 const { tokens } = require('../global.config');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
-const { sleep, fnName } = require('../utils/utils');
+const { sleep, fnName, roundTo } = require('../utils/utils');
 
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
@@ -19,6 +19,7 @@ const MINIMUM_TO_APPEND = process.env.MINIMUM_TO_APPEND || 5000;
 async function UniswapV2HistoryFetcher() {
     // eslint-disable-next-line no-constant-condition
     while(true) {
+        const start = Date.now();
         if(!RPC_URL) {
             throw new Error('Could not find RPC_URL env variable');
         }
@@ -27,17 +28,23 @@ async function UniswapV2HistoryFetcher() {
             fs.mkdirSync(`${DATA_DIR}/uniswapv2`);
         }
 
-        console.log('UniswapV2HistoryFetcher: starting');
+        console.log('${fnName()}: starting');
         const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 
         for(const pairKey of univ2Config.uniswapV2Pairs) {
-            console.log('Start fetching pair ' + pairKey);
+            console.log(`${fnName()}: Start fetching pair ` + pairKey);
             await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`);
-            console.log('End fetching pair ' + pairKey);
+            console.log(`${fnName()}: End fetching pair ` + pairKey);
         }
 
         console.log('UniswapV2HistoryFetcher: ending');
         
+        // sleep 10 min - time it took to run the loop
+        // if the loop took more than 10 minutes, restart directly
+        const sleepTime = 600 * 1000 - (Date.now() - start);
+        if(sleepTime > 0) {
+            console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
+        }
         await sleep(1000 * 600);
     }
 }
@@ -92,7 +99,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
         startBlock = deployBlockNumber;
     }
 
-    console.log(`FetchHistoryForPair[${pairKey}]: start fetching data for ${currentBlock - startBlock} blocks to reach current block: ${currentBlock}`);
+    console.log(`${fnName()}[${pairKey}]: start fetching data for ${currentBlock - startBlock} blocks to reach current block: ${currentBlock}`);
 
     let liquidityValues = [];
 
@@ -113,16 +120,16 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
         } 
         catch(e) {
             // console.log(`query filter error: ${e.toString()}`);
-            blockStep = Math.round(blockStep / 2);
-            if(blockStep < 1000) {
-                blockStep = 1000;
-            }
+            blockStep = Math.max(10, Math.round(blockStep / 2));
             toBlock = 0;
             cptError++;
+            if(cptError >= 100) {
+                throw new Error('Too many errors');
+            }
             continue;
         }
 
-        console.log(`${fnName()} [${pairKey}]: [${fromBlock} - ${toBlock}] found ${events.length} Sync events after ${cptError} errors (fetched ${toBlock-fromBlock+1} blocks)`);
+        console.log(`${fnName()}[${pairKey}]: [${fromBlock} - ${toBlock}] found ${events.length} Sync events after ${cptError} errors (fetched ${toBlock-fromBlock+1} blocks)`);
         cptError = 0;
         
         if(events.length > 0) {
@@ -160,7 +167,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
             // try to find the blockstep to reach 8000 events per call as the RPC limit is 10 000, 
             // this try to change the blockstep by increasing it when the pool is not very used
             // or decreasing it when the pool is very used
-            blockStep = Math.min(100000, Math.round(blockStep * 8000 / events.length));
+            blockStep = Math.min(500000, Math.round(blockStep * 8000 / events.length));
         }
 
         fromBlock = toBlock +1;

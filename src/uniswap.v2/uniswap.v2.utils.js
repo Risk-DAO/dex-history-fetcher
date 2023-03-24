@@ -5,6 +5,7 @@ const { normalize } = require('../utils/token.utils');
 const { tokens } = require('../global.config');
 const { BigNumber } = require('ethers');
 const path = require('path');
+const { fnName } = require('../utils/utils');
 
 async function getUniswapAveragePriceAndLiquidity(dataDir, fromSymbol, toSymbol, fromBlock, toBlock) {
     const aggregatedLiquidity = await getUniV2AggregatedDataForBlockNumbers(dataDir, fromSymbol, toSymbol, fromBlock, toBlock);
@@ -115,7 +116,6 @@ async function getUniV2AggregatedDataForBlockNumbers(dataDir, fromSymbol, toSymb
                 break;
             }
         }
-        // console.log('line:', line);    
     }
 
     fileStream.close();
@@ -171,7 +171,7 @@ function getUniV2DataforBlockRange(DATA_DIR, fromSymbol, toSymbol, blockRange) {
             if(fileContentIndex < fileContent.length - 2) {
                 fileContentIndex++;
             } else {
-                console.log(`End of file reached with ${Object.keys(results).length} results found`);
+                console.log(`${fnName()}: End of file reached with ${Object.keys(results).length} results found`);
                 break;
             }
         } else {
@@ -273,8 +273,6 @@ async function getUniV2DataForBlockNumber(dataDir, fromSymbol, toSymbol, targetB
                 reserve1
             };
         }
-        // console.log('line:', line);    
-
     }
 
     fileStream.close();
@@ -366,12 +364,3 @@ function getAvailableUniswapV2(dataDir) {
 
 module.exports = { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, computeUniswapV2Price,
     getUniV2DataforBlockRange, computeLiquidityUniV2Pool, getAvailableUniswapV2, getUniV2DataFile};
-
-// async function test() {
-//     // computeLiquidityUniV2Pool('ETH', 28345.5, 'USDC', 43920629, 10/100 );
-//     const start = Date.now();
-//     console.log(await getUniswapAveragePriceAndLiquidity('./data', 'ETH', 'USDC', 10000000, 18000000));
-//     console.log('duration', Date.now() - start);
-// }
-
-// test();

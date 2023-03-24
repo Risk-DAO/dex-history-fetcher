@@ -22,7 +22,7 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
         const startDate = Math.round(Date.now()/1000) - daysToFetch * 24 * 60 * 60;
         // get the blocknumber for this date
         const startBlock =  await getBlocknumberForTimestamp(startDate);
-        const currentBlock = await web3Provider.getBlockNumber();
+        const currentBlock = await web3Provider.getBlockNumber() - 150;
 
         // calculate block step considering we want TARGET_DATA_POINTS
         const blockStep = Math.round((currentBlock - startBlock) / TARGET_DATA_POINTS);
@@ -30,11 +30,15 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
         
         // creating blockrange
         const blockRange = [];
-        for (let i = startBlock; i <= currentBlock; i+= blockStep) {
-            blockRange.push(i);
+        for (let i = 0; i < TARGET_DATA_POINTS; i++) {
+            const block = startBlock + i*blockStep;
+            if(block > currentBlock) {
+                break;
+            }
+
+            blockRange.push(startBlock + i*blockStep);
         }
         // console.log(blockRange);
-
 
         await precomputeUniswapV2Data(blockRange, TARGET_SLIPPAGES, daysToFetch);
         
