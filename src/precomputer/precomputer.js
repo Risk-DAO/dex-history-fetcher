@@ -1,7 +1,9 @@
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { ethers } = require('ethers');
 const { precomputeUniswapV2Data } = require('./uniswap.v2.precomputer');
-const { sleep, fnName } = require('../utils/utils');
+const { sleep, fnName, roundTo } = require('../utils/utils');
+const { precomputeUniswapV3Data } = require('./uniswap.v3.precomputer');
+const { precomputeCurveData } = require('./curve.precomputer');
 
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
@@ -17,6 +19,7 @@ const TARGET_SLIPPAGES = [1, 5, 10, 15, 20];
 async function precomputeData(daysToFetch, fetchEveryMinutes) {
     // eslint-disable-next-line no-constant-condition
     while(true) {
+        const start = Date.now();
         console.log(`${fnName()}: Will precompute data for the last ${daysToFetch} day(s)`);
 
         const startDate = Math.round(Date.now()/1000) - daysToFetch * 24 * 60 * 60;
@@ -39,11 +42,18 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
             blockRange.push(startBlock + i*blockStep);
         }
         // console.log(blockRange);
-
-        await precomputeUniswapV2Data(blockRange, TARGET_SLIPPAGES, daysToFetch);
         
-        console.log(`${fnName()}: sleeping ${fetchEveryMinutes} minutes before starting again`);
-        await sleep(fetchEveryMinutes * 60 * 1000);
+        const univ2Promise = precomputeUniswapV2Data(blockRange, TARGET_SLIPPAGES, daysToFetch);
+        const curvePromise = precomputeCurveData(blockRange, TARGET_SLIPPAGES, daysToFetch);
+        const univ3Promise = precomputeUniswapV3Data(blockRange, TARGET_SLIPPAGES, daysToFetch);
+
+        await Promise.all([univ2Promise, univ3Promise, curvePromise]);
+        
+        const sleepTime = fetchEveryMinutes * 60 * 1000 - (Date.now() - start);
+        if(sleepTime > 0) {
+            console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
+            await sleep(sleepTime);
+        }
     }
 }
 
