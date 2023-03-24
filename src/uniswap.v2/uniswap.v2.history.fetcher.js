@@ -44,8 +44,9 @@ async function UniswapV2HistoryFetcher() {
         const sleepTime = 600 * 1000 - (Date.now() - start);
         if(sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
+            await sleep(sleepTime);
         }
-        await sleep(1000 * 600);
+        
     }
 }
 
@@ -80,7 +81,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
     }
     const currentBlock = await web3Provider.getBlockNumber();
 
-    const initBlockStep = 10000;
+    const initBlockStep = 500000;
 
     let startBlock = undefined;
     if (!fs.existsSync(DATA_DIR)){
@@ -133,30 +134,39 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
         cptError = 0;
         
         if(events.length > 0) {
-            let previousEvent = events[0];
-            // for each events, we will only save the last event of a block
-            for(let i = 1; i < events.length; i++) {
-                const workingEvent = events[i];
-                
-                // we save the 'previousEvent' when the workingEvent block number is different than the previousEvent
-                if(workingEvent.blockNumber != previousEvent.blockNumber) {
-                    liquidityValues.push({
-                        blockNumber: previousEvent.blockNumber,
-                        reserve0: previousEvent.args.reserve0.toString(),
-                        reserve1: previousEvent.args.reserve1.toString()
-                    });
+            if(events.length == 1) {
+                liquidityValues.push({
+                    blockNumber: events[0].blockNumber,
+                    reserve0: events[0].args.reserve0.toString(),
+                    reserve1: events[0].args.reserve1.toString()
+                });
+            }
+            else {
+                let previousEvent = events[0];
+                // for each events, we will only save the last event of a block
+                for(let i = 1; i < events.length; i++) {
+                    const workingEvent = events[i];
+                    
+                    // we save the 'previousEvent' when the workingEvent block number is different than the previousEvent
+                    if(workingEvent.blockNumber != previousEvent.blockNumber) {
+                        liquidityValues.push({
+                            blockNumber: previousEvent.blockNumber,
+                            reserve0: previousEvent.args.reserve0.toString(),
+                            reserve1: previousEvent.args.reserve1.toString()
+                        });
+                    }
+                    
+                    if(i == events.length -1) {
+                        // always save the last event
+                        liquidityValues.push({
+                            blockNumber: workingEvent.blockNumber,
+                            reserve0: workingEvent.args.reserve0.toString(),
+                            reserve1: workingEvent.args.reserve1.toString()
+                        });
+                    }
+        
+                    previousEvent = workingEvent;
                 }
-                
-                if(i == events.length -1) {
-                    // always save the last event
-                    liquidityValues.push({
-                        blockNumber: workingEvent.blockNumber,
-                        reserve0: workingEvent.args.reserve0.toString(),
-                        reserve1: workingEvent.args.reserve1.toString()
-                    });
-                }
-    
-                previousEvent = workingEvent;
             }
     
             if(liquidityValues.length >= MINIMUM_TO_APPEND) {
@@ -167,7 +177,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
             // try to find the blockstep to reach 8000 events per call as the RPC limit is 10 000, 
             // this try to change the blockstep by increasing it when the pool is not very used
             // or decreasing it when the pool is very used
-            blockStep = Math.min(500000, Math.round(blockStep * 8000 / events.length));
+            blockStep = Math.min(1000000, Math.round(blockStep * 8000 / events.length));
         }
 
         fromBlock = toBlock +1;
