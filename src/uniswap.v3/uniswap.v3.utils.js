@@ -5,7 +5,7 @@ const { roundTo, logFnDuration } = require('../utils/utils');
 module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages};
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
-const CONSTANT_TARGET_SLIPPAGE = 50; // 50%
+const CONSTANT_TARGET_SLIPPAGE = 20; // 50%
 
 function getVolumeForSlippage(targetSlippagePercent, zeroForOne, currentTick, tickSpacing, sqrtPriceX96, liquidity) {
     const dtStart = Date.now();
@@ -234,15 +234,21 @@ function get_dx_slippage(currentTick, tickSpacing, sqrtPriceX96, liquidity, toke
     // 'slippageData' will store for each amount of slippage, the amount of y tradable
     const slippageData = {};
 
+    // console.log(liquidity);
     // when selling y, the price goes down
     while(currTick <= targetTick) {
         const nextTick = currTick + Number(tickSpacing);
         //console.log({base},{nextTick})
         const nextSqrtPrice = (base.pow(nextTick)).sqrt();
 
-        const L = new BigNumber(liquidity[currTick]).times(CONSTANT_1e18);
+        let liquidityAtTick = liquidity[currTick];
+        if(!liquidityAtTick) {
+            liquidityAtTick = 0;
+        }
+        const L = new BigNumber(liquidityAtTick).times(CONSTANT_1e18);
+        // console.log(L.toString());
         dx = dx.plus(L.div(currSqrtPrice).minus(L.div(nextSqrtPrice)));
-
+        // console.log(dx.toString());
         if(Object.keys(relevantTicks).map(_ => Number(_)).includes(currTick)) {
             slippageData[relevantTicks[currTick]] = dx.div(decimalFactor).toNumber();
         }
@@ -297,7 +303,11 @@ function get_dy_slippage(currentTick, tickSpacing, sqrtPriceX96, liquidity, toke
         const nextTick = currTick - Number(tickSpacing);
         const nextSqrtPrice = (base.pow(nextTick)).sqrt();
 
-        const L = new BigNumber(liquidity[currTick]).times(CONSTANT_1e18);
+        let liquidityAtTick = liquidity[currTick];
+        if(!liquidityAtTick) {
+            liquidityAtTick = 0;
+        }
+        const L = new BigNumber(liquidityAtTick).times(CONSTANT_1e18);
         const dSqrtP = currSqrtPrice.minus(nextSqrtPrice);
         dy = dy.plus(L.times(dSqrtP));
 
@@ -341,7 +351,11 @@ function get_dy(currentTick, tickSpacing, sqrtPriceX96, liquidity, dx) {
         //console.log({base},{nextTick})
         const nextSqrtPrice = (base.pow(nextTick)).sqrt();
 
-        const L = new BigNumber(liquidity[currTick]).times(CONSTANT_1e18);
+        let liquidityAtTick = liquidity[currTick];
+        if(!liquidityAtTick) {
+            liquidityAtTick = 0;
+        }
+        const L = new BigNumber(liquidityAtTick).times(CONSTANT_1e18);
         // console.log({currTick});
 
         // dx = L/d(sqrt(p))
@@ -408,7 +422,11 @@ function get_dx(currentTick, tickSpacing, sqrtPriceX96, liquidity, dy) {
         //console.log({base},{nextTick})
         const nextSqrtPrice = (base.pow(nextTick)).sqrt();
 
-        const L = new BigNumber(liquidity[currTick]).times(CONSTANT_1e18);
+        let liquidityAtTick = liquidity[currTick];
+        if(!liquidityAtTick) {
+            liquidityAtTick = 0;
+        }
+        const L = new BigNumber(liquidityAtTick).times(CONSTANT_1e18);
         // console.log({currTick});
 
         // dx = L/d(sqrt(p))

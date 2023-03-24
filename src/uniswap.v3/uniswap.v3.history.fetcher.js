@@ -12,7 +12,7 @@ const { getPriceNormalized, getSlippages } = require('./uniswap.v3.utils');
 const { default: BigNumber } = require('bignumber.js');
 // save liqiudity data every 'CHECKPOINT_INTERVAL' blocks
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
-const CONSTANT_BLOCK_INTERVAL = 100;
+const CONSTANT_BLOCK_INTERVAL = 500;
 
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
@@ -41,15 +41,16 @@ async function UniswapV3HistoryFetcher() {
 
         for(const pairToFetch of univ3Config.pairsToFetch) {
             await FetchUniswapV3HistoryForPair(pairToFetch, web3Provider, univ3Factory, currentBlock);
+            await sleep(5000);
         }
 
-        console.log('UniswapV3HistoryFetcher: ending');
+        console.log(`${fnName()}: ending`);
         await sleep(1000 * 600);
     }
 }
 
 async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Factory, currentBlock) {
-    console.log(`${fnName()} [${pairConfig.token0}-${pairConfig.token1}]: start for pair ${pairConfig.token0}-${pairConfig.token1}`);
+    console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}]: start for pair ${pairConfig.token0}-${pairConfig.token1} and fees: ${pairConfig.fees}`);
     const token0 = getConfTokenBySymbol(pairConfig.token0);
     if(!token0) {
         throw new Error('Cannot find token in global config with symbol: ' + pairConfig.token0);
@@ -73,7 +74,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
         throw new Error(`pool token0 ${poolToken1} != config token0 ${token1.address}. config must match pool order`);
     }
 
-    console.log(`${fnName()} [${pairConfig.token0}-${pairConfig.token1}]: pool address found: ${poolAddress} with pair ${pairConfig.token0}-${pairConfig.token1}`);
+    console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}]: pool address found: ${poolAddress} with pair ${pairConfig.token0}-${pairConfig.token1}`);
     // try to find the json file representation of the pool latest value already fetched
     const latestDataFilePath = `${DATA_DIR}/uniswapv3/${pairConfig.token0}-${pairConfig.token1}-${pairConfig.fees}-latestdata.json`;
     let latestData = undefined;
@@ -81,9 +82,9 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
     if(fs.existsSync(latestDataFilePath)) {
         // if the file exists, set its value to latestData
         latestData = JSON.parse(fs.readFileSync(latestDataFilePath));
-        console.log(`${fnName()} [${pairConfig.token0}-${pairConfig.token1}]: data file found ${latestDataFilePath}, last block fetched: ${latestData.blockNumber}`);
+        console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${pairConfig.fees}]: data file found ${latestDataFilePath}, last block fetched: ${latestData.blockNumber}`);
     } else {
-        console.log(`${fnName()} [${pairConfig.token0}-${pairConfig.token1}]: data file not found, starting from scratch`);
+        console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${pairConfig.fees}]: data file not found, starting from scratch`);
         latestData = await fetchInitializeData(web3Provider, poolAddress, univ3PairContract);
     }
 
@@ -99,7 +100,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
     const filterSwap = univ3PairContract.filters.Swap();
     let iface = new ethers.utils.Interface(univ3Config.uniswapV3PairAbi);
 
-    const initBlockStep = 7000;
+    const initBlockStep = 50000;
     let blockStep = initBlockStep;
     let fromBlock =  latestData.blockNumber + 1;
     let toBlock = 0;
@@ -130,7 +131,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
             continue;
         }
 
-        console.log(`${fnName()} [${pairConfig.token0}-${pairConfig.token1}]: [${fromBlock} - ${toBlock}] found ${events.length} Mint/Burn/Swap events after ${cptError} errors (fetched ${toBlock-fromBlock+1} blocks)`);
+        console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${pairConfig.fees}]: [${fromBlock} - ${toBlock}] found ${events.length} Mint/Burn/Swap events after ${cptError} errors (fetched ${toBlock-fromBlock+1} blocks)`);
         
         if(events.length != 0) {
             processEvents(events, iface, latestData, token0, token1, latestDataFilePath, dataFileName);
@@ -138,9 +139,11 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
             // try to find the blockstep to reach 9000 events per call as the RPC limit is 10 000, 
             // this try to change the blockstep by increasing it when the pool is not very used
             // or decreasing it when the pool is very used
-            const ratioEvents = 9000 / events.length;
-            blockStep = Math.round(blockStep * ratioEvents);
+            blockStep = Math.min(1_000_000, Math.round(blockStep * 8000 / events.length));
             cptError = 0;
+        } else {
+            // if 0 events, multiply blockstep by 4
+            blockStep = blockStep * 4;
         }
         fromBlock = toBlock +1;
     }
@@ -249,6 +252,7 @@ function processEvents(events, iface, latestData, token0, token1, latestDataFile
 }
 
 function updateLatestDataLiquidity(latestData, blockNumber, tickLower, tickUpper, amount, tickSpacing) {
+    // console.log(`Adding ${amount} from ${tickLower} to ${tickUpper}`);
     const amountNorm = amount.div(CONSTANT_1e18).toNumber();
     for(let tick = tickLower ; tick <= tickUpper ; tick += tickSpacing) {
         if(!latestData.ticks[tick]) {
