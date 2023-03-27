@@ -6,7 +6,7 @@ dotenv.config();
 
 const univ3Config = require('./uniswap.v3.config');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
-const { fnName, logFnDuration, sleep } = require('../utils/utils');
+const { fnName, logFnDuration, sleep, roundTo } = require('../utils/utils');
 const { getConfTokenBySymbol } = require('../utils/token.utils');
 const { getPriceNormalized, getSlippages } = require('./uniswap.v3.utils');
 const { default: BigNumber } = require('bignumber.js');
@@ -26,6 +26,7 @@ UniswapV3HistoryFetcher();
 async function UniswapV3HistoryFetcher() {
     // eslint-disable-next-line no-constant-condition
     while(true) {
+        const start = Date.now();
         if(!RPC_URL) {
             throw new Error('Could not find RPC_URL env variable');
         }
@@ -41,11 +42,13 @@ async function UniswapV3HistoryFetcher() {
 
         for(const pairToFetch of univ3Config.pairsToFetch) {
             await FetchUniswapV3HistoryForPair(pairToFetch, web3Provider, univ3Factory, currentBlock);
-            await sleep(5000);
         }
 
-        console.log(`${fnName()}: ending`);
-        await sleep(1000 * 600);
+        const sleepTime = 10 * 60 * 1000 - (Date.now() - start);
+        if(sleepTime > 0) {
+            console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
+            await sleep(sleepTime);
+        }
     }
 }
 
@@ -224,9 +227,11 @@ function processEvents(events, iface, latestData, token0, token1, latestDataFile
         lastBlock = event.blockNumber;
     }
     
-    // at the end, write the last data
-    const newSaveData = getSaveData(token0, token1, latestData);
-    saveData.push(newSaveData);
+    // at the end, write the last data if not already saved
+    if(latestData.blockNumber != latestData.lastDataSave) {
+        const newSaveData = getSaveData(token0, token1, latestData);
+        saveData.push(newSaveData);
+    }
     fs.appendFileSync(dataFileName, saveData.join(''));
 
     // const priceFilename = `${DATA_DIR}/uniswapv3/${token0.symbol}-${token1.symbol}_prices.csv`;
