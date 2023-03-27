@@ -9,6 +9,32 @@ app.use(cors());
 const port = process.env.API_PORT || 3000;
 const DATA_DIR = process.cwd() + '/data';
 
+
+
+// getprecomputeddata?platform=uniswapv2&from=ETH&to=USDC&span=1
+app.get('/api/getprecomputeddata', async (req, res, next) => {
+    try {
+        console.log('received getprecomputeddata request', req);
+        const platform = req.query.platform;
+        const from = req.query.from;
+        const to = req.query.to;
+        const span = Number(req.query.span);
+
+        if(!span) {
+            res.status(400).json({error: 'span required'});
+            next();
+        }
+        const fileName = `${from}-${to}_precomputed_${span}d.json`;
+        const returnObject = JSON.parse(fs.readFileSync(`${DATA_DIR}/${platform}/${fileName}`));
+
+        res.json(returnObject);
+
+
+    } catch(error) {
+        next(error);
+    }
+});
+
 function getAvailableUniswapV2() {
     const available = {};
     const files = fs.readdirSync(`${DATA_DIR}/uniswapv2/`).filter(_ => _.endsWith('.csv'));
