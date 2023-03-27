@@ -233,24 +233,6 @@ function processEvents(events, iface, latestData, token0, token1, latestDataFile
         saveData.push(newSaveData);
     }
     fs.appendFileSync(dataFileName, saveData.join(''));
-
-    // const priceFilename = `${DATA_DIR}/uniswapv3/${token0.symbol}-${token1.symbol}_prices.csv`;
-    // const checkpointFileName = `${DATA_DIR}/uniswapv3/${token0.symbol}-${token1.symbol}_liquidity_checkpoint.csv`;
-    // if(!fs.existsSync(priceFilename)) {
-    //     fs.writeFileSync(priceFilename, `blocknumber,price ${token1.symbol}/${token0.symbol},price ${token0.symbol}/${token1.symbol}\n`);
-    // }
-
-    // if(!fs.existsSync(checkpointFileName)) {
-    //     fs.writeFileSync(checkpointFileName, 'blocknumber,liquidity data\n');
-    // }
-    // if(priceData.length > 0) {
-    //     fs.appendFileSync(priceFilename, priceData.join(''));
-    // }
-
-    // if(checkpointData.length > 0) {
-    //     console.log(`${fnName()} [${token0.symbol}-${token1.symbol}]: saving ${checkpointData.length} checkpoint(s)`);
-    //     fs.appendFileSync(checkpointFileName, checkpointData.join(''));
-    // }
     
     fs.writeFileSync(latestDataFilePath, JSON.stringify(latestData));
     logFnDuration(dtStart, events.length, 'event');
@@ -286,12 +268,4 @@ function getSaveData(token0, token1, latestData) {
 
     latestData.lastDataSave = latestData.blockNumber;
     return `${latestData.blockNumber},${JSON.stringify(saveValue)}\n`;
-    // console.log(slippages);
-    // Compute token1->token0 price
-    // priceData.push(`${latestData.blockNumber},${p0},${1/p0}\n`);
-
-    // if(latestData.blockNumber >= latestData.lastCheckpoint + CHECKPOINT_INTERVAL) {
-    //     checkpointData.push(`${latestData.blockNumber},${JSON.stringify(latestData)}\n`);
-    //     latestData.lastCheckpoint = latestData.blockNumber;
-    // }
 }
