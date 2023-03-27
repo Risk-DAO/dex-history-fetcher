@@ -4,6 +4,8 @@ const readline = require('readline');
 const { normalize } = require('../utils/token.utils');
 const { tokens } = require('../global.config');
 const { BigNumber } = require('ethers');
+const path = require('path');
+const { fnName } = require('../utils/utils');
 
 async function getUniswapAveragePriceAndLiquidity(dataDir, fromSymbol, toSymbol, fromBlock, toBlock) {
     const aggregatedLiquidity = await getUniV2AggregatedDataForBlockNumbers(dataDir, fromSymbol, toSymbol, fromBlock, toBlock);
@@ -36,11 +38,14 @@ async function getUniswapPriceAndLiquidity(dataDir, fromSymbol, toSymbol, target
     return result;
 }
 
+function computeUniswapV2Price(normalizedFrom, normalizedTo) {
+    return  normalizedTo / normalizedFrom;
+}
 
 function computePriceAndLiquidity(fromSymbol, toSymbol, liquidity) {
     const normalizedFrom = normalize(liquidity.fromReserve, tokens[fromSymbol].decimals);
     const normalizedTo = normalize(liquidity.toReserve, tokens[toSymbol].decimals);
-    const price = normalizedTo / normalizedFrom;
+    const price = computeUniswapV2Price(normalizedTo / normalizedFrom);
 
     const result = {
         from: liquidity.from,
@@ -111,7 +116,6 @@ async function getUniV2AggregatedDataForBlockNumbers(dataDir, fromSymbol, toSymb
                 break;
             }
         }
-        // console.log('line:', line);    
     }
 
     fileStream.close();
@@ -139,6 +143,69 @@ async function getUniV2AggregatedDataForBlockNumbers(dataDir, fromSymbol, toSymb
     }
 
     return aggregatedLiquidity;
+}
+
+function getUniV2DataforBlockRange(DATA_DIR, fromSymbol, toSymbol, blockRange) {
+    const fileInfo = getUniV2DataFile(DATA_DIR, fromSymbol, toSymbol);
+    if(!fileInfo) {
+        throw new Error(`Could not find pool data for ${fromSymbol}/${toSymbol} on uniswapv2`);
+    }
+    // load the file in RAM
+    const fileContent = fs.readFileSync(fileInfo.path, 'utf-8').split('\n');
+
+    // loop through until finding infos for each block in the blockRange
+    let targetBlockNumberIndex = 0;
+    let targetBlockNumber = blockRange[targetBlockNumberIndex];
+    let lastLine = fileContent[1];
+    const results = {};
+
+    // start at 2 because first line is headers and second is in lastLine
+    let fileContentIndex = 2;
+    while(targetBlockNumberIndex < blockRange.length) {
+        const splitted = fileContent[fileContentIndex].split(',');
+        const blockNumber = Number(splitted[0]);
+
+        if(blockNumber < targetBlockNumber) {
+            // do nothing except save that line in lastLine and incr fileContentIndex
+            lastLine = fileContent[fileContentIndex];
+            if(fileContentIndex < fileContent.length - 2) {
+                fileContentIndex++;
+            } else {
+                console.log(`${fnName()}: End of file reached with ${Object.keys(results).length} results found`);
+                break;
+            }
+        } else {
+            const lastLineSplitted = lastLine.split(',');
+            const lastLineBlocknumber = Number(lastLineSplitted[0]);
+
+            // here lastLine.blockNumber < currentTargetBlockNumber <= blockNumber
+            // need to find the closest block between blockNumber and lastLine.blockNumber
+            // and record the value of the closest
+            const distanceFromLast = Math.abs(targetBlockNumber - lastLineBlocknumber);
+            const distanceFromCurrent =  Math.abs(targetBlockNumber - blockNumber);
+            
+            // take current because distance is less
+            if(distanceFromLast > distanceFromCurrent) {
+                results[targetBlockNumber] = {
+                    blockNumber: blockNumber,
+                    fromReserve: fileInfo.reverse ? splitted[2] : splitted[1],
+                    toReserve: fileInfo.reverse ? splitted[1] : splitted[2]
+                };
+            } else {
+                results[targetBlockNumber] = {
+                    blockNumber: lastLineBlocknumber,
+                    fromReserve: fileInfo.reverse ? lastLineSplitted[2] : lastLineSplitted[1],
+                    toReserve: fileInfo.reverse ? lastLineSplitted[1] : lastLineSplitted[2]
+                };
+            }
+
+            targetBlockNumberIndex++;
+            targetBlockNumber = blockRange[targetBlockNumberIndex];
+            // here, we don't increment fileContentIndex because we might have multiple lines valid for the sale target block
+        }
+    }
+
+    return results;
 }
 
 async function getUniV2DataForBlockNumber(dataDir, fromSymbol, toSymbol, targetBlockNumber) {
@@ -206,8 +273,6 @@ async function getUniV2DataForBlockNumber(dataDir, fromSymbol, toSymbol, targetB
                 reserve1
             };
         }
-        // console.log('line:', line);    
-
     }
 
     fileStream.close();
@@ -230,20 +295,20 @@ async function getUniV2DataForBlockNumber(dataDir, fromSymbol, toSymbol, targetB
 }
 
 function getUniV2DataFile(dataDir, fromSymbol, toSymbol) {
-    let path = `${dataDir}/uniswapv2/${fromSymbol}-${toSymbol}_uniswapv2.csv`;
+    let filePath = path.join(dataDir, 'uniswapv2', `${fromSymbol}-${toSymbol}_uniswapv2.csv`);
     let reverse = false;
 
-    if(fs.existsSync(path)) {
+    if(fs.existsSync(filePath)) {
         return {
-            path: path,
+            path: filePath,
             reverse: reverse
         };
     } else {
-        path = `${dataDir}/uniswapv2/${toSymbol}-${fromSymbol}_uniswapv2.csv`;
+        filePath = path.join(dataDir, 'uniswapv2',`${toSymbol}-${fromSymbol}_uniswapv2.csv`);
         reverse = true;
-        if(fs.existsSync(path)) {
+        if(fs.existsSync(filePath)) {
             return {
-                path: path,
+                path: filePath,
                 reverse: reverse
             };
         } else {
@@ -268,24 +333,34 @@ function getUniV2DataFile(dataDir, fromSymbol, toSymbol) {
  * @param {number} targetSlippage 
  * @returns {number} amount of token exchangeable for defined slippage
  */
-function computeLiquidityUniV2Pool(fromSymbol, fromReserve, toSymbol, toReserve, targetSlippage) {
-    // console.log(`computeLiquidity: Calculating liquidity from ${fromSymbol} to ${toSymbol} with slippage ${Math.round(targetSlippage * 100)} %`);
-
+function computeLiquidityUniV2Pool(fromReserve, toReserve, targetSlippage) {
     const initPrice = toReserve / fromReserve;
     const targetPrice = initPrice - (initPrice * targetSlippage);
-    // console.log(`computeLiquidity: initPrice: ${initPrice}, targetPrice: ${targetPrice}`);
     const amountOfFromToExchange = (toReserve / targetPrice) - fromReserve;
-    // console.log(`computeLiquidity: ${fromSymbol}/${toSymbol} liquidity: ${amountOfFromToExchange} ${fromSymbol}`);
     return amountOfFromToExchange;
 }
 
-module.exports = { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity };
 
-// async function test() {
-//     // computeLiquidityUniV2Pool('ETH', 28345.5, 'USDC', 43920629, 10/100 );
-//     const start = Date.now();
-//     console.log(await getUniswapAveragePriceAndLiquidity('./data', 'ETH', 'USDC', 10000000, 18000000));
-//     console.log('duration', Date.now() - start);
-// }
+function getAvailableUniswapV2(dataDir) {
+    const available = {};
+    const files = fs.readdirSync(`${dataDir}/uniswapv2/`).filter(_ => _.endsWith('.csv'));
+    for(const file of files) {
+        const pair = file.split('_')[0];
 
-// test();
+        const tokenA = pair.split('-')[0];
+        const tokenB = pair.split('-')[1];
+        if(!available[tokenA]) {
+            available[tokenA] = [];
+        }
+        if(!available[tokenB]) {
+            available[tokenB] = [];
+        }
+        available[tokenA].push(tokenB);
+        available[tokenB].push(tokenA);
+    }
+
+    return available;
+}
+
+module.exports = { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, computeUniswapV2Price,
+    getUniV2DataforBlockRange, computeLiquidityUniV2Pool, getAvailableUniswapV2, getUniV2DataFile};

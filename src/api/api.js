@@ -1,34 +1,13 @@
 const express = require('express');
 const fs = require('fs');
 const { getCurvePriceAndLiquidity } = require('../curve/curve.utils');
-const { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity } = require('../uniswap.v2/uniswap.v2.utils');
+const { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, getAvailableUniswapV2 } = require('../uniswap.v2/uniswap.v2.utils');
 var cors = require('cors');
-const { default: axios } = require('axios');
+const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const app = express();
 app.use(cors());
 const port = process.env.API_PORT || 3000;
 const DATA_DIR = process.cwd() + '/data';
-
-function getAvailableUniswapV2() {
-    const available = {};
-    const files = fs.readdirSync(`${DATA_DIR}/uniswapv2/`).filter(_ => _.endsWith('.csv'));
-    for(const file of files) {
-        const pair = file.split('_')[0];
-
-        const tokenA = pair.split('-')[0];
-        const tokenB = pair.split('-')[1];
-        if(!available[tokenA]) {
-            available[tokenA] = [];
-        }
-        if(!available[tokenB]) {
-            available[tokenB] = [];
-        }
-        available[tokenA].push(tokenB);
-        available[tokenB].push(tokenA);
-    }
-
-    return available;
-}
 
 function getAvailableCurve() {
     const summary = JSON.parse(fs.readFileSync(`${DATA_DIR}/curve/curve_pools_summary.json`));
@@ -56,7 +35,7 @@ function getAvailableCurve() {
 
 app.get('/api/available', (req, res) => {
     const available = {};
-    available['uniswapv2'] = getAvailableUniswapV2();
+    available['uniswapv2'] = getAvailableUniswapV2(DATA_DIR);
     available['curve'] = getAvailableCurve();
 
     res.json(available);    
@@ -77,10 +56,7 @@ app.get('/api/getprice', async (req, res, next) => {
         }
 
         // get nearest blocknum from defillama
-        console.log(`calling defillama: https://coins.llama.fi/block/ethereum/${timestamp}`);
-        const defiLamaResp = await axios.get(`https://coins.llama.fi/block/ethereum/${timestamp}`);
-        const blockNumber = defiLamaResp.data.height;
-        console.log('defillama resp:', defiLamaResp.data);
+        const blockNumber = await getBlocknumberForTimestamp(timestamp);
 
         switch(platform.toLowerCase()) {
             case 'uniswapv2':
@@ -116,16 +92,8 @@ app.get('/api/getaverageprice', async (req, res, next) => {
         const toTimestamp = Number(req.query.toTimestamp);
         
         // get nearest blocknum from defillama
-        console.log(`calling defillama: https://coins.llama.fi/block/ethereum/${fromTimestamp}`);
-        let defiLamaResp = await axios.get(`https://coins.llama.fi/block/ethereum/${fromTimestamp}`);
-        console.log('defillama resp:', defiLamaResp.data);
-        const fromBlock = defiLamaResp.data.height;
-
-
-        console.log(`calling defillama: https://coins.llama.fi/block/ethereum/${toTimestamp}`);
-        defiLamaResp = await axios.get(`https://coins.llama.fi/block/ethereum/${toTimestamp}`);
-        console.log('defillama resp:', defiLamaResp.data);
-        const toBlock = defiLamaResp.data.height;
+        const fromBlock = await getBlocknumberForTimestamp(fromTimestamp);
+        const toBlock = await getBlocknumberForTimestamp(toTimestamp);
 
         if(toBlock < fromBlock) {
             res.status(400).json({error: 'toBlock must be greater than fromBlock'});
@@ -147,3 +115,4 @@ app.get('/api/getaverageprice', async (req, res, next) => {
 app.listen(port, () => {
     console.log(`Example app listening on port ${port}`);
 });
+

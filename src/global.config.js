@@ -118,7 +118,35 @@ const tokens = {
     GNO: {
         decimals: 18,
         address: '0x9C58BAcC331c9aa871AFD802DB6379a98e80CEdb'
-    }
+    },
+    COMP: {
+        decimals: 18,
+        address: '0xc00e94cb662c3520282e6f5717214004a7f26888'
+    },
+    BAT: {
+        decimals: 18,
+        address: '0x0D8775F648430679A709E98d2b0Cb6250d2887EF'
+    },
+    TUSD: {
+        decimals: 18,
+        address: '0x0000000000085d4780B73119b644AE5ecd22b376'
+    },
+    SUSHI: {
+        decimals: 18,
+        address: '0x6B3595068778DD592e39A122f4f5a5cF09C90fE2'
+    },
+    AAVE: {
+        decimals: 18,
+        address: '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9'
+    },
+    USDP: {
+        decimals: 18,
+        address: '0x8E870D67F660D95d5be530380D0eC0bd388289E1'
+    },
+    FEI: {
+        decimals: 18,
+        address: '0x956F47F50A910163D8BF957Cf5846D573E7f87CA'
+    },
 };
 
 module.exports = { tokens };
