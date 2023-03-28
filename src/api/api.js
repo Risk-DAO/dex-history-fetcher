@@ -11,20 +11,18 @@ const DATA_DIR = process.cwd() + '/data';
 
 
 
-// getprecomputeddata?platform=uniswapv2&from=ETH&to=USDC&span=1
+// getprecomputeddata?platform=uniswapv2&span=1
 app.get('/api/getprecomputeddata', async (req, res, next) => {
     try {
         console.log('received getprecomputeddata request', req);
         const platform = req.query.platform;
-        const from = req.query.from;
-        const to = req.query.to;
         const span = Number(req.query.span);
 
         if(!span) {
             res.status(400).json({error: 'span required'});
             next();
         }
-        const fileName = `${from}-${to}_precomputed_${span}d.json`;
+        const fileName = `concat_${span}d.json`;
         const returnObject = JSON.parse(fs.readFileSync(`${DATA_DIR}/${platform}/${fileName}`));
 
         res.json(returnObject);
