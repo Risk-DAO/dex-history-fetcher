@@ -22,8 +22,8 @@ app.get('/api/getprecomputeddata', async (req, res, next) => {
             res.status(400).json({error: 'span required'});
             next();
         }
-        const fileName = `concat_${span}d.json`;
-        const returnObject = JSON.parse(fs.readFileSync(`${DATA_DIR}/${platform}/${fileName}`));
+        const fileName = `concat-${span}d.json`;
+        const returnObject = JSON.parse(fs.readFileSync(`${DATA_DIR}/precomputed/${platform}/${fileName}`));
 
         res.json(returnObject);
 
@@ -32,27 +32,6 @@ app.get('/api/getprecomputeddata', async (req, res, next) => {
         next(error);
     }
 });
-
-function getAvailableUniswapV2() {
-    const available = {};
-    const files = fs.readdirSync(`${DATA_DIR}/uniswapv2/`).filter(_ => _.endsWith('.csv'));
-    for(const file of files) {
-        const pair = file.split('_')[0];
-
-        const tokenA = pair.split('-')[0];
-        const tokenB = pair.split('-')[1];
-        if(!available[tokenA]) {
-            available[tokenA] = [];
-        }
-        if(!available[tokenB]) {
-            available[tokenB] = [];
-        }
-        available[tokenA].push(tokenB);
-        available[tokenB].push(tokenA);
-    }
-
-    return available;
-}
 
 function getAvailableCurve() {
     const summary = JSON.parse(fs.readFileSync(`${DATA_DIR}/curve/curve_pools_summary.json`));
