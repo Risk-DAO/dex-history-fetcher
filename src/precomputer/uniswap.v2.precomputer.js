@@ -53,6 +53,9 @@ async function precomputeUniswapV2Data(blockRange, targetSlippages, daysToFetch)
             logFnDuration(start);
         }
     }
+
+    // create a concatenated file
+    concatenateFiles(daysToFetch);
     console.log(`${fnName()}: Ending UNIV2 Precomputer for days to fetch: ${daysToFetch}`);
 }
 
@@ -109,6 +112,29 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
     };
 
     fs.writeFileSync(path.join(precomputedDirectory,`${fromToken.symbol}-${toToken.symbol}_precomputed_${daysToFetch}d.json`), JSON.stringify(preComputedData, null, 2));
+}
+
+function concatenateFiles(daysToFetch) {
+    console.log(`${fnName()}: Creating concatenated file for UNIV2 and days to fetch: ${daysToFetch}`);
+    const precomputeDir = path.join(DATA_DIR, 'precomputed', 'uniswapv2');
+    const concatenatedFilename = path.join(precomputeDir, `concat-${daysToFetch}d.json`);
+
+    const filesToConcat = fs.readdirSync(precomputeDir).filter(_ => _.endsWith(`precomputed_${daysToFetch}d.json`) && !_.startsWith('concat-'));
+
+    const allJsons = [];
+    for(const file of filesToConcat) {
+        const filepath = path.join(precomputeDir,file);
+        const json = JSON.parse(fs.readFileSync(filepath));
+        const base = file.split('_')[0].split('-')[0];
+        const quote = file.split('_')[0].split('-')[1];
+        json.base = base;
+        json.quote = quote;
+        allJsons.push(json);
+    }
+
+    console.log(`${fnName()}: Writing concat file with ${allJsons.length} source data in it`);
+    fs.writeFileSync(concatenatedFilename, JSON.stringify(allJsons));
+    console.log(`${fnName()}: ${concatenatedFilename} file created`);
 }
 
 module.exports = { precomputeUniswapV2Data };
