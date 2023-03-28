@@ -1,5 +1,52 @@
+const fs = require('fs');
+const dotenv = require('dotenv');
+dotenv.config();
+
 // various utils fct
 
+/**
+ * Read the last line of a file, without reading full file
+ * @param {string} file filepath
+ * @returns 
+ */
+async function readLastLine(file) {
+    const fileSize = (await fs.promises.stat(file)).size;
+    const bufferSize = 1024 * 1024;
+    let lastLine = '';
+    let bytesRead = 0;
+    let fileOffset = fileSize - bufferSize;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        const start = Math.max(fileOffset, 0);
+        const stream = fs.createReadStream(file, {
+            start: start,
+            highWaterMark: bufferSize,
+        });
+        bytesRead = 0;
+
+        for await (const chunk of stream) {
+            let i = chunk.length - 1;
+            for (; i >= 0; --i) {
+                if (chunk[i] === 10) { // '\n'
+                    lastLine = chunk.slice(i + 1).toString('utf8') + lastLine;
+
+                    // don't return last empty line
+                    if(lastLine.trim()) {
+                        return lastLine.trim();
+                    }
+                }
+            }
+
+            lastLine = chunk.toString('utf8') + lastLine;
+            bytesRead += chunk.length;
+        }
+        fileOffset -= bytesRead;
+        if (fileOffset < 0) {
+            return lastLine;
+        }
+    }
+}
 
 /**
  * round a number to 'dec' decimals
@@ -24,13 +71,15 @@ function fnName() {
  * Logs the duration of a function
  * @param {number} dtStart unix timestamp ms
  * @param {number} jobCount the number of job done, to be displayed as nbjob/sec if set
+ * @param {number} jobName the name for the jobs done
  */
-function logFnDuration(dtStart, jobCount = undefined) {
+function logFnDuration(dtStart, jobCount = undefined, jobName = 'job') {
+    if(!process.env.DEBUG_DURATION) return;
     const secDuration = (Date.now() - dtStart)/1000;
     if(jobCount) {
-        console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration)} s. ${jobCount/secDuration} job/sec`);
+        console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration, 6)} s. ${jobCount/secDuration} ${jobName}/sec`);
     } else {
-        console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration)} s`);
+        console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration, 6)} s`);
     }
 }
 /**
@@ -69,4 +118,4 @@ async function retry(fn, params, retries = 0) {
     }
 }
 
-module.exports = { retry, sleep, fnName, roundTo, logFnDuration };
+module.exports = { retry, sleep, fnName, roundTo, logFnDuration, readLastLine };

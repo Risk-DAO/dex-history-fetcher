@@ -1,10 +1,11 @@
 const axios = require('axios');
 const dotenv = require('dotenv');
-const { retry } = require('./utils');
+const { retry, fnName, sleep } = require('./utils');
 dotenv.config();
 
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || 'YourApiKeyToken';
 
+let lastCallEtherscan = 0;
 /**
  * 
  * @param {ethers.providers.BaseProvider} web3Provider 
@@ -12,15 +13,28 @@ const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || 'YourApiKeyToken';
  * @returns 
  */
 async function GetContractCreationBlockNumber(web3Provider, contractAddress) {
-    console.log(`GetContractCreationBlockNumber: fetching data for contract ${contractAddress}`);
+    console.log(`${fnName()}: fetching data for contract ${contractAddress}`);
+    const msToWait = 10000 - (Date.now() - lastCallEtherscan);
+    if(msToWait > 0) {
+        console.log(`${fnName()}: Sleeping ${msToWait} before calling etherscan`);
+        await sleep(msToWait);
+    }
     // call etherscan to get the tx receipt of contract creation
     const etherscanUrl = `https://api.etherscan.io/api?module=contract&action=getcontractcreation&contractaddresses=${contractAddress}&apikey=${ETHERSCAN_API_KEY}`;
     const etherscanResponse = await retry(axios.get, [etherscanUrl]);
+    lastCallEtherscan = Date.now();
 
     const receipt = await web3Provider.getTransactionReceipt(etherscanResponse.data.result[0].txHash);
     // console.log(receipt);
-    console.log(`GetContractCreationBlockNumber: returning blocknumber: ${receipt.blockNumber}`);
+    console.log(`${fnName()}: returning blocknumber: ${receipt.blockNumber}`);
     return receipt.blockNumber;
 }
 
-module.exports = { GetContractCreationBlockNumber };
+async function getBlocknumberForTimestamp(timestamp) {
+    const defiLamaResp = await axios.get(`https://coins.llama.fi/block/ethereum/${timestamp}`);
+    const blockNumber = defiLamaResp.data.height;
+    console.log(`${fnName()}: at timestamp ${timestamp}, block: ${blockNumber}`);
+    return blockNumber;
+}
+
+module.exports = { GetContractCreationBlockNumber, getBlocknumberForTimestamp };
