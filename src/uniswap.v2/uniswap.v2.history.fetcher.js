@@ -90,7 +90,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
     if(!fs.existsSync(historyFileName)) {
         fs.writeFileSync(historyFileName, `blocknumber,reserve_${token0Symbol}_${token0Address},reserve_${token1Symbol}_${token1Address}\n`);
     } else {
-        const lastLine = readLastLine(historyFileName);
+        const lastLine = await readLastLine(historyFileName);
         startBlock = Number(lastLine.split(',')[0]) + 1;
     }
     

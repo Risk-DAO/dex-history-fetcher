@@ -120,7 +120,7 @@ async function FetchHistory(pool) {
     // now we will try to fetch the old last data (from begining or from the csv file)
     if (fs.existsSync(historyFileName)) {
         // if file exists, we read the last line to get the lastData
-        const lastLine = readLastLine(historyFileName);
+        const lastLine = await readLastLine(historyFileName);
         
         const lastBlockDataSplt = lastLine.split(',');
         lastData.blockNumber = Number(lastBlockDataSplt[0]);
