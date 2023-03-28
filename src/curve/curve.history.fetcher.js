@@ -3,7 +3,7 @@ const dotenv = require('dotenv');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const curveConfig = require('./curve.config');
 const fs = require('fs');
-const { sleep, fnName } = require('../utils/utils');
+const { sleep, fnName, readLastLine } = require('../utils/utils');
 const { getTokenSymbolByAddress, getConfTokenBySymbol, normalize } = require('../utils/token.utils');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
@@ -120,13 +120,7 @@ async function FetchHistory(pool) {
     // now we will try to fetch the old last data (from begining or from the csv file)
     if (fs.existsSync(historyFileName)) {
         // if file exists, we read the last line to get the lastData
-        const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
-        // read last line
-        let lastLine = fileContent[fileContent.length - 1]; 
-        if(!lastLine) {
-            // last line can be just \n so if lastline empty, check previous line
-            lastLine = fileContent[fileContent.length - 2]; 
-        }
+        const lastLine = await readLastLine(historyFileName);
         
         const lastBlockDataSplt = lastLine.split(',');
         lastData.blockNumber = Number(lastBlockDataSplt[0]);

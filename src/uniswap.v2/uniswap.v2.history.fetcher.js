@@ -6,7 +6,7 @@ dotenv.config();
 const univ2Config = require('./uniswap.v2.config');
 const { tokens } = require('../global.config');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
-const { sleep, fnName, roundTo } = require('../utils/utils');
+const { sleep, fnName, roundTo, readLastLine } = require('../utils/utils');
 
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
@@ -28,7 +28,7 @@ async function UniswapV2HistoryFetcher() {
             fs.mkdirSync(`${DATA_DIR}/uniswapv2`);
         }
 
-        console.log('${fnName()}: starting');
+        console.log(`${fnName()}: starting`);
         const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 
         for(const pairKey of univ2Config.uniswapV2Pairs) {
@@ -90,8 +90,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
     if(!fs.existsSync(historyFileName)) {
         fs.writeFileSync(historyFileName, `blocknumber,reserve_${token0Symbol}_${token0Address},reserve_${token1Symbol}_${token1Address}\n`);
     } else {
-        const fileContent = fs.readFileSync(historyFileName, 'utf-8').split('\n');
-        const lastLine = fileContent[fileContent.length-2];
+        const lastLine = await readLastLine(historyFileName);
         startBlock = Number(lastLine.split(',')[0]) + 1;
     }
     
