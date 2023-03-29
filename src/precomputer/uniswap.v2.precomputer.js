@@ -132,8 +132,13 @@ function concatenateFiles(daysToFetch) {
         allJsons.push(json);
     }
 
+    const concatObj = {
+        lastUpdate: Date.now(),
+        concatData: allJsons
+    };
+
     console.log(`${fnName()}: Writing concat file with ${allJsons.length} source data in it`);
-    fs.writeFileSync(concatenatedFilename, JSON.stringify(allJsons));
+    fs.writeFileSync(concatenatedFilename, JSON.stringify(concatObj));
     console.log(`${fnName()}: ${concatenatedFilename} file created`);
 }
 
