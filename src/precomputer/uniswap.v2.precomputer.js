@@ -60,6 +60,11 @@ async function precomputeUniswapV2Data(blockRange, targetSlippages, daysToFetch)
 }
 
 function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, targetSlippages,  fromToken, toToken) {
+    const destFileName = path.join(precomputedDirectory,`${fromToken.symbol}-${toToken.symbol}_precomputed_${daysToFetch}d.json`);
+    if(fs.existsSync(destFileName)) {
+        fs.rmSync(destFileName);
+    }
+    
     console.log(`${fnName()}: computing data for ${fromToken.symbol}/${toToken.symbol}`);
     const resultsForRange = getUniV2DataforBlockRange(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange);
     if(Object.keys(resultsForRange).length == 0)  {
@@ -82,21 +87,29 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
         volumeForSlippage.push(liquidity);
     }
 
-    // if any empty blocks, fill with 0 ?
+    console.log(`volume for slippage count: ${volumeForSlippage.length}`);
+    // if any empty blocks, fill with previous
+    let lastBlockValue = resultsForRange[Object.keys(resultsForRange)[0]];
     for(let i = 0; i< blockRange.length; i++) {
         const block = blockRange[i];
-        if(!resultsForRange[block]) {
-            
+        const blockValue = resultsForRange[block];
+        if(!blockValue) {
             const liquidity = {};
             liquidity['blockNumber'] = Number(block);
-            liquidity['realBlockNumberDistance'] = -1;
+            liquidity['realBlockNumber'] = lastBlockValue.blockNumber;
+            liquidity['realBlockNumberDistance'] = Math.abs(Number(block) - lastBlockValue.blockNumber);
             for (let i = 0; i < targetSlippages.length; i++) {
-                liquidity[targetSlippages[i]] = 0;
+                const normalizedFrom = normalize(lastBlockValue.fromReserve, fromToken.decimals);
+                const normalizedTo = normalize(lastBlockValue.toReserve, toToken.decimals);
+                liquidity[targetSlippages[i]] = computeLiquidityUniV2Pool(normalizedFrom, normalizedTo, targetSlippages[i]/100);
             }
             volumeForSlippage.push(liquidity);
+        } else {
+            lastBlockValue = blockValue;
         }
     }
 
+    console.log(`volume for slippage count after fill: ${volumeForSlippage.length}`);
 
     const firstKey = Object.keys(resultsForRange)[0];
     const lastKey = Object.keys(resultsForRange)[Object.keys(resultsForRange).length - 1];
@@ -111,7 +124,7 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
         volumeForSlippage : volumeForSlippage
     };
 
-    fs.writeFileSync(path.join(precomputedDirectory,`${fromToken.symbol}-${toToken.symbol}_precomputed_${daysToFetch}d.json`), JSON.stringify(preComputedData, null, 2));
+    fs.writeFileSync(destFileName, JSON.stringify(preComputedData, null, 2));
 }
 
 function concatenateFiles(daysToFetch) {
