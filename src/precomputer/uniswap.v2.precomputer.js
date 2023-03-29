@@ -64,7 +64,7 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
     if(fs.existsSync(destFileName)) {
         fs.rmSync(destFileName);
     }
-    
+
     console.log(`${fnName()}: computing data for ${fromToken.symbol}/${toToken.symbol}`);
     const resultsForRange = getUniV2DataforBlockRange(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange);
     if(Object.keys(resultsForRange).length == 0)  {
@@ -73,43 +73,29 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
     }
 
     console.log(`${fnName()}: got ${Object.keys(resultsForRange).length} results for block range`);
+    // init lastBlockValue as the first result returned in 'resultsForRange'
+    let lastBlockValue = resultsForRange[Object.keys(resultsForRange)[0]];
     const volumeForSlippage = [];
-    for (const [block, value] of Object.entries(resultsForRange)) {
+    for(let i = 0; i< blockRange.length; i++) {
+        const block = blockRange[i];
+        let blockValue = resultsForRange[block];
+
+        if(!blockValue) {
+            blockValue = lastBlockValue;
+        }
+        
         const liquidity = {};
         liquidity['blockNumber'] = Number(block);
-        liquidity['realBlockNumber'] = value.blockNumber;
-        liquidity['blockNumberDistance'] = Math.abs(Number(block) - value.blockNumber);
+        liquidity['realBlockNumber'] = blockValue.blockNumber;
+        liquidity['realBlockNumberDistance'] = Math.abs(Number(block) - blockValue.blockNumber);
         for (let i = 0; i < targetSlippages.length; i++) {
-            const normalizedFrom = normalize(value.fromReserve, fromToken.decimals);
-            const normalizedTo = normalize(value.toReserve, toToken.decimals);
+            const normalizedFrom = normalize(blockValue.fromReserve, fromToken.decimals);
+            const normalizedTo = normalize(blockValue.toReserve, toToken.decimals);
             liquidity[targetSlippages[i]] = computeLiquidityUniV2Pool(normalizedFrom, normalizedTo, targetSlippages[i]/100);
         }
         volumeForSlippage.push(liquidity);
+        lastBlockValue = blockValue;
     }
-
-    console.log(`volume for slippage count: ${volumeForSlippage.length}`);
-    // if any empty blocks, fill with previous
-    let lastBlockValue = resultsForRange[Object.keys(resultsForRange)[0]];
-    for(let i = 0; i< blockRange.length; i++) {
-        const block = blockRange[i];
-        const blockValue = resultsForRange[block];
-        if(!blockValue) {
-            const liquidity = {};
-            liquidity['blockNumber'] = Number(block);
-            liquidity['realBlockNumber'] = lastBlockValue.blockNumber;
-            liquidity['realBlockNumberDistance'] = Math.abs(Number(block) - lastBlockValue.blockNumber);
-            for (let i = 0; i < targetSlippages.length; i++) {
-                const normalizedFrom = normalize(lastBlockValue.fromReserve, fromToken.decimals);
-                const normalizedTo = normalize(lastBlockValue.toReserve, toToken.decimals);
-                liquidity[targetSlippages[i]] = computeLiquidityUniV2Pool(normalizedFrom, normalizedTo, targetSlippages[i]/100);
-            }
-            volumeForSlippage.push(liquidity);
-        } else {
-            lastBlockValue = blockValue;
-        }
-    }
-
-    console.log(`volume for slippage count after fill: ${volumeForSlippage.length}`);
 
     const firstKey = Object.keys(resultsForRange)[0];
     const lastKey = Object.keys(resultsForRange)[Object.keys(resultsForRange).length - 1];
@@ -118,9 +104,11 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
     const endPrice = computeUniswapV2Price(normalize(resultsForRange[lastKey].fromReserve, fromToken.decimals), normalize(resultsForRange[lastKey].toReserve, toToken.decimals));
 
     const preComputedData = {
+        base: fromToken.symbol,
+        quote: toToken.symbol,
         blockStep: blockRange[1] - blockRange[0],
         startPrice: startPrice,
-        endPrice : endPrice, 
+        endPrice : endPrice,         
         volumeForSlippage : volumeForSlippage
     };
 
@@ -138,10 +126,6 @@ function concatenateFiles(daysToFetch) {
     for(const file of filesToConcat) {
         const filepath = path.join(precomputeDir,file);
         const json = JSON.parse(fs.readFileSync(filepath));
-        const base = file.split('_')[0].split('-')[0];
-        const quote = file.split('_')[0].split('-')[1];
-        json.base = base;
-        json.quote = quote;
         allJsons.push(json);
     }
 
