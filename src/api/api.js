@@ -27,7 +27,7 @@ app.get('/api/getprecomputeddata', async (req, res, next) => {
         const fileName = `concat-${span}d.json`;
         const filePath = path.join(DATA_DIR, 'precomputed', platform, fileName);
         if (!fs.existsSync(filePath)) {
-            res.status(400).json({ error: 'file does not exist' });
+            res.status(404).json({ error: 'file does not exist' });
             next();
         }
         else {
