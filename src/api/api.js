@@ -3,26 +3,58 @@ const fs = require('fs');
 const { getCurvePriceAndLiquidity } = require('../curve/curve.utils');
 const { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, getAvailableUniswapV2 } = require('../uniswap.v2/uniswap.v2.utils');
 var cors = require('cors');
+var path = require('path');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const app = express();
 app.use(cors());
 const port = process.env.API_PORT || 3000;
 const DATA_DIR = process.cwd() + '/data';
 
+
+
+// getprecomputeddata?platform=uniswapv2&span=1
+app.get('/api/getprecomputeddata', async (req, res, next) => {
+    try {
+        console.log('received getprecomputeddata request', req);
+        const platform = req.query.platform;
+        const span = Number(req.query.span);
+
+        if (!span || !platform) {
+            res.status(400).json({ error: 'span and platform required' });
+            next();
+        }
+
+        const fileName = `concat-${span}d.json`;
+        const filePath = path.join(DATA_DIR, 'precomputed', platform, fileName);
+        if (!fs.existsSync(filePath)) {
+            res.status(404).json({ error: 'file does not exist' });
+            next();
+        }
+        else {
+            const returnObject = JSON.parse(fs.readFileSync(filePath));
+            res.json(returnObject);
+        }
+
+
+    } catch (error) {
+        next(error);
+    }
+});
+
 function getAvailableCurve() {
     const summary = JSON.parse(fs.readFileSync(`${DATA_DIR}/curve/curve_pools_summary.json`));
     const available = {};
-    for(const poolName of Object.keys(summary)) {
-        for(const [token, reserveValue] of Object.entries(summary[poolName])) {
-            if(!available[token]) {
+    for (const poolName of Object.keys(summary)) {
+        for (const [token, reserveValue] of Object.entries(summary[poolName])) {
+            if (!available[token]) {
                 available[token] = {};
             }
 
-            for(const [tokenB, reserveValueB] of Object.entries(summary[poolName])) {
-                if(tokenB === token) {
+            for (const [tokenB, reserveValueB] of Object.entries(summary[poolName])) {
+                if (tokenB === token) {
                     continue;
                 }
-                
+
                 available[token][tokenB] = available[token][tokenB] || {};
                 available[token][tokenB][poolName] = available[token][tokenB][poolName] || {};
                 available[token][tokenB][poolName][token] = reserveValue;
@@ -38,7 +70,7 @@ app.get('/api/available', (req, res) => {
     available['uniswapv2'] = getAvailableUniswapV2(DATA_DIR);
     available['curve'] = getAvailableCurve();
 
-    res.json(available);    
+    res.json(available);
 });
 
 // getprice?platform=uniswapv2&from=ETH&to=USDC&timestamp=1658171864&poolName=3pool
@@ -50,33 +82,33 @@ app.get('/api/getprice', async (req, res, next) => {
         const to = req.query.to;
         const timestamp = Number(req.query.timestamp);
 
-        if(!timestamp) {
-            res.status(400).json({error: 'timestamp required'});
+        if (!timestamp) {
+            res.status(400).json({ error: 'timestamp required' });
             next();
         }
 
         // get nearest blocknum from defillama
         const blockNumber = await getBlocknumberForTimestamp(timestamp);
 
-        switch(platform.toLowerCase()) {
+        switch (platform.toLowerCase()) {
             case 'uniswapv2':
                 res.json(await getUniswapPriceAndLiquidity(DATA_DIR, from, to, blockNumber));
                 break;
-            case 'curve': 
-            {
-                const poolName = req.query.poolName;
-                if(!poolName) {
-                    res.status(400).json({error: 'poolName required for curve'});
-                    next();
+            case 'curve':
+                {
+                    const poolName = req.query.poolName;
+                    if (!poolName) {
+                        res.status(400).json({ error: 'poolName required for curve' });
+                        next();
+                    }
+                    res.json(await getCurvePriceAndLiquidity(DATA_DIR, poolName, from, to, blockNumber));
+                    break;
                 }
-                res.json(await getCurvePriceAndLiquidity(DATA_DIR, poolName, from, to, blockNumber));
-                break;
-            }
             default:
-                res.status(400).json({error: `Wrong platform: ${platform}`});
+                res.status(400).json({ error: `Wrong platform: ${platform}` });
                 break;
         }
-    } catch(error) {
+    } catch (error) {
         next(error);
     }
 });
@@ -90,24 +122,24 @@ app.get('/api/getaverageprice', async (req, res, next) => {
         const to = req.query.to;
         const fromTimestamp = Number(req.query.fromTimestamp);
         const toTimestamp = Number(req.query.toTimestamp);
-        
+
         // get nearest blocknum from defillama
         const fromBlock = await getBlocknumberForTimestamp(fromTimestamp);
         const toBlock = await getBlocknumberForTimestamp(toTimestamp);
 
-        if(toBlock < fromBlock) {
-            res.status(400).json({error: 'toBlock must be greater than fromBlock'});
+        if (toBlock < fromBlock) {
+            res.status(400).json({ error: 'toBlock must be greater than fromBlock' });
             next();
         }
-        switch(platform.toLowerCase()) {
+        switch (platform.toLowerCase()) {
             case 'uniswapv2':
                 res.json(await getUniswapAveragePriceAndLiquidity(DATA_DIR, from, to, fromBlock, toBlock));
                 break;
             default:
-                res.status(400).json({error: `Wrong platform: ${platform}`});
+                res.status(400).json({ error: `Wrong platform: ${platform}` });
                 break;
         }
-    } catch(error) {
+    } catch (error) {
         next(error);
     }
 });
