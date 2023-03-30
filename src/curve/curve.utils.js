@@ -318,11 +318,31 @@ function get_return(i, j, x, balances, A) {
     return get_y(i, j, x + balances[i], balances, BigInt(balances.length), BigInt(A));
 }
 
-function toWei(n) {
-    return BigInt(n) * 10n **18n;
+function getAvailableCurve(dataDir) {
+    const summary = JSON.parse(fs.readFileSync(`${dataDir}/curve/curve_pools_summary.json`));
+    const available = {};
+    for (const poolName of Object.keys(summary)) {
+        for (const [token, reserveValue] of Object.entries(summary[poolName])) {
+            if (!available[token]) {
+                available[token] = {};
+            }
+
+            for (const [tokenB, reserveValueB] of Object.entries(summary[poolName])) {
+                if (tokenB === token) {
+                    continue;
+                }
+
+                available[token][tokenB] = available[token][tokenB] || {};
+                available[token][tokenB][poolName] = available[token][tokenB][poolName] || {};
+                available[token][tokenB][poolName][token] = reserveValue;
+                available[token][tokenB][poolName][tokenB] = reserveValueB;
+            }
+        }
+    }
+    return available;
 }
 
-module.exports = { getCurvePriceAndLiquidity, get_return, get_virtual_price, computeLiquidityForSlippageCurvePool };
+module.exports = { getCurvePriceAndLiquidity, get_return, get_virtual_price, computeLiquidityForSlippageCurvePool, getAvailableCurve };
 
 // function test() {
 //     getCurvePriceAndLiquidity('./data', '3pool', 'DAI', 'USDC', 15487);
