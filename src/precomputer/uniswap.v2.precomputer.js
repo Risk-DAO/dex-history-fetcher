@@ -88,11 +88,12 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
         liquidity['blockNumber'] = Number(block);
         liquidity['realBlockNumber'] = blockValue.blockNumber;
         liquidity['realBlockNumberDistance'] = Math.abs(Number(block) - blockValue.blockNumber);
-        for (let i = 0; i < targetSlippages.length; i++) {
+        for (let j = 0; j < targetSlippages.length; j++) {
             const normalizedFrom = normalize(blockValue.fromReserve, fromToken.decimals);
             const normalizedTo = normalize(blockValue.toReserve, toToken.decimals);
-            liquidity[targetSlippages[i]] = computeLiquidityUniV2Pool(normalizedFrom, normalizedTo, targetSlippages[i]/100);
+            liquidity[targetSlippages[j]] = computeLiquidityUniV2Pool(normalizedFrom, normalizedTo, targetSlippages[j]/100);
         }
+        
         volumeForSlippage.push(liquidity);
         lastBlockValue = blockValue;
     }
