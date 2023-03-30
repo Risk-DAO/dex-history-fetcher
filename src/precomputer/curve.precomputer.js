@@ -110,10 +110,13 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
             
             const reservesNorm18Dec = getReservesNormalizedTo18Decimals(tokens, blockValue.reserves);
             const basePrice = normalize(get_return(indexFrom, indexTo, BIGINT_1e18, reservesNorm18Dec, blockValue.ampFactor).toString(), 18);
+
+            // if on the first block of the blockrange, save startprice
             if(i == 0) {
                 startPrices.push(basePrice);
             }
 
+            // if on the last block of the blockrange, save start price
             if(i == blockRange.length - 1) {
                 endPrices.push(basePrice);
             }
@@ -151,7 +154,9 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
         aggregVolumeForSlippage.push(aggregVolume);
     }
 
+    // startprice is avg of startprices of each pools where we found the info
     const startPrice = startPrices.reduce((accumulator, currentValue) => { return accumulator + currentValue; }, 0) / startPrices.length;
+    // same for endprice
     const endPrice = endPrices.reduce((accumulator, currentValue) => { return accumulator + currentValue; }, 0) / startPrices.length;
     
     const preComputedData = {
@@ -191,5 +196,3 @@ function concatenateFiles(daysToFetch) {
 }
 
 module.exports = { precomputeCurveData };
-
-// precomputeCurveData([16896464], [1, 5, 10, 15, 20], 1);
