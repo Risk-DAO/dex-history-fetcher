@@ -2,9 +2,10 @@
 const BigNumber = require('bignumber.js');
 const { ethers } = require('ethers');
 const { getConfTokenBySymbol } = require('../utils/token.utils');
-const { roundTo, logFnDuration } = require('../utils/utils');
+const { roundTo, logFnDuration, fnName } = require('../utils/utils');
 const univ3Config = require('./uniswap.v3.config');
-
+const fs = require('fs');
+const path = require('path');
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
 const CONSTANT_TARGET_SLIPPAGE = 20;
@@ -513,16 +514,183 @@ function get_dx(currentTick, tickSpacing, sqrtPriceX96, liquidity, dy) {
     return dx;
 }
 
-async function generateConfigOracleAndCompoundAssets() {
-    const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
 
-    const bases = ['BAT','DAI','WBTC','USDC','WETH','UNI','COMP','TUSD','LINK','MKR','SUSHI','AAVE','YFI','USDP','FEI','BUSD','MANA','SNX','sUSD'];
-    const quotes = ['WETH', 'USDC', 'WBTC', 'DAI'];
-    
-    console.log(JSON.stringify(await generateConfigFromBaseAndQuote(web3Provider, bases, quotes), null, 2));
+function getAvailableUniswapV3(dataDir) {
+    const available = {};
+    const files = fs.readdirSync(`${dataDir}/uniswapv3/`).filter(_ => _.endsWith('.csv'));
+    for(const file of files) {
+        const splitted = file.split('-');
 
+        const tokenA = splitted[0];
+        const tokenB = splitted[1];
+        if(!available[tokenA]) {
+            available[tokenA] = [];
+        }
+        if(!available[tokenB]) {
+            available[tokenB] = [];
+        }
+
+        if(!available[tokenA].includes(tokenB)) {
+            available[tokenA].push(tokenB);
+        }
+
+        if(!available[tokenB].includes(tokenA)) {
+            available[tokenB].push(tokenA);
+        }
+    }
+
+    return available;
 }
+
+
+function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
+    console.log(`${fnName()}: Searching for on ${fromSymbol}/${toSymbol}`);
+    const results = {};
+
+    
+    const allUniv3Files = fs.readdirSync(path.join(dataDir, 'uniswapv3')).filter(_ => _.endsWith('.csv'));
+    
+    let searchKey = `${fromSymbol}-${blockRange}`;
+    let reverse = false;
+    let selectedFiles = allUniv3Files.filter(_ => _.startsWith(searchKey));
+    if(selectedFiles.length == 0) {
+        let searchKey = `${toSymbol}-${fromSymbol}`;
+        reverse = true;
+        selectedFiles = allUniv3Files.filter(_ => _.startsWith(searchKey));
+
+        if(selectedFiles.length == 0) {
+            console.log(`Could not find univ3 files for ${fromSymbol}/${toSymbol}`);
+            return results;
+        }
+    }
+
+    const dataContents = getDataContents(selectedFiles, dataDir);
+
+    // select base file = the file with the most lines
+    let baseFile = selectedFiles[0];
+    for(let i = 1; i < selectedFiles.length; i++) {
+        const selectedFile = selectedFiles[i];
+        if(Object.keys(dataContents[baseFile]).length < Object.keys(dataContents[selectedFile]).length) {
+            baseFile = selectedFile;
+        }
+    }
+
+    
+    let targetBlockNumberIndex = 0;
+    let targetBlockNumber = blockRange[targetBlockNumberIndex];
+    let lastData = undefined;
+    let lastBlockNumber = 0;
+
+    for(const [blockNumber, dataObj] of Object.entries(dataContents[baseFile])) {
+
+        if(blockNumber < targetBlockNumber) {
+            lastData = dataObj;
+            lastBlockNumber = blockNumber;
+            continue;
+        }
+
+        let baseData = {
+            blockNumber: lastBlockNumber,
+            price: reverse ? lastData.p1vs0 : lastData.p0vs1,
+            slippageMap: lastData[`${fromSymbol}-slippagemap`]
+        };
+
+        if(blockNumber == targetBlockNumber) {
+            baseData = {
+                blockNumber: blockNumber,
+                price: reverse ? dataObj.p1vs0 : dataObj.p0vs1,
+                slippageMap: dataObj[`${fromSymbol}-slippagemap`]
+            };
+        }
+
+        // here in base data we have the base value we want to return, we must now find the 
+        // nearest block values in other data files
+
+        // for each other files, select the line with the nearest block number
+        for(let i = 0; i < selectedFiles.length; i++) {
+            const selectedFile = selectedFiles[i];
+            if(selectedFile == baseFile) {
+                continue;
+            }
+
+            let selectedFileSlippage = undefined;
+            // if the exact blocknumber is found, use it
+            if(dataContents[selectedFile][targetBlockNumber]) {
+                selectedFileSlippage = dataContents[selectedFile][targetBlockNumber][`${fromSymbol}-slippagemap`];
+            } else {
+                // find nearest block under the current block
+                const selectedFileBlocks = Object.keys(dataContents[selectedFile]).map(_ => Number(_));
+                const nearestUnderBlock = selectedFileBlocks.filter(_ => _ < Number(blockNumber)).at(-1);
+                if(nearestUnderBlock) {
+                    selectedFileSlippage = dataContents[selectedFile][nearestUnderBlock][`${fromSymbol}-slippagemap`];
+                }
+            }
+            
+            if(!selectedFileSlippage) {
+                console.log('Could not find slippage ??');
+            }
+
+            // for each data in the selected file slippage, add to baseData
+            for(const slippagePct of Object.keys(baseData.slippageMap)) {
+                let volumeToAdd = selectedFileSlippage[slippagePct];
+                if(!volumeToAdd && slippagePct > 1) {
+                    // when the tick spacing is high, there is not a value for each slippage percent
+                    // so for example there may be 4% and 6% in the slippages but not 5 in the file with 10000 fees
+                    // to add some value to the aggregated data, we will add the value of 4%
+                    volumeToAdd = selectedFileSlippage[slippagePct - 1];
+                }
+
+                if(volumeToAdd) {
+                    baseData.slippageMap[slippagePct] += volumeToAdd;
+                    // console.log(`new volume for slippage ${slippagePct}%: ${baseData.slippageMap[slippagePct]} after adding ${volumeToAdd} from ${selectedFile}`);
+                }
+            }
+        }
+
+        results[targetBlockNumber] = baseData;
+        targetBlockNumberIndex++;
+        if(targetBlockNumberIndex == blockRange.length) {
+            break;
+        }
+        targetBlockNumber = blockRange[targetBlockNumberIndex];
+    }
+
+    return results;
+}
+
+function getDataContents(selectedFiles, dataDir) {
+    const dataContents = {};
+    for (let i = 0; i < selectedFiles.length; i++) {
+        dataContents[selectedFiles[i]] = {};
+        const fileContent = fs.readFileSync(path.join(dataDir, 'uniswapv3', selectedFiles[i]), 'utf-8').split('\n')
+            // remove first line, which is headers
+            .splice(1);
+
+        // remove last line, which is empty
+        fileContent.pop();
+
+        for (let j = 0; j < fileContent.length; j++) {
+            const blockNumber = Number(fileContent[j].split(',')[0]);
+            const jsonStr = fileContent[j].replace(`${blockNumber},`, '');
+            const parsed = JSON.parse(jsonStr);
+            dataContents[selectedFiles[i]][blockNumber] = parsed;
+        }
+    }
+    return dataContents;
+}
+
+// async function generateConfigOracleAndCompoundAssets() {
+//     const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
+
+//     const bases = ['BAT','DAI','WBTC','USDC','WETH','UNI','COMP','TUSD','LINK','MKR','SUSHI','AAVE','YFI','USDP','FEI','BUSD','MANA','SNX','sUSD'];
+//     const quotes = ['WETH', 'USDC', 'WBTC', 'DAI'];
+    
+//     console.log(JSON.stringify(await generateConfigFromBaseAndQuote(web3Provider, bases, quotes), null, 2));
+
+// }
 
 // generateConfigOracleAndCompoundAssets();
 
-module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, generateConfigFromBaseAndQuote};
+module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, generateConfigFromBaseAndQuote, getAvailableUniswapV3, getUniV3DataforBlockRange };
+
+

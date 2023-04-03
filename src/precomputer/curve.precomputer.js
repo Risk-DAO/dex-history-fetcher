@@ -1,6 +1,5 @@
 const fs = require('fs');
 const { normalize, getConfTokenBySymbol } = require('../utils/token.utils');
-const { getAvailableUniswapV2, getUniV2DataforBlockRange, computeLiquidityUniV2Pool, computeUniswapV2Price } = require('../uniswap.v2/uniswap.v2.utils');
 const { pairsToCompute } = require('./precomputer.config');
 const { fnName, logFnDuration } = require('../utils/utils');
 const path = require('path');
