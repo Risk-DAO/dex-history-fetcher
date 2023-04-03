@@ -1,11 +1,60 @@
 
 const BigNumber = require('bignumber.js');
+const { ethers } = require('ethers');
+const { getConfTokenBySymbol } = require('../utils/token.utils');
 const { roundTo, logFnDuration } = require('../utils/utils');
+const univ3Config = require('./uniswap.v3.config');
 
-module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages};
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
-const CONSTANT_TARGET_SLIPPAGE = 20; // 50%
+const CONSTANT_TARGET_SLIPPAGE = 20;
+
+async function generateConfigFromBaseAndQuote(web3Provider, bases, quotes) {
+    const univ3Factory = new ethers.Contract(univ3Config.uniswapFactoryV3Address, univ3Config.uniswapFactoryV3Abi, web3Provider);
+    const fees = [10000,3000,500,100];
+
+    const conf = [];
+    for(const base of bases) {
+        for(const quote of quotes) {
+            const baseToken = getConfTokenBySymbol(base);
+            const quoteToken =  getConfTokenBySymbol(quote);
+            for(const fee of fees) {
+
+                const poolAddress = await univ3Factory.getPool(baseToken.address, quoteToken.address, fee);
+                
+                if(poolAddress == ethers.constants.AddressZero) {
+                    console.log(`No pool found for ${base}/${quote} and fee: ${fee}`);
+                    continue;
+                } else {
+                    console.log(`Found a pool for ${base}/${quote} and fee: ${fee}`);
+
+                }
+
+                const univ3PairContract = new ethers.Contract(poolAddress, univ3Config.uniswapV3PairAbi, web3Provider);
+                const contractToken0 = await univ3PairContract.token0();
+
+                let reverse = false;
+                if(contractToken0.toLowerCase() != baseToken.address.toLowerCase()) {
+                    reverse = true;
+                }
+
+                const token0 = reverse ? quoteToken.symbol : baseToken.symbol;
+                const token1 = reverse ? baseToken.symbol : quoteToken.symbol;
+
+                const alreadyAdded = conf.some(_ => _.token0 == token0 && _.token1 == token1 && _.fees == fee);
+                if(!alreadyAdded) {
+                    conf.push({
+                        token0: token0,
+                        token1: token1,
+                        fees: fee
+                    });
+                }
+            }
+        }
+    }
+
+    return conf;
+}
 
 function getVolumeForSlippage(targetSlippagePercent, zeroForOne, currentTick, tickSpacing, sqrtPriceX96, liquidity) {
     const dtStart = Date.now();
@@ -463,3 +512,17 @@ function get_dx(currentTick, tickSpacing, sqrtPriceX96, liquidity, dy) {
 
     return dx;
 }
+
+async function generateConfigOracleAndCompoundAssets() {
+    const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
+
+    const bases = ['BAT','DAI','WBTC','USDC','WETH','UNI','COMP','TUSD','LINK','MKR','SUSHI','AAVE','YFI','USDP','FEI','BUSD','MANA','SNX','sUSD'];
+    const quotes = ['WETH', 'USDC', 'WBTC', 'DAI'];
+    
+    console.log(JSON.stringify(await generateConfigFromBaseAndQuote(web3Provider, bases, quotes), null, 2));
+
+}
+
+// generateConfigOracleAndCompoundAssets();
+
+module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, generateConfigFromBaseAndQuote};
