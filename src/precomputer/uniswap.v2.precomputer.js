@@ -118,7 +118,7 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
 function concatenateFiles(daysToFetch) {
     console.log(`${fnName()}: Creating concatenated file for UNIV2 and days to fetch: ${daysToFetch}`);
     const precomputeDir = path.join(DATA_DIR, 'precomputed', 'uniswapv2');
-    const concatenatedFilename = path.join(precomputeDir, `concat-${daysToFetch}d.json`);
+    const concatenatedFilename = path.join(precomputeDir, `concat-${daysToFetch}d.json-staging`);
 
     const filesToConcat = fs.readdirSync(precomputeDir).filter(_ => _.endsWith(`precomputed_${daysToFetch}d.json`) && !_.startsWith('concat-'));
 

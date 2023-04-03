@@ -10,9 +10,9 @@ const { fnName, logFnDuration, sleep, roundTo } = require('../utils/utils');
 const { getConfTokenBySymbol } = require('../utils/token.utils');
 const { getPriceNormalized, getSlippages } = require('./uniswap.v3.utils');
 const { default: BigNumber } = require('bignumber.js');
-// save liqiudity data every 'CHECKPOINT_INTERVAL' blocks
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
-const CONSTANT_BLOCK_INTERVAL = 500;
+// save liquidity data every 'CONSTANT_BLOCK_INTERVAL' blocks
+const CONSTANT_BLOCK_INTERVAL = 150;
 
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
