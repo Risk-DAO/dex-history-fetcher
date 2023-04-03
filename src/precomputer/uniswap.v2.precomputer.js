@@ -76,8 +76,7 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
     // init lastBlockValue as the first result returned in 'resultsForRange'
     let lastBlockValue = resultsForRange[Object.keys(resultsForRange)[0]];
     const volumeForSlippage = [];
-    for(let i = 0; i< blockRange.length; i++) {
-        const block = blockRange[i];
+    for(const block of blockRange) {
         let blockValue = resultsForRange[block];
 
         if(!blockValue) {
@@ -88,11 +87,12 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
         liquidity['blockNumber'] = Number(block);
         liquidity['realBlockNumber'] = blockValue.blockNumber;
         liquidity['realBlockNumberDistance'] = Math.abs(Number(block) - blockValue.blockNumber);
-        for (let i = 0; i < targetSlippages.length; i++) {
+        for(const slippage of targetSlippages) {
             const normalizedFrom = normalize(blockValue.fromReserve, fromToken.decimals);
             const normalizedTo = normalize(blockValue.toReserve, toToken.decimals);
-            liquidity[targetSlippages[i]] = computeLiquidityUniV2Pool(normalizedFrom, normalizedTo, targetSlippages[i]/100);
+            liquidity[slippage] = computeLiquidityUniV2Pool(normalizedFrom, normalizedTo, slippage/100);
         }
+        
         volumeForSlippage.push(liquidity);
         lastBlockValue = blockValue;
     }

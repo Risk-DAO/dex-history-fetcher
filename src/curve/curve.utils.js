@@ -147,6 +147,88 @@ async function getCurveDataForBlockNumber(dataDir, poolName, targetBlockNumber) 
     };
 }
 
+
+
+function getCurveDataforBlockRange(dataDir, poolName, blockRange) {
+    const filePath = getCurveDataFile(dataDir, poolName);
+    if(!filePath) {
+        throw new Error(`Could not find pool data in ${dataDir}/curve/${poolName} for curve`);
+    }
+
+    const fileContent = fs.readFileSync(filePath, 'utf-8').split('\n');
+
+    let lastLine = undefined;
+    const poolTokens = [];
+    const results = {};
+    let targetBlockNumberIndex = 0;
+    let targetBlockNumber = blockRange[targetBlockNumberIndex];
+
+
+    let mustStop = false;
+    for(let l = 0; l < fileContent.length -1; l++) {
+        const line = fileContent[l];
+        if(mustStop) {
+            break;
+        }
+
+        if(l == 0) {
+            const splitted = line.split(',');
+            for(let i = 3; i < splitted.length; i++) {
+                poolTokens.push(splitted[i].split('_')[1]);
+            }
+            continue;
+        }
+
+        if(!lastLine) {
+            // first real line is just saved
+            lastLine = line;
+            continue;
+        }
+    
+        const splitted = line.split(',');
+        const blockNumber = Number(splitted[0]);
+
+        // if the current block number is higher than the target block number
+        // save the lastLine result as the closest valid value
+        if(blockNumber > targetBlockNumber) {
+            const lastLineSplitted = lastLine.split(',');
+            const amplificationFactor = Number(lastLineSplitted[1]);
+            const lpTokenReserve = lastLineSplitted[2];
+            const reserves = [];
+            
+            for(let i = 3; i < lastLineSplitted.length; i++) {
+                reserves.push(lastLineSplitted[i]);
+            }
+
+            while(targetBlockNumber < blockNumber) {
+                results[targetBlockNumber] = {
+                    blockNumber: blockNumber,
+                    lpTokenReserve: lpTokenReserve,
+                    ampFactor: amplificationFactor,
+                    reserves: reserves
+                };
+
+
+                targetBlockNumberIndex++;
+                if(targetBlockNumberIndex == blockRange.length) {
+                    mustStop = true;
+                    break;
+                }
+
+                targetBlockNumber = blockRange[targetBlockNumberIndex];
+            }
+        }
+
+        lastLine = line;
+
+    }
+
+    return {
+        tokens: poolTokens,
+        reserves: results,
+    };
+}
+
 function getCurveDataFile(dataDir, poolName) {
     let path = `${dataDir}/curve/${poolName}_curve.csv`;
 
@@ -318,11 +400,52 @@ function get_return(i, j, x, balances, A) {
     return get_y(i, j, x + balances[i], balances, BigInt(balances.length), BigInt(A));
 }
 
-function toWei(n) {
-    return BigInt(n) * 10n **18n;
+function getAvailableCurve(dataDir) {
+    const summary = JSON.parse(fs.readFileSync(`${dataDir}/curve/curve_pools_summary.json`));
+    const available = {};
+    for (const poolName of Object.keys(summary)) {
+        for (const [token, reserveValue] of Object.entries(summary[poolName])) {
+            if (!available[token]) {
+                available[token] = {};
+            }
+
+            for (const [tokenB, reserveValueB] of Object.entries(summary[poolName])) {
+                if (tokenB === token) {
+                    continue;
+                }
+
+                available[token][tokenB] = available[token][tokenB] || {};
+                available[token][tokenB][poolName] = available[token][tokenB][poolName] || {};
+                available[token][tokenB][poolName][token] = reserveValue;
+                available[token][tokenB][poolName][tokenB] = reserveValueB;
+            }
+        }
+    }
+    return available;
 }
 
-module.exports = { getCurvePriceAndLiquidity, get_return, get_virtual_price, computeLiquidityForSlippageCurvePool };
+/**
+ * 
+ * @param {tokenConf[]} tokens 
+ * @param {string[]} reserves 
+ * @returns 
+ */
+function getReservesNormalizedTo18Decimals(tokens, reserves) {
+    if(tokens.length != reserves.length) {
+        throw new Error('Tokens array must be same length as reserves array');
+    }
+    const reservesNorm = [];
+
+    for(let i = 0; i < reserves.length; i++) {
+        const tokenReserve18DecimalStr = reserves[i] + ''.padEnd(18 - tokens[i].decimals, '0');
+        reservesNorm.push(BigInt(tokenReserve18DecimalStr));
+    }
+
+    return reservesNorm;
+}
+
+module.exports = { getCurvePriceAndLiquidity, get_return, get_virtual_price, computeLiquidityForSlippageCurvePool, getAvailableCurve,
+    getCurveDataforBlockRange, getReservesNormalizedTo18Decimals };
 
 // function test() {
 //     getCurvePriceAndLiquidity('./data', '3pool', 'DAI', 'USDC', 15487);

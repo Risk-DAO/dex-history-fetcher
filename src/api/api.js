@@ -1,6 +1,6 @@
 const express = require('express');
 const fs = require('fs');
-const { getCurvePriceAndLiquidity } = require('../curve/curve.utils');
+const { getCurvePriceAndLiquidity, getAvailableCurve } = require('../curve/curve.utils');
 const { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, getAvailableUniswapV2 } = require('../uniswap.v2/uniswap.v2.utils');
 var cors = require('cors');
 var path = require('path');
@@ -41,34 +41,10 @@ app.get('/api/getprecomputeddata', async (req, res, next) => {
     }
 });
 
-function getAvailableCurve() {
-    const summary = JSON.parse(fs.readFileSync(`${DATA_DIR}/curve/curve_pools_summary.json`));
-    const available = {};
-    for (const poolName of Object.keys(summary)) {
-        for (const [token, reserveValue] of Object.entries(summary[poolName])) {
-            if (!available[token]) {
-                available[token] = {};
-            }
-
-            for (const [tokenB, reserveValueB] of Object.entries(summary[poolName])) {
-                if (tokenB === token) {
-                    continue;
-                }
-
-                available[token][tokenB] = available[token][tokenB] || {};
-                available[token][tokenB][poolName] = available[token][tokenB][poolName] || {};
-                available[token][tokenB][poolName][token] = reserveValue;
-                available[token][tokenB][poolName][tokenB] = reserveValueB;
-            }
-        }
-    }
-    return available;
-}
-
 app.get('/api/available', (req, res) => {
     const available = {};
     available['uniswapv2'] = getAvailableUniswapV2(DATA_DIR);
-    available['curve'] = getAvailableCurve();
+    available['curve'] = getAvailableCurve(DATA_DIR);
 
     res.json(available);
 });

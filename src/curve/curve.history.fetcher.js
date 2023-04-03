@@ -30,7 +30,7 @@ async function CurveHistoryFetcher() {
             try {
                 const curvePair = curveConfig.curvePairs[i];
                 const lastData = await FetchHistory(curvePair);
-                lastResults[curvePair.poolName] = lastData;
+                lastResults[`${curvePair.poolName}_${curvePair.lpTokenName}`] = lastData;
             }
             catch (error) {
                 errors.push(curveConfig.curvePairs[i].poolName);
