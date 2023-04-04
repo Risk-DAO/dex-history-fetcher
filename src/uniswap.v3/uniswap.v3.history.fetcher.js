@@ -228,7 +228,7 @@ function processEvents(events, iface, latestData, token0, token1, latestDataFile
     }
     
     // at the end, write the last data if not already saved
-    if(latestData.blockNumber != latestData.lastDataSave) {
+    if(latestData.blockNumber != latestData.lastDataSave && latestData.blockNumber >= latestData.lastDataSave + CONSTANT_BLOCK_INTERVAL) {
         const newSaveData = getSaveData(token0, token1, latestData);
         saveData.push(newSaveData);
     }
