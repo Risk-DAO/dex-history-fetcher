@@ -63,32 +63,44 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
         throw new Error('Cannot find token in global config with symbol: ' + pairConfig.token1);
     }
 
-    const poolAddress = await univ3Factory.getPool(token0.address, token1.address, pairConfig.fees);
-    const univ3PairContract = new Contract(poolAddress, univ3Config.uniswapV3PairAbi, web3Provider);
-
-    // verify that the token0 in config is the token0 of the pool
-    const poolToken0 = await univ3PairContract.token0();
-    if(poolToken0.toLowerCase() != token0.address.toLowerCase()) {
-        throw new Error(`pool token0 ${poolToken0} != config token0 ${token0.address}. config must match pool order`);
-    }
-    // same for token1
-    const poolToken1 = await univ3PairContract.token1();
-    if(poolToken1.toLowerCase() != token1.address.toLowerCase()) {
-        throw new Error(`pool token0 ${poolToken1} != config token0 ${token1.address}. config must match pool order`);
-    }
-
-    console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}]: pool address found: ${poolAddress} with pair ${pairConfig.token0}-${pairConfig.token1}`);
     // try to find the json file representation of the pool latest value already fetched
     const latestDataFilePath = `${DATA_DIR}/uniswapv3/${pairConfig.token0}-${pairConfig.token1}-${pairConfig.fees}-latestdata.json`;
     let latestData = undefined;
+    let poolAddress = undefined;
+    let univ3PairContract = undefined;
 
     if(fs.existsSync(latestDataFilePath)) {
         // if the file exists, set its value to latestData
         latestData = JSON.parse(fs.readFileSync(latestDataFilePath));
+        poolAddress = latestData.poolAddress;
+        if(!poolAddress) {
+            console.log(`Could not find pool address in latest data file ${latestDataFilePath}`);
+            poolAddress = await univ3Factory.getPool(token0.address, token1.address, pairConfig.fees);
+            latestData.poolAddress = poolAddress;
+        }
+
+        univ3PairContract = new Contract(poolAddress, univ3Config.uniswapV3PairAbi, web3Provider);
         console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${pairConfig.fees}]: data file found ${latestDataFilePath}, last block fetched: ${latestData.blockNumber}`);
     } else {
         console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${pairConfig.fees}]: data file not found, starting from scratch`);
+        poolAddress = await univ3Factory.getPool(token0.address, token1.address, pairConfig.fees);
+        univ3PairContract = new Contract(poolAddress, univ3Config.uniswapV3PairAbi, web3Provider);
+
+        // verify that the token0 in config is the token0 of the pool
+        const poolToken0 = await univ3PairContract.token0();
+        if(poolToken0.toLowerCase() != token0.address.toLowerCase()) {
+            throw new Error(`pool token0 ${poolToken0} != config token0 ${token0.address}. config must match pool order`);
+        }
+        
+        // same for token1
+        const poolToken1 = await univ3PairContract.token1();
+        if(poolToken1.toLowerCase() != token1.address.toLowerCase()) {
+            throw new Error(`pool token0 ${poolToken1} != config token0 ${token1.address}. config must match pool order`);
+        }
+
+        console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}]: pool address found: ${poolAddress} with pair ${pairConfig.token0}-${pairConfig.token1}`);
         latestData = await fetchInitializeData(web3Provider, poolAddress, univ3PairContract);
+        latestData.poolAddress = poolAddress;
     }
 
     const dataFileName = `${DATA_DIR}/uniswapv3/${token0.symbol}-${token1.symbol}-${pairConfig.fees}-data.csv`;
@@ -150,6 +162,10 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
         }
         fromBlock = toBlock +1;
     }
+
+    // at the end, update latest data blockNumber because even if no events were emitted, we must 
+    // save that we have fetched blocks without events
+    latestData.blockNumber = currentBlock;
 }
 
 async function fetchInitializeData(web3Provider, poolAddress, univ3PairContract) {

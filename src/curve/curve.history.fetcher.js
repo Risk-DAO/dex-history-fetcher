@@ -3,7 +3,7 @@ const dotenv = require('dotenv');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const curveConfig = require('./curve.config');
 const fs = require('fs');
-const { sleep, fnName, readLastLine } = require('../utils/utils');
+const { sleep, fnName, readLastLine, roundTo } = require('../utils/utils');
 const { getTokenSymbolByAddress, getConfTokenBySymbol, normalize } = require('../utils/token.utils');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
@@ -16,6 +16,7 @@ const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 async function CurveHistoryFetcher() {
     // eslint-disable-next-line no-constant-condition
     while(true) {
+        const start = Date.now();
         const errors = [];
 
         if(!fs.existsSync(`${DATA_DIR}/curve`)) {
@@ -23,13 +24,14 @@ async function CurveHistoryFetcher() {
         }
 
         const lastResults = {};
+        const currentBlock = await web3Provider.getBlockNumber();
         for (let i = 0; i < curveConfig.curvePairs.length; i++) {
             if(i > 0) {
                 await sleep(5000);
             }
             try {
                 const curvePair = curveConfig.curvePairs[i];
-                const lastData = await FetchHistory(curvePair);
+                const lastData = await FetchHistory(curvePair, currentBlock);
                 lastResults[`${curvePair.poolName}_${curvePair.lpTokenName}`] = lastData;
             }
             catch (error) {
@@ -45,8 +47,13 @@ async function CurveHistoryFetcher() {
             console.log('errors:', errors);
         }
 
-        console.log('Sleeping 10 minutes before restarting');
-        await sleep(1000 * 600);
+        // sleep 10 min - time it took to run the loop
+        // if the loop took more than 10 minutes, restart directly
+        const sleepTime = 600 * 1000 - (Date.now() - start);
+        if(sleepTime > 0) {
+            console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
+            await sleep(sleepTime);
+        }
     }
 }
 
@@ -54,7 +61,7 @@ async function CurveHistoryFetcher() {
  * Takes a pool from curve.config.js and outputs liquidity file in /data
  * @param {{poolAddress: string, poolName: string, version: number, abi: string, ampFactor: number, additionnalTransferEvents: {[symbol: string]: string[]}}} pool 
  */
-async function FetchHistory(pool) {
+async function FetchHistory(pool, currentBlock) {
     if (!RPC_URL) {
         throw new Error('Could not find RPC_URL env variable');
     }
@@ -67,7 +74,6 @@ async function FetchHistory(pool) {
     const historyFileName = `${DATA_DIR}/curve/${pool.poolName}_${pool.lpTokenName}_curve.csv`;
     let tokenAddresses = undefined;
     let poolSymbols = [];
-    const currentBlock = await web3Provider.getBlockNumber();
     // Fetching tokens in pool
     console.log('--- fetching pool tokens ---');
     try {
