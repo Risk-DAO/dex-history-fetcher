@@ -87,9 +87,13 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
         liquidity['blockNumber'] = Number(block);
         liquidity['realBlockNumber'] = blockValue.blockNumber;
         liquidity['realBlockNumberDistance'] = Math.abs(Number(block) - blockValue.blockNumber);
+        
+        const normalizedFrom = normalize(blockValue.fromReserve, fromToken.decimals);
+        const normalizedTo = normalize(blockValue.toReserve, toToken.decimals);
+
+        liquidity['price'] = computeUniswapV2Price(normalizedFrom, normalizedTo);
+
         for(const slippage of targetSlippages) {
-            const normalizedFrom = normalize(blockValue.fromReserve, fromToken.decimals);
-            const normalizedTo = normalize(blockValue.toReserve, toToken.decimals);
             liquidity[slippage] = computeLiquidityUniV2Pool(normalizedFrom, normalizedTo, slippage/100);
         }
         

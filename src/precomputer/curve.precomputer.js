@@ -109,6 +109,7 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
             
             const reservesNorm18Dec = getReservesNormalizedTo18Decimals(tokens, blockValue.reserves);
             const basePrice = normalize(get_return(indexFrom, indexTo, BIGINT_1e18, reservesNorm18Dec, blockValue.ampFactor).toString(), 18);
+            liquidity['price'] = basePrice;
 
             // if on the first block of the blockrange, save startprice
             if(i == 0) {
