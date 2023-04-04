@@ -24,7 +24,7 @@ async function CurveHistoryFetcher() {
         }
 
         const lastResults = {};
-        const currentBlock = await web3Provider.getBlockNumber();
+        const currentBlock = await web3Provider.getBlockNumber() - 10;
         for (let i = 0; i < curveConfig.curvePairs.length; i++) {
             if(i > 0) {
                 await sleep(5000);

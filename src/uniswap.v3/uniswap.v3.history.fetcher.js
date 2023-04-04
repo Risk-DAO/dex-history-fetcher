@@ -38,7 +38,7 @@ async function UniswapV3HistoryFetcher() {
         console.log(`${fnName()}: starting`);
         const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
         const univ3Factory = new Contract(univ3Config.uniswapFactoryV3Address, univ3Config.uniswapFactoryV3Abi, web3Provider);
-        const currentBlock = await web3Provider.getBlockNumber();
+        const currentBlock = await web3Provider.getBlockNumber() - 10;
 
         for(const pairToFetch of univ3Config.pairsToFetch) {
             await FetchUniswapV3HistoryForPair(pairToFetch, web3Provider, univ3Factory, currentBlock);
