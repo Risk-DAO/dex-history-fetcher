@@ -91,7 +91,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
         if(poolToken0.toLowerCase() != token0.address.toLowerCase()) {
             throw new Error(`pool token0 ${poolToken0} != config token0 ${token0.address}. config must match pool order`);
         }
-        
+
         // same for token1
         const poolToken1 = await univ3PairContract.token1();
         if(poolToken1.toLowerCase() != token1.address.toLowerCase()) {
@@ -166,6 +166,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
     // at the end, update latest data blockNumber because even if no events were emitted, we must 
     // save that we have fetched blocks without events
     latestData.blockNumber = currentBlock;
+    fs.writeFileSync(latestDataFilePath, JSON.stringify(latestData));
 }
 
 async function fetchInitializeData(web3Provider, poolAddress, univ3PairContract) {
