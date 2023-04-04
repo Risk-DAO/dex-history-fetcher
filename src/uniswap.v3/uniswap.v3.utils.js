@@ -550,7 +550,7 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
     
     const allUniv3Files = fs.readdirSync(path.join(dataDir, 'uniswapv3')).filter(_ => _.endsWith('.csv'));
     
-    let searchKey = `${fromSymbol}-${blockRange}`;
+    let searchKey = `${fromSymbol}-${toSymbol}`;
     let reverse = false;
     let selectedFiles = allUniv3Files.filter(_ => _.startsWith(searchKey));
     if(selectedFiles.length == 0) {
@@ -578,7 +578,19 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
     
     let targetBlockNumberIndex = 0;
     let targetBlockNumber = blockRange[targetBlockNumberIndex];
-    let lastData = undefined;
+    const emptySlippageMap = {};
+    for(let slippagePct = 1; slippagePct <= CONSTANT_TARGET_SLIPPAGE; slippagePct++) {
+        emptySlippageMap[slippagePct] = 0;
+    }
+
+    let lastData = {
+        blockNumber: 0,
+        p1vs0: 0,
+        p0vs1: 0,
+    };
+
+    lastData[`${fromSymbol}-slippagemap`] = emptySlippageMap;
+
     let lastBlockNumber = 0;
 
     for(const [blockNumber, dataObj] of Object.entries(dataContents[baseFile])) {
@@ -603,6 +615,18 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
             };
         }
 
+        
+        for(let slippagePct = 1; slippagePct <= CONSTANT_TARGET_SLIPPAGE; slippagePct++) {
+            const slippageValue = baseData.slippageMap[slippagePct];
+            if(slippageValue == undefined) {
+                if(slippagePct == 1) {
+                    baseData.slippageMap[slippagePct] = 0;
+                } else {
+                    baseData.slippageMap[slippagePct] = baseData.slippageMap[slippagePct-1];
+                }
+            }
+        }
+
         // here in base data we have the base value we want to return, we must now find the 
         // nearest block values in other data files
 
@@ -620,7 +644,13 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
             } else {
                 // find nearest block under the current block
                 const selectedFileBlocks = Object.keys(dataContents[selectedFile]).map(_ => Number(_));
-                const nearestUnderBlock = selectedFileBlocks.filter(_ => _ < Number(blockNumber)).at(-1);
+                const dataOlderThanBlockNumber = selectedFileBlocks.filter(_ => _ < Number(blockNumber));
+                if(dataOlderThanBlockNumber.length == 0) {
+                    console.log(`There is not data older than ${blockNumber}, will ignore data from ${selectedFile}`);
+                    continue;
+                }
+
+                const nearestUnderBlock = dataOlderThanBlockNumber.at(-1);
                 if(nearestUnderBlock) {
                     selectedFileSlippage = dataContents[selectedFile][nearestUnderBlock][`${fromSymbol}-slippagemap`];
                 }
@@ -631,7 +661,7 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
             }
 
             // for each data in the selected file slippage, add to baseData
-            for(const slippagePct of Object.keys(baseData.slippageMap)) {
+            for(let slippagePct = 1; slippagePct <= CONSTANT_TARGET_SLIPPAGE; slippagePct++) {
                 let volumeToAdd = selectedFileSlippage[slippagePct];
                 if(!volumeToAdd && slippagePct > 1) {
                     // when the tick spacing is high, there is not a value for each slippage percent
@@ -693,4 +723,5 @@ function getDataContents(selectedFiles, dataDir) {
 
 module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, generateConfigFromBaseAndQuote, getAvailableUniswapV3, getUniV3DataforBlockRange };
 
+// getUniV3DataforBlockRange('./data', 'UNI', 'USDC', [])
 
