@@ -11,7 +11,7 @@ const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 const TARGET_DATA_POINTS = Number(process.env.TARGET_DATA_POINTS || 50);
 const TARGET_SLIPPAGES = [1, 5, 10, 15, 20];
-const PRECOMPUTED_DIRS = ['uniswapv2', 'curve'];
+const PRECOMPUTED_DIRS = ['uniswapv2', 'curve', 'uniswapv3'];
 const DATA_DIR = process.cwd() + '/data';
 
 
@@ -47,11 +47,10 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
         }
         // console.log(blockRange);
         
-        const univ2Promise = precomputeUniswapV2Data(blockRange, TARGET_SLIPPAGES, daysToFetch);
-        const curvePromise = precomputeCurveData(blockRange, TARGET_SLIPPAGES, daysToFetch);
-        const univ3Promise = precomputeUniswapV3Data(blockRange, TARGET_SLIPPAGES, daysToFetch);
+        await precomputeUniswapV2Data(blockRange, TARGET_SLIPPAGES, daysToFetch);
+        await precomputeCurveData(blockRange, TARGET_SLIPPAGES, daysToFetch);
+        await precomputeUniswapV3Data(blockRange, TARGET_SLIPPAGES, daysToFetch);
 
-        await Promise.all([univ2Promise, univ3Promise, curvePromise]);
 
         // delete old files and replace with new one
         // this ensure that the new files are all generated at the same time

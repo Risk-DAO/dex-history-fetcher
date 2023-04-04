@@ -30,10 +30,10 @@ async function UniswapV2HistoryFetcher() {
 
         console.log(`${fnName()}: starting`);
         const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-
+        const currentBlock = await web3Provider.getBlockNumber() - 10;
         for(const pairKey of univ2Config.uniswapV2Pairs) {
             console.log(`${fnName()}: Start fetching pair ` + pairKey);
-            await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`);
+            await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`, currentBlock);
             console.log(`${fnName()}: End fetching pair ` + pairKey);
         }
 
@@ -58,7 +58,7 @@ async function UniswapV2HistoryFetcher() {
  * @param {ethers.providers.BaseProvider} web3Provider 
  * @param {string} pairKey
  */
-async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
+async function FetchHistoryForPair(web3Provider, pairKey, historyFileName, currentBlock) {
     const token0Symbol = pairKey.split('-')[0];
     const token0Address = tokens[token0Symbol].address;
     const token1Symbol = pairKey.split('-')[1];
@@ -79,7 +79,6 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName) {
     if(contractToken1.toLowerCase() != token1Address.toLowerCase()) {
         throw new Error('Order mismatch between configuration and uniswapv2 pair');
     }
-    const currentBlock = await web3Provider.getBlockNumber();
 
     const initBlockStep = 500000;
 

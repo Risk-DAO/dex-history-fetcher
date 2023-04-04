@@ -1,6 +1,5 @@
 const fs = require('fs');
 const { normalize, getConfTokenBySymbol } = require('../utils/token.utils');
-const { getAvailableUniswapV2, getUniV2DataforBlockRange, computeLiquidityUniV2Pool, computeUniswapV2Price } = require('../uniswap.v2/uniswap.v2.utils');
 const { pairsToCompute } = require('./precomputer.config');
 const { fnName, logFnDuration } = require('../utils/utils');
 const path = require('path');
@@ -110,6 +109,7 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
             
             const reservesNorm18Dec = getReservesNormalizedTo18Decimals(tokens, blockValue.reserves);
             const basePrice = normalize(get_return(indexFrom, indexTo, BIGINT_1e18, reservesNorm18Dec, blockValue.ampFactor).toString(), 18);
+            liquidity['price'] = basePrice;
 
             // if on the first block of the blockrange, save startprice
             if(i == 0) {
