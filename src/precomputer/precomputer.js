@@ -45,6 +45,7 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
 
             blockRange.push(startBlock + i*blockStep);
         }
+        
         // console.log(blockRange);
         
         await precomputeUniswapV2Data(blockRange, TARGET_SLIPPAGES, daysToFetch);

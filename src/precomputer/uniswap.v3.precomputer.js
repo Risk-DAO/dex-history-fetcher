@@ -62,13 +62,17 @@ async function precomputeUniswapV3Data(blockRange, targetSlippages, daysToFetch)
 }
 
 function precomputeDataForPair(univ3PrecomputedDir, daysToFetch, blockRange, targetSlippages, fromToken, toToken) {
+    const destFileName = path.join(univ3PrecomputedDir,`${fromToken.symbol}-${toToken.symbol}_precomputed_${daysToFetch}d.json`);
+    if(fs.existsSync(destFileName)) {
+        fs.rmSync(destFileName);
+    }
+    
     const resultsForRange = getUniV3DataforBlockRange(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange);
     if(Object.keys(resultsForRange).length == 0)  {
         console.log(`${fnName()}: No data found for the last ${daysToFetch} day(s) for ${fromToken.symbol}/${toToken.symbol}`);
         return;
     }
 
-    const destFileName = path.join(univ3PrecomputedDir,`${fromToken.symbol}-${toToken.symbol}_precomputed_${daysToFetch}d.json`);
     
     const preComputedData = {
         base: fromToken.symbol,
