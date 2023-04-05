@@ -53,6 +53,36 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
         await precomputeUniswapV3Data(blockRange, TARGET_SLIPPAGES, daysToFetch);
 
 
+        // generate avg data for each pairs
+        for(const platform of PRECOMPUTED_DIRS) {
+            const averageData = {};
+            const concatenatedFilenameStaging = path.join(DATA_DIR, 'precomputed', platform, `concat-${daysToFetch}d.json-staging`);
+            const concatObj = JSON.parse(fs.readFileSync(concatenatedFilenameStaging));
+            for(const concatData of concatObj.concatData) {
+                console.log(`Finding avg price for ${platform} and ${concatData.base}/${concatData.quote}`);
+                const priceArray = concatData.volumeForSlippage.map(_ => _.price);
+                const avgPrice = priceArray.reduce((a,b) => a + b, 0) / priceArray.length;
+                const std = calculateStdDev(priceArray);
+                const volatility = std / avgPrice;
+
+                console.log(`[${platform}] ${concatData.base}/${concatData.quote} avgPrice: ${avgPrice}`);
+                console.log(`[${platform}] ${concatData.base}/${concatData.quote} volatility: ${volatility*100}`);
+                
+                if(!averageData[concatData.base]) {
+                    averageData[concatData.base] = {};
+                }
+
+                averageData[concatData.base][concatData.quote] = {
+                    avgPrice: avgPrice,
+                    volatility: volatility
+                };
+            }
+
+            const filename = path.join(DATA_DIR, 'precomputed', platform, `averages-${daysToFetch}d.json`);
+            fs.writeFileSync(filename, JSON.stringify(averageData, null, 2));
+        }
+
+
         // delete old files and replace with new one
         // this ensure that the new files are all generated at the same time
         // without this, the precomputed values for univ2 would be generated much faster than the curve ones
@@ -77,6 +107,14 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
             await sleep(sleepTime);
         }
     }
+}
+
+function calculateStdDev(prices) {
+    const n = prices.length;
+    const mean = prices.reduce((a, b) => a + b) / n;
+    const variance = prices.reduce((a, b) => a + (b - mean) ** 2, 0) / n;
+    const stdDev = Math.sqrt(variance);
+    return stdDev;
 }
 
 async function main() {
