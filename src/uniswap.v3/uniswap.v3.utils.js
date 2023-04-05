@@ -542,11 +542,7 @@ function getAvailableUniswapV3(dataDir) {
     return available;
 }
 
-
-function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
-    console.log(`${fnName()}: Searching for on ${fromSymbol}/${toSymbol}`);
-    const results = {};
-
+function getUniV3DataFiles(dataDir, fromSymbol, toSymbol) {
     
     const allUniv3Files = fs.readdirSync(path.join(dataDir, 'uniswapv3')).filter(_ => _.endsWith('.csv'));
     
@@ -558,13 +554,25 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
         reverse = true;
         selectedFiles = allUniv3Files.filter(_ => _.startsWith(searchKey));
 
-        if(selectedFiles.length == 0) {
-            console.log(`Could not find univ3 files for ${fromSymbol}/${toSymbol}`);
-            return results;
-        }
     }
 
-    const dataContents = getDataContents(selectedFiles, dataDir);
+    return {selectedFiles, reverse};
+}
+
+
+function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
+    console.log(`${fnName()}: Searching for on ${fromSymbol}/${toSymbol}`);
+    
+    const results = {};
+
+    const {selectedFiles, reverse} = getUniV3DataFiles(dataDir, fromSymbol, toSymbol);
+
+    if(selectedFiles.length == 0) {
+        console.log(`Could not find univ3 files for ${fromSymbol}/${toSymbol}`);
+        return results;
+    }
+
+    const dataContents = getUniV3DataContents(selectedFiles, dataDir);
 
     // select base file = the file with the most lines
     let baseFile = selectedFiles[0];
@@ -688,7 +696,7 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
     return results;
 }
 
-function getDataContents(selectedFiles, dataDir) {
+function getUniV3DataContents(selectedFiles, dataDir) {
     const dataContents = {};
     for (let i = 0; i < selectedFiles.length; i++) {
         dataContents[selectedFiles[i]] = {};
@@ -706,6 +714,7 @@ function getDataContents(selectedFiles, dataDir) {
             dataContents[selectedFiles[i]][blockNumber] = parsed;
         }
     }
+    
     return dataContents;
 }
 
@@ -721,7 +730,7 @@ function getDataContents(selectedFiles, dataDir) {
 
 // generateConfigOracleAndCompoundAssets();
 
-module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, generateConfigFromBaseAndQuote, getAvailableUniswapV3, getUniV3DataforBlockRange };
+module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, generateConfigFromBaseAndQuote, getAvailableUniswapV3, getUniV3DataforBlockRange, getUniV3DataFiles, getUniV3DataContents };
 
 // getUniV3DataforBlockRange('./data', 'UNI', 'USDC', [])
 
