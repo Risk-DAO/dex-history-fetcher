@@ -65,15 +65,22 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
                 const std = calculateStdDev(priceArray);
                 const volatility = std / avgPrice;
 
-                console.log(`[${platform}] ${concatData.base}/${concatData.quote} avgPrice: ${avgPrice}`);
-                console.log(`[${platform}] ${concatData.base}/${concatData.quote} volatility: ${volatility*100}`);
+                const avgVolumeMap = {};
+                for(const slippage of TARGET_SLIPPAGES) {
+                    const volumeArray = concatData.volumeForSlippage.map(_ => _[slippage]);
+                    const avgLiquidity = volumeArray.reduce((a,b) => a + b, 0) / volumeArray.length;
+                    avgVolumeMap[slippage] = avgLiquidity;
+                }
+
+                // console.log(`[${platform}] ${concatData.base}/${concatData.quote} avgPrice: ${avgPrice}`);
+                // console.log(`[${platform}] ${concatData.base}/${concatData.quote} volatility: ${volatility*100}`);
                 
                 if(!averageData[concatData.base]) {
                     averageData[concatData.base] = {};
                 }
 
                 averageData[concatData.base][concatData.quote] = {
-                    avgPrice: avgPrice,
+                    avgLiquidity: avgVolumeMap,
                     volatility: volatility
                 };
             }
@@ -81,7 +88,6 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
             const filename = path.join(DATA_DIR, 'precomputed', platform, `averages-${daysToFetch}d.json`);
             fs.writeFileSync(filename, JSON.stringify(averageData, null, 2));
         }
-
 
         // delete old files and replace with new one
         // this ensure that the new files are all generated at the same time
