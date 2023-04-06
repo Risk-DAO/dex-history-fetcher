@@ -52,66 +52,76 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
         await precomputeCurveData(blockRange, TARGET_SLIPPAGES, daysToFetch);
         await precomputeUniswapV3Data(blockRange, TARGET_SLIPPAGES, daysToFetch);
 
-
         // generate avg data for each pairs
-        for(const platform of PRECOMPUTED_DIRS) {
-            const averageData = {};
-            const concatenatedFilenameStaging = path.join(DATA_DIR, 'precomputed', platform, `concat-${daysToFetch}d.json-staging`);
-            const concatObj = JSON.parse(fs.readFileSync(concatenatedFilenameStaging));
-            for(const concatData of concatObj.concatData) {
-                console.log(`Finding avg price for ${platform} and ${concatData.base}/${concatData.quote}`);
-                const priceArray = concatData.volumeForSlippage.map(_ => _.price);
-                const avgPrice = priceArray.reduce((a,b) => a + b, 0) / priceArray.length;
-                const std = calculateStdDev(priceArray);
-                const volatility = std / avgPrice;
+        computeAverages(daysToFetch);
 
-                const avgVolumeMap = {};
-                for(const slippage of TARGET_SLIPPAGES) {
-                    const volumeArray = concatData.volumeForSlippage.map(_ => _[slippage]);
-                    const avgLiquidity = volumeArray.reduce((a,b) => a + b, 0) / volumeArray.length;
-                    avgVolumeMap[slippage] = avgLiquidity;
-                }
-
-                // console.log(`[${platform}] ${concatData.base}/${concatData.quote} avgPrice: ${avgPrice}`);
-                // console.log(`[${platform}] ${concatData.base}/${concatData.quote} volatility: ${volatility*100}`);
-                
-                if(!averageData[concatData.base]) {
-                    averageData[concatData.base] = {};
-                }
-
-                averageData[concatData.base][concatData.quote] = {
-                    avgLiquidity: avgVolumeMap,
-                    volatility: volatility
-                };
-            }
-
-            const filename = path.join(DATA_DIR, 'precomputed', platform, `averages-${daysToFetch}d.json`);
-            fs.writeFileSync(filename, JSON.stringify(averageData, null, 2));
-        }
-
-        // delete old files and replace with new one
-        // this ensure that the new files are all generated at the same time
-        // without this, the precomputed values for univ2 would be generated much faster than the curve ones
-        // and that would mean that if the API was to be called at between the update time of univ2 and curve files
-        // then the values of the both files would not share the same block numbers
-        for(const precomputedSubDir of PRECOMPUTED_DIRS) {
-            const concatenatedFilename = path.join(DATA_DIR, 'precomputed', precomputedSubDir, `concat-${daysToFetch}d.json`);
-            const concatenatedFilenameStaging = path.join(DATA_DIR, 'precomputed', precomputedSubDir, `concat-${daysToFetch}d.json-staging`);
-            
-            if(fs.existsSync(concatenatedFilename)) {
-                console.log(`${fnName()}: deleting ${concatenatedFilename}`);
-                fs.rmSync(concatenatedFilename);
-            }
-
-            console.log(`${fnName()}: moving ${concatenatedFilenameStaging} to ${concatenatedFilename}`);
-            fs.renameSync(concatenatedFilenameStaging, concatenatedFilename);
-        }
+        // 
+        renameConcatFiles(daysToFetch);
         
         const sleepTime = fetchEveryMinutes * 60 * 1000 - (Date.now() - start);
         if(sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
             await sleep(sleepTime);
         }
+    }
+}
+
+/**
+ * delete old files and replace with new one
+ * this ensure that the new files are all generated at the same time
+ * without this, the precomputed values for univ2 would be generated much faster than the curve ones
+ * and that would mean that if the API was to be called at between the update time of univ2 and curve files
+ * then the values of the both files would not share the same block numbers
+ * @param {number} daysToFetch 
+ */
+function renameConcatFiles(daysToFetch) {
+    for (const precomputedSubDir of PRECOMPUTED_DIRS) {
+        const concatenatedFilename = path.join(DATA_DIR, 'precomputed', precomputedSubDir, `concat-${daysToFetch}d.json`);
+        const concatenatedFilenameStaging = path.join(DATA_DIR, 'precomputed', precomputedSubDir, `concat-${daysToFetch}d.json-staging`);
+
+        if (fs.existsSync(concatenatedFilename)) {
+            console.log(`${fnName()}: deleting ${concatenatedFilename}`);
+            fs.rmSync(concatenatedFilename);
+        }
+
+        console.log(`${fnName()}: moving ${concatenatedFilenameStaging} to ${concatenatedFilename}`);
+        fs.renameSync(concatenatedFilenameStaging, concatenatedFilename);
+    }
+}
+
+function computeAverages(daysToFetch) {
+    for (const platform of PRECOMPUTED_DIRS) {
+        const averageData = {};
+        const concatenatedFilenameStaging = path.join(DATA_DIR, 'precomputed', platform, `concat-${daysToFetch}d.json-staging`);
+        const concatObj = JSON.parse(fs.readFileSync(concatenatedFilenameStaging));
+        for (const concatData of concatObj.concatData) {
+            // console.log(`Finding avg price for ${platform} and ${concatData.base}/${concatData.quote}`);
+            const priceArray = concatData.volumeForSlippage.map(_ => _.price);
+            const avgPrice = priceArray.reduce((a, b) => a + b, 0) / priceArray.length;
+            const std = calculateStdDev(priceArray);
+            const volatility = std / avgPrice;
+
+            const avgVolumeMap = {};
+            for (const slippage of TARGET_SLIPPAGES) {
+                const volumeArray = concatData.volumeForSlippage.map(_ => _[slippage]);
+                const avgLiquidity = volumeArray.reduce((a, b) => a + b, 0) / volumeArray.length;
+                avgVolumeMap[slippage] = avgLiquidity;
+            }
+
+            // console.log(`[${platform}] ${concatData.base}/${concatData.quote} avgPrice: ${avgPrice}`);
+            // console.log(`[${platform}] ${concatData.base}/${concatData.quote} volatility: ${volatility*100}`);
+            if (!averageData[concatData.base]) {
+                averageData[concatData.base] = {};
+            }
+
+            averageData[concatData.base][concatData.quote] = {
+                avgLiquidity: avgVolumeMap,
+                volatility: volatility
+            };
+        }
+
+        const filename = path.join(DATA_DIR, 'precomputed', platform, `averages-${daysToFetch}d.json`);
+        fs.writeFileSync(filename, JSON.stringify(averageData, null, 2));
     }
 }
 

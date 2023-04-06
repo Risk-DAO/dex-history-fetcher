@@ -588,7 +588,8 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
         const blocknumbers = Object.keys(dataContents[baseFile]);
         const nearestBlockNumbers = blocknumbers.filter(_ => Number(_) <= targetBlock);
         if(nearestBlockNumbers.length == 0) {
-            throw new Error(`Could not find nearest blocknumbers in ${baseFile} for targetblock ${targetBlock}`);
+            // if no data, ignore block
+            continue;
         }
 
         const nearestBlockNumber = Number(nearestBlockNumbers.at(-1));
