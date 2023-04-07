@@ -13,7 +13,7 @@ const BIGINT_1e18 = (BigInt(10) ** BigInt(18));
  * @param {number[]} blockRange 
  * @param {number[]} targetSlippages
  */
-async function precomputeCurveData(blockRange, targetSlippages, daysToFetch) {
+async function precomputeCurveData(blockRange, targetSlippages, daysToFetch, blockTimeStamps) {
     console.log(`${fnName()}: Starting CURVE Precomputer for days to fetch: ${daysToFetch}`);
 
     const curvePrecomputedDir = path.join(DATA_DIR, 'precomputed', 'curve');
@@ -57,7 +57,7 @@ async function precomputeCurveData(blockRange, targetSlippages, daysToFetch) {
         }
     }
 
-    concatenateFiles(daysToFetch);
+    concatenateFiles(daysToFetch, blockTimeStamps);
 
     console.log(`${fnName()}: Ending CURVE Precomputer for days to fetch: ${daysToFetch}`);
 }
@@ -171,7 +171,7 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
     fs.writeFileSync(destFileName, JSON.stringify(preComputedData, null, 2));
 }
 
-function concatenateFiles(daysToFetch) {
+function concatenateFiles(daysToFetch, blockTimeStamps) {
     console.log(`${fnName()}: Creating concatenated file for CURVE and days to fetch: ${daysToFetch}`);
     const precomputeDir = path.join(DATA_DIR, 'precomputed', 'curve');
     const concatenatedFilename = path.join(precomputeDir, `concat-${daysToFetch}d.json-staging`);
@@ -187,7 +187,8 @@ function concatenateFiles(daysToFetch) {
 
     const concatObj = {
         lastUpdate: Date.now(),
-        concatData: allJsons
+        concatData: allJsons,
+        blockTimestamps: blockTimeStamps
     };
 
     console.log(`${fnName()}: Writing concat file with ${allJsons.length} source data in it`);

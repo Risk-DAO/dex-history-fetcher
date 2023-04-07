@@ -6,6 +6,7 @@ const { precomputeUniswapV3Data } = require('./uniswap.v3.precomputer');
 const { precomputeCurveData } = require('./curve.precomputer');
 const path = require('path');
 const fs = require('fs');
+const { default: axios } = require('axios');
 
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
@@ -13,7 +14,7 @@ const TARGET_DATA_POINTS = Number(process.env.TARGET_DATA_POINTS || 50);
 const TARGET_SLIPPAGES = [1, 5, 10, 15, 20];
 const PRECOMPUTED_DIRS = ['uniswapv2', 'curve', 'uniswapv3'];
 const DATA_DIR = process.cwd() + '/data';
-
+const BLOCKINFO_URL = process.env.BLOCKINFO_URL;
 
 /**
  * Precompute data for the risk oracle front
@@ -37,20 +38,26 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
         
         // creating blockrange
         const blockRange = [];
+        const blockTimeStamps = {};
         for (let i = 0; i < TARGET_DATA_POINTS; i++) {
             const block = startBlock + i*blockStep;
             if(block > currentBlock) {
                 break;
             }
 
-            blockRange.push(startBlock + i*blockStep);
+            const blockToPush = startBlock + i*blockStep;
+            const blockTimestampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockToPush}`);
+            blockTimeStamps[blockToPush] = blockTimestampResp.data.timestamp;
+            blockRange.push(blockToPush);
         }
+
+        // get blockrange timestamp
         
         // console.log(blockRange);
         
-        await precomputeUniswapV2Data(blockRange, TARGET_SLIPPAGES, daysToFetch);
-        await precomputeCurveData(blockRange, TARGET_SLIPPAGES, daysToFetch);
-        await precomputeUniswapV3Data(blockRange, TARGET_SLIPPAGES, daysToFetch);
+        await precomputeUniswapV2Data(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
+        await precomputeCurveData(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
+        await precomputeUniswapV3Data(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
 
         // generate avg data for each pairs
         computeAverages(daysToFetch);
