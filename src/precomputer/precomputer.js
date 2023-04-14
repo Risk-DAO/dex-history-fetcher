@@ -7,6 +7,7 @@ const { precomputeCurveData } = require('./curve.precomputer');
 const path = require('path');
 const fs = require('fs');
 const { default: axios } = require('axios');
+const { RecordMonitoring } = require('../utils/monitoring');
 
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
@@ -25,46 +26,72 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
     // eslint-disable-next-line no-constant-condition
     while(true) {
         const start = Date.now();
-        console.log(`${fnName()}: Will precompute data for the last ${daysToFetch} day(s)`);
+        try {
+            const runStartDate = Math.round(Date.now()/1000);
+            await RecordMonitoring({
+                'name': `Precomputer ${daysToFetch}d`,
+                'status': 'running',
+                'lastStart': runStartDate,
+                'runEvery': fetchEveryMinutes * 60
+            });
 
-        const startDate = Math.round(Date.now()/1000) - daysToFetch * 24 * 60 * 60;
-        // get the blocknumber for this date
-        const startBlock =  await getBlocknumberForTimestamp(startDate);
-        const currentBlock = await web3Provider.getBlockNumber() - 150;
+            console.log(`${fnName()}: Will precompute data for the last ${daysToFetch} day(s)`);
 
-        // calculate block step considering we want TARGET_DATA_POINTS
-        const blockStep = Math.round((currentBlock - startBlock) / TARGET_DATA_POINTS);
-        console.log(`${fnName()}: Will precompute data since block ${startBlock} to ${currentBlock} with step: ${blockStep} blocks`);
+            const startDate = Math.round(Date.now()/1000) - daysToFetch * 24 * 60 * 60;
+            // get the blocknumber for this date
+            const startBlock =  await getBlocknumberForTimestamp(startDate);
+            const currentBlock = await web3Provider.getBlockNumber() - 150;
+
+            // calculate block step considering we want TARGET_DATA_POINTS
+            const blockStep = Math.round((currentBlock - startBlock) / TARGET_DATA_POINTS);
+            console.log(`${fnName()}: Will precompute data since block ${startBlock} to ${currentBlock} with step: ${blockStep} blocks`);
         
-        // creating blockrange
-        const blockRange = [];
-        const blockTimeStamps = {};
-        for (let i = 0; i < TARGET_DATA_POINTS; i++) {
-            const block = startBlock + i*blockStep;
-            if(block > currentBlock) {
-                break;
+            // creating blockrange
+            const blockRange = [];
+            const blockTimeStamps = {};
+            for (let i = 0; i < TARGET_DATA_POINTS; i++) {
+                const block = startBlock + i*blockStep;
+                if(block > currentBlock) {
+                    break;
+                }
+
+                const blockToPush = startBlock + i*blockStep;
+                const blockTimestampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockToPush}`);
+                blockTimeStamps[blockToPush] = blockTimestampResp.data.timestamp;
+                blockRange.push(blockToPush);
             }
 
-            const blockToPush = startBlock + i*blockStep;
-            const blockTimestampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockToPush}`);
-            blockTimeStamps[blockToPush] = blockTimestampResp.data.timestamp;
-            blockRange.push(blockToPush);
+            // get blockrange timestamp
+        
+            // console.log(blockRange);
+        
+            await precomputeUniswapV2Data(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
+            await precomputeCurveData(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
+            await precomputeUniswapV3Data(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
+
+            // generate avg data for each pairs
+            computeAverages(daysToFetch);
+
+            // 
+            renameConcatFiles(daysToFetch);
+        
+            const runEndDate = Math.round(Date.now()/1000);
+            await RecordMonitoring({
+                'name': `Precomputer ${daysToFetch}d`,
+                'status': 'success',
+                'lastEnd': runEndDate,
+                'lastDuration': runEndDate - runStartDate,
+            });
+        } catch(error) {
+            const errorMsg = `An exception occurred: ${error}`;
+            console.log(errorMsg);
+            await RecordMonitoring({
+                'name': `Precomputer ${daysToFetch}d`,
+                'status': 'error',
+                'error': errorMsg
+            });
         }
 
-        // get blockrange timestamp
-        
-        // console.log(blockRange);
-        
-        await precomputeUniswapV2Data(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
-        await precomputeCurveData(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
-        await precomputeUniswapV3Data(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
-
-        // generate avg data for each pairs
-        computeAverages(daysToFetch);
-
-        // 
-        renameConcatFiles(daysToFetch);
-        
         const sleepTime = fetchEveryMinutes * 60 * 1000 - (Date.now() - start);
         if(sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);

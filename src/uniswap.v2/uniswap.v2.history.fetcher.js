@@ -7,6 +7,7 @@ const univ2Config = require('./uniswap.v2.config');
 const { tokens } = require('../global.config');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const { sleep, fnName, roundTo, readLastLine } = require('../utils/utils');
+const { RecordMonitoring } = require('../utils/monitoring');
 
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
@@ -20,25 +21,49 @@ async function UniswapV2HistoryFetcher() {
     // eslint-disable-next-line no-constant-condition
     while(true) {
         const start = Date.now();
-        if(!RPC_URL) {
-            throw new Error('Could not find RPC_URL env variable');
-        }
+        try {
+            await RecordMonitoring({
+                'name': 'UniswapV2 Fetcher',
+                'status': 'running',
+                'lastStart': Math.round(start/1000),
+                'runEvery': 10 * 60
+            });
+            if(!RPC_URL) {
+                throw new Error('Could not find RPC_URL env variable');
+            }
         
-        if(!fs.existsSync(`${DATA_DIR}/uniswapv2`)) {
-            fs.mkdirSync(`${DATA_DIR}/uniswapv2`);
-        }
+            if(!fs.existsSync(`${DATA_DIR}/uniswapv2`)) {
+                fs.mkdirSync(`${DATA_DIR}/uniswapv2`);
+            }
 
-        console.log(`${fnName()}: starting`);
-        const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-        const currentBlock = await web3Provider.getBlockNumber() - 10;
-        for(const pairKey of univ2Config.uniswapV2Pairs) {
-            console.log(`${fnName()}: Start fetching pair ` + pairKey);
-            await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`, currentBlock);
-            console.log(`${fnName()}: End fetching pair ` + pairKey);
-        }
+            console.log(`${fnName()}: starting`);
+            const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
+            const currentBlock = await web3Provider.getBlockNumber() - 10;
+            for(const pairKey of univ2Config.uniswapV2Pairs) {
+                console.log(`${fnName()}: Start fetching pair ` + pairKey);
+                await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`, currentBlock);
+                console.log(`${fnName()}: End fetching pair ` + pairKey);
+            }
 
-        console.log('UniswapV2HistoryFetcher: ending');
+            console.log('UniswapV2HistoryFetcher: ending');
         
+            const runEndDate = Math.round(Date.now()/1000);
+            await RecordMonitoring({
+                'name': 'UniswapV2 Fetcher',
+                'status': 'success',
+                'lastEnd': runEndDate,
+                'lastDuration': runEndDate - Math.round(start/1000),
+                'lastBlockFetched': currentBlock
+            });
+        } catch(error) {
+            const errorMsg = `An exception occurred: ${error}`;
+            console.log(errorMsg);
+            await RecordMonitoring({
+                'name': 'UniswapV2 Fetcher',
+                'status': 'error',
+                'error': errorMsg
+            });
+        }
         // sleep 10 min - time it took to run the loop
         // if the loop took more than 10 minutes, restart directly
         const sleepTime = 600 * 1000 - (Date.now() - start);

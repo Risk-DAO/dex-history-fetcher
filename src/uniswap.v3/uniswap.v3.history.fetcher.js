@@ -10,6 +10,7 @@ const { fnName, logFnDuration, sleep, roundTo } = require('../utils/utils');
 const { getConfTokenBySymbol } = require('../utils/token.utils');
 const { getPriceNormalized, getSlippages } = require('./uniswap.v3.utils');
 const { default: BigNumber } = require('bignumber.js');
+const { RecordMonitoring } = require('../utils/monitoring');
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
 // save liquidity data every 'CONSTANT_BLOCK_INTERVAL' blocks
 const CONSTANT_BLOCK_INTERVAL = 150;
@@ -27,21 +28,47 @@ async function UniswapV3HistoryFetcher() {
     // eslint-disable-next-line no-constant-condition
     while(true) {
         const start = Date.now();
-        if(!RPC_URL) {
-            throw new Error('Could not find RPC_URL env variable');
-        }
+        try {
+            await RecordMonitoring({
+                'name': 'UniswapV3 Fetcher',
+                'status': 'running',
+                'lastStart': Math.round(start/1000),
+                'runEvery': 10 * 60
+            });
 
-        if(!fs.existsSync(`${DATA_DIR}/uniswapv3`)) {
-            fs.mkdirSync(`${DATA_DIR}/uniswapv3`);
-        }
+            if(!RPC_URL) {
+                throw new Error('Could not find RPC_URL env variable');
+            }
 
-        console.log(`${fnName()}: starting`);
-        const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-        const univ3Factory = new Contract(univ3Config.uniswapFactoryV3Address, univ3Config.uniswapFactoryV3Abi, web3Provider);
-        const currentBlock = await web3Provider.getBlockNumber() - 10;
+            if(!fs.existsSync(`${DATA_DIR}/uniswapv3`)) {
+                fs.mkdirSync(`${DATA_DIR}/uniswapv3`);
+            }
 
-        for(const pairToFetch of univ3Config.pairsToFetch) {
-            await FetchUniswapV3HistoryForPair(pairToFetch, web3Provider, univ3Factory, currentBlock);
+            console.log(`${fnName()}: starting`);
+            const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
+            const univ3Factory = new Contract(univ3Config.uniswapFactoryV3Address, univ3Config.uniswapFactoryV3Abi, web3Provider);
+            const currentBlock = await web3Provider.getBlockNumber() - 10;
+
+            for(const pairToFetch of univ3Config.pairsToFetch) {
+                await FetchUniswapV3HistoryForPair(pairToFetch, web3Provider, univ3Factory, currentBlock);
+            }
+
+            const runEndDate = Math.round(Date.now()/1000);
+            await RecordMonitoring({
+                'name': 'UniswapV3 Fetcher',
+                'status': 'success',
+                'lastEnd': runEndDate,
+                'lastDuration': runEndDate - Math.round(start/1000),
+                'lastBlockFetched': currentBlock
+            });
+        } catch(error) {
+            const errorMsg = `An exception occurred: ${error}`;
+            console.log(errorMsg);
+            await RecordMonitoring({
+                'name': 'UniswapV3 Fetcher',
+                'status': 'error',
+                'error': errorMsg
+            });
         }
 
         const sleepTime = 10 * 60 * 1000 - (Date.now() - start);
