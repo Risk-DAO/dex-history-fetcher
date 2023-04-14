@@ -559,7 +559,6 @@ function getUniV3DataFiles(dataDir, fromSymbol, toSymbol) {
     return {selectedFiles, reverse};
 }
 
-
 function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
     console.log(`${fnName()}: Searching for on ${fromSymbol}/${toSymbol}`);
     
@@ -572,7 +571,7 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
         return results;
     }
 
-    const dataContents = getUniV3DataContents(selectedFiles, dataDir);
+    const dataContents = getUniV3DataContents(selectedFiles, dataDir, blockRange[0]);
 
     // select base file = the file with the most lines
     let baseFile = selectedFiles[0];
@@ -583,135 +582,115 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
         }
     }
 
-    
-    let targetBlockNumberIndex = 0;
-    let targetBlockNumber = blockRange[targetBlockNumberIndex];
-    const emptySlippageMap = {};
-    for(let slippagePct = 1; slippagePct <= CONSTANT_TARGET_SLIPPAGE; slippagePct++) {
-        emptySlippageMap[slippagePct] = 0;
-    }
+    for(const targetBlock of blockRange) {
 
-    let lastData = {
-        blockNumber: 0,
-        p1vs0: 0,
-        p0vs1: 0,
-    };
-
-    lastData[`${fromSymbol}-slippagemap`] = emptySlippageMap;
-
-    let lastBlockNumber = 0;
-
-    for(const [blockNumber, dataObj] of Object.entries(dataContents[baseFile])) {
-
-        if(blockNumber < targetBlockNumber) {
-            lastData = dataObj;
-            lastBlockNumber = blockNumber;
+        // find the closest value from the basefile and init the result with the data
+        const blocknumbers = Object.keys(dataContents[baseFile]);
+        const nearestBlockNumbers = blocknumbers.filter(_ => Number(_) <= targetBlock);
+        if(nearestBlockNumbers.length == 0) {
+            // if no data, ignore block
             continue;
         }
 
-        let baseData = {
-            blockNumber: lastBlockNumber,
-            price: reverse ? lastData.p1vs0 : lastData.p0vs1,
-            slippageMap: lastData[`${fromSymbol}-slippagemap`]
+        const nearestBlockNumber = Number(nearestBlockNumbers.at(-1));
+        // console.log(`[${targetBlock}] ${baseFile} nearest block value is ${nearestBlockNumber}. Distance: ${targetBlock-nearestBlockNumber}`);
+        results[targetBlock] = {
+            blockNumber: nearestBlockNumber,
+            price: reverse ? dataContents[baseFile][nearestBlockNumber].p1vs0 : dataContents[baseFile][nearestBlockNumber].p0vs1,
         };
 
-        if(blockNumber == targetBlockNumber) {
-            baseData = {
-                blockNumber: blockNumber,
-                price: reverse ? dataObj.p1vs0 : dataObj.p0vs1,
-                slippageMap: dataObj[`${fromSymbol}-slippagemap`]
-            };
-        }
-
-        
+        // clone the data because we need to modify it without modifying the source
+        const baseSlippageMap = structuredClone(dataContents[baseFile][nearestBlockNumber][`${fromSymbol}-slippagemap`]);
         for(let slippagePct = 1; slippagePct <= CONSTANT_TARGET_SLIPPAGE; slippagePct++) {
-            const slippageValue = baseData.slippageMap[slippagePct];
+            const slippageValue = baseSlippageMap[slippagePct];
             if(slippageValue == undefined) {
                 if(slippagePct == 1) {
-                    baseData.slippageMap[slippagePct] = 0;
+                    baseSlippageMap[slippagePct] = 0;
                 } else {
-                    baseData.slippageMap[slippagePct] = baseData.slippageMap[slippagePct-1];
+                    baseSlippageMap[slippagePct] = baseSlippageMap[slippagePct-1];
                 }
             }
         }
 
-        // here in base data we have the base value we want to return, we must now find the 
-        // nearest block values in other data files
+        results[targetBlock].slippageMap = baseSlippageMap;
 
-        // for each other files, select the line with the nearest block number
-        for(let i = 0; i < selectedFiles.length; i++) {
-            const selectedFile = selectedFiles[i];
-            if(selectedFile == baseFile) {
-                continue;
+        // do the same for every other data contents, but only summing the slippagemap
+        for(const filename of selectedFiles) {
+            if(filename == baseFile) {
+                continue; // base file already done
             }
 
-            let selectedFileSlippage = undefined;
-            // if the exact blocknumber is found, use it
-            if(dataContents[selectedFile][targetBlockNumber]) {
-                selectedFileSlippage = dataContents[selectedFile][targetBlockNumber][`${fromSymbol}-slippagemap`];
-            } else {
-                // find nearest block under the current block
-                const selectedFileBlocks = Object.keys(dataContents[selectedFile]).map(_ => Number(_));
-                const dataOlderThanBlockNumber = selectedFileBlocks.filter(_ => _ < Number(blockNumber));
-                if(dataOlderThanBlockNumber.length == 0) {
-                    console.log(`There is not data older than ${blockNumber}, will ignore data from ${selectedFile}`);
-                    continue;
-                }
-
-                const nearestUnderBlock = dataOlderThanBlockNumber.at(-1);
-                if(nearestUnderBlock) {
-                    selectedFileSlippage = dataContents[selectedFile][nearestUnderBlock][`${fromSymbol}-slippagemap`];
-                }
-            }
-            
-            if(!selectedFileSlippage) {
-                console.log('Could not find slippage ??');
+            const blocknumbers = Object.keys(dataContents[filename]);
+            const nearestBlockNumbers = blocknumbers.filter(_ => Number(_) <= targetBlock);
+            if(nearestBlockNumbers.length == 0) {
+                continue; // no available data in source?
             }
 
-            // for each data in the selected file slippage, add to baseData
+            const nearestBlockNumber = nearestBlockNumbers.at(-1);
+            // console.log(`[${targetBlock}] ${filename} nearest block value is ${nearestBlockNumber}. Distance: ${targetBlock-nearestBlockNumber}`);
+            const slippageMap = dataContents[filename][nearestBlockNumber][`${fromSymbol}-slippagemap`];
             for(let slippagePct = 1; slippagePct <= CONSTANT_TARGET_SLIPPAGE; slippagePct++) {
-                let volumeToAdd = selectedFileSlippage[slippagePct];
+                let volumeToAdd = slippageMap[slippagePct];
                 if(!volumeToAdd && slippagePct > 1) {
                     // when the tick spacing is high, there is not a value for each slippage percent
                     // so for example there may be 4% and 6% in the slippages but not 5 in the file with 10000 fees
                     // to add some value to the aggregated data, we will add the value of 4%
-                    volumeToAdd = selectedFileSlippage[slippagePct - 1];
+                    volumeToAdd = slippageMap[slippagePct - 1];
                 }
 
                 if(volumeToAdd) {
-                    baseData.slippageMap[slippagePct] += volumeToAdd;
+                    results[targetBlock].slippageMap[slippagePct] += volumeToAdd;
                     // console.log(`new volume for slippage ${slippagePct}%: ${baseData.slippageMap[slippagePct]} after adding ${volumeToAdd} from ${selectedFile}`);
                 }
             }
         }
-
-        results[targetBlockNumber] = baseData;
-        targetBlockNumberIndex++;
-        if(targetBlockNumberIndex == blockRange.length) {
-            break;
-        }
-        targetBlockNumber = blockRange[targetBlockNumberIndex];
     }
 
     return results;
 }
 
-function getUniV3DataContents(selectedFiles, dataDir) {
+function getUniV3DataContents(selectedFiles, dataDir, minBlock=0) {
     const dataContents = {};
     for (let i = 0; i < selectedFiles.length; i++) {
+        const selectedFile = selectedFiles[i];
         dataContents[selectedFiles[i]] = {};
-        const fileContent = fs.readFileSync(path.join(dataDir, 'uniswapv3', selectedFiles[i]), 'utf-8').split('\n')
+        const fileContent = fs.readFileSync(path.join(dataDir, 'uniswapv3', selectedFile), 'utf-8').split('\n')
             // remove first line, which is headers
             .splice(1);
 
         // remove last line, which is empty
         fileContent.pop();
 
-        for (let j = 0; j < fileContent.length; j++) {
+        let lastLine = fileContent[0];
+        for (let j = 1; j < fileContent.length; j++) {
             const blockNumber = Number(fileContent[j].split(',')[0]);
+            if(blockNumber < minBlock) {
+                lastLine = fileContent[j];
+                continue;
+            }
+
+            // when breaching the minblock, save the last line
+            if(blockNumber > minBlock && lastLine) {
+                const lastLineBlockNumber = Number(lastLine.split(',')[0]);
+                const lastLineJsonStr = lastLine.replace(`${lastLineBlockNumber},`, '');
+                const lastLineParsed = JSON.parse(lastLineJsonStr);
+                dataContents[selectedFile][lastLineBlockNumber] = lastLineParsed;
+                lastLine = null;
+            }
+
             const jsonStr = fileContent[j].replace(`${blockNumber},`, '');
             const parsed = JSON.parse(jsonStr);
-            dataContents[selectedFiles[i]][blockNumber] = parsed;
+            dataContents[selectedFile][blockNumber] = parsed;
+        }
+
+        // if lastline is still instancied, it means we never breached the minBlock and that the
+        // datacontent for the file is empty
+        // in that case, just save the last line as the only point
+        if(lastLine && Object.keys(dataContents[selectedFile]) == 0) {
+            const lastLineBlockNumber = Number(lastLine.split(',')[0]);
+            const lastLineJsonStr = lastLine.replace(`${lastLineBlockNumber},`, '');
+            const lastLineParsed = JSON.parse(lastLineJsonStr);
+            dataContents[selectedFile][lastLineBlockNumber] = lastLineParsed;
         }
     }
     

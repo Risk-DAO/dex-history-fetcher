@@ -13,7 +13,7 @@ const DATA_DIR = process.cwd() + '/data';
  * @param {number[]} blockRange 
  * @param {number[]} targetSlippages
  */
-async function precomputeUniswapV3Data(blockRange, targetSlippages, daysToFetch) {
+async function precomputeUniswapV3Data(blockRange, targetSlippages, daysToFetch, blockTimeStamps) {
     console.log(`${fnName()}: Starting UNIV3 Precomputer for days to fetch: ${daysToFetch}`);
 
     const univ3PrecomputedDir = path.join(DATA_DIR, 'precomputed', 'uniswapv3');
@@ -56,7 +56,7 @@ async function precomputeUniswapV3Data(blockRange, targetSlippages, daysToFetch)
         }
     }
 
-    concatenateFiles(daysToFetch);
+    concatenateFiles(daysToFetch, blockTimeStamps);
 
     console.log(`${fnName()}: Ending UNIV3 Precomputer for days to fetch: ${daysToFetch}`);
 }
@@ -119,7 +119,7 @@ function precomputeDataForPair(univ3PrecomputedDir, daysToFetch, blockRange, tar
     fs.writeFileSync(destFileName, JSON.stringify(preComputedData, null, 2));
 }
 
-function concatenateFiles(daysToFetch) {
+function concatenateFiles(daysToFetch, blockTimeStamps) {
     console.log(`${fnName()}: Creating concatenated file for UNIV3 and days to fetch: ${daysToFetch}`);
     const precomputeDir = path.join(DATA_DIR, 'precomputed', 'uniswapv3');
     const concatenatedFilename = path.join(precomputeDir, `concat-${daysToFetch}d.json-staging`);
@@ -135,7 +135,8 @@ function concatenateFiles(daysToFetch) {
 
     const concatObj = {
         lastUpdate: Date.now(),
-        concatData: allJsons
+        concatData: allJsons,
+        blockTimestamps: blockTimeStamps
     };
 
     console.log(`${fnName()}: Writing concat file with ${allJsons.length} source data in it`);

@@ -41,6 +41,35 @@ app.get('/api/getprecomputeddata', async (req, res, next) => {
     }
 });
 
+// getprecomputeddata?platform=uniswapv2&span=1
+app.get('/api/getaveragedata', async (req, res, next) => {
+    try {
+        console.log('received getaveragedata request', req);
+        const platform = req.query.platform;
+        const span = Number(req.query.span);
+
+        if (!span || !platform) {
+            res.status(400).json({ error: 'span and platform required' });
+            next();
+        }
+
+        const fileName = `averages-${span}d.json`;
+        const filePath = path.join(DATA_DIR, 'precomputed', platform, fileName);
+        if (!fs.existsSync(filePath)) {
+            res.status(404).json({ error: 'file does not exist' });
+            next();
+        }
+        else {
+            const returnObject = JSON.parse(fs.readFileSync(filePath));
+            res.json(returnObject);
+        }
+
+
+    } catch (error) {
+        next(error);
+    }
+});
+
 app.get('/api/available', (req, res) => {
     const available = {};
     available['uniswapv2'] = getAvailableUniswapV2(DATA_DIR);
