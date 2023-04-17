@@ -219,6 +219,7 @@ async function fetchInitializeData(web3Provider, poolAddress, univ3PairContract)
                 blockNumber: initEvents[0].blockNumber - 1, // set to blocknumber -1 to be sure to fetch mint/burn events on same block as initialize,
                 tickSpacing: await univ3PairContract.tickSpacing(),
                 lastCheckpoint: 0, // set to 0 to save liquidity check point at the begining
+                lastDataSave: 0, // set to 0 to save data at the beginning
                 ticks: {}
             };
 
@@ -276,6 +277,7 @@ function processEvents(events, iface, latestData, token0, token1, latestDataFile
         const newSaveData = getSaveData(token0, token1, latestData);
         saveData.push(newSaveData);
     }
+
     fs.appendFileSync(dataFileName, saveData.join(''));
     
     fs.writeFileSync(latestDataFilePath, JSON.stringify(latestData));
