@@ -657,6 +657,61 @@ const pairsToFetch = [
     "token0": "sUSD",
     "token1": "DAI",
     "fees": 500
+  },
+  {
+    "token0": "WETH",
+    "token1": "USDT",
+    "fees": 10000
+  },
+  {
+    "token0": "WETH",
+    "token1": "USDT",
+    "fees": 3000
+  },
+  {
+    "token0": "WETH",
+    "token1": "USDT",
+    "fees": 500
+  },
+  {
+    "token0": "WETH",
+    "token1": "USDT",
+    "fees": 100
+  },
+  {
+    "token0": "USDC",
+    "token1": "USDT",
+    "fees": 10000
+  },
+  {
+    "token0": "USDC",
+    "token1": "USDT",
+    "fees": 3000
+  },
+  {
+    "token0": "USDC",
+    "token1": "USDT",
+    "fees": 500
+  },
+  {
+    "token0": "USDC",
+    "token1": "USDT",
+    "fees": 100
+  },
+  {
+    "token0": "WBTC",
+    "token1": "USDT",
+    "fees": 10000
+  },
+  {
+    "token0": "WBTC",
+    "token1": "USDT",
+    "fees": 3000
+  },
+  {
+    "token0": "WBTC",
+    "token1": "USDT",
+    "fees": 500
   }
 ]
 
