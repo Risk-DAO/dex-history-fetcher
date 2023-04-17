@@ -1,13 +1,20 @@
 const { MongoClient, ServerApiVersion } = require('mongodb');
 
 const uri = process.env.MONGODB_URI;
+let monitoringEnabled = true; // default to true
+if(process.env.MONITORING) {
+    monitoringEnabled = process.env.MONITORING == 'true';
+}
 
 async function RecordMonitoring(monitoringData) {
+    if(!monitoringEnabled) {
+        return;
+    }
+
     if(!uri) {
         console.log('Could not find env variable MONGODB_URI');
         return;
     }
-
     const client = new MongoClient(uri, { serverApi: ServerApiVersion.v1 });
 
     try {
