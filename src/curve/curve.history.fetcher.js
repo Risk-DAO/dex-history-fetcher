@@ -5,6 +5,7 @@ const curveConfig = require('./curve.config');
 const fs = require('fs');
 const { sleep, fnName, readLastLine, roundTo } = require('../utils/utils');
 const { getTokenSymbolByAddress, getConfTokenBySymbol, normalize } = require('../utils/token.utils');
+const { RecordMonitoring } = require('../utils/monitoring');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
@@ -17,36 +18,60 @@ async function CurveHistoryFetcher() {
     // eslint-disable-next-line no-constant-condition
     while(true) {
         const start = Date.now();
-        const errors = [];
+        try {
+            await RecordMonitoring({
+                'name': 'Curve Fetcher',
+                'status': 'running',
+                'lastStart': Math.round(start/1000),
+                'runEvery': 10 * 60
+            });
+            const errors = [];
 
-        if(!fs.existsSync(`${DATA_DIR}/curve`)) {
-            fs.mkdirSync(`${DATA_DIR}/curve`);
-        }
-
-        const lastResults = {};
-        const currentBlock = await web3Provider.getBlockNumber() - 10;
-        for (let i = 0; i < curveConfig.curvePairs.length; i++) {
-            if(i > 0) {
-                await sleep(5000);
+            if(!fs.existsSync(`${DATA_DIR}/curve`)) {
+                fs.mkdirSync(`${DATA_DIR}/curve`);
             }
-            try {
-                const curvePair = curveConfig.curvePairs[i];
-                const lastData = await FetchHistory(curvePair, currentBlock);
-                lastResults[`${curvePair.poolName}_${curvePair.lpTokenName}`] = lastData;
+
+            const lastResults = {};
+            const currentBlock = await web3Provider.getBlockNumber() - 10;
+            for (let i = 0; i < curveConfig.curvePairs.length; i++) {
+                if(i > 0) {
+                    await sleep(5000);
+                }
+                try {
+                    const curvePair = curveConfig.curvePairs[i];
+                    const lastData = await FetchHistory(curvePair, currentBlock);
+                    lastResults[`${curvePair.poolName}_${curvePair.lpTokenName}`] = lastData;
+                }
+                catch (error) {
+                    errors.push(curveConfig.curvePairs[i].poolName);
+                    console.log('error fetching pool', curveConfig.curvePairs[i].poolName);
+                    console.log('error fetching pool', error);
+                }
             }
-            catch (error) {
-                errors.push(curveConfig.curvePairs[i].poolName);
-                console.log('error fetching pool', curveConfig.curvePairs[i].poolName);
-                console.log('error fetching pool', error);
+
+            fs.writeFileSync(`${DATA_DIR}/curve/curve_pools_summary.json`, JSON.stringify(lastResults, null, 2));
+
+            if(errors.length > 1) {
+                console.log('errors:', errors);
             }
+
+            const runEndDate = Math.round(Date.now()/1000);
+            await RecordMonitoring({
+                'name': 'Curve Fetcher',
+                'status': 'success',
+                'lastEnd': runEndDate,
+                'lastDuration': runEndDate - Math.round(start/1000),
+                'lastBlockFetched': currentBlock
+            });
+        } catch(error) {
+            const errorMsg = `An exception occurred: ${error}`;
+            console.log(errorMsg);
+            await RecordMonitoring({
+                'name': 'Curve Fetcher',
+                'status': 'error',
+                'error': errorMsg
+            });
         }
-
-        fs.writeFileSync(`${DATA_DIR}/curve/curve_pools_summary.json`, JSON.stringify(lastResults, null, 2));
-
-        if(errors.length > 1) {
-            console.log('errors:', errors);
-        }
-
         // sleep 10 min - time it took to run the loop
         // if the loop took more than 10 minutes, restart directly
         const sleepTime = 600 * 1000 - (Date.now() - start);
