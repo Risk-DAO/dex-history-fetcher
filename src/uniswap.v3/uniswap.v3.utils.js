@@ -559,6 +559,14 @@ function getUniV3DataFiles(dataDir, fromSymbol, toSymbol) {
     return {selectedFiles, reverse};
 }
 
+/**
+ * 
+ * @param {string} dataDir 
+ * @param {string} fromSymbol 
+ * @param {string} toSymbol 
+ * @param {number[]} blockRange 
+ * @returns {Promise<{[targetBlock: number]: {blockNumber: number, price: number, slippageMap: {[slippagePct: number]: number}}}>}
+ */
 function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
     console.log(`${fnName()}: Searching for on ${fromSymbol}/${toSymbol}`);
     

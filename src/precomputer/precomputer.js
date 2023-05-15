@@ -8,7 +8,6 @@ const path = require('path');
 const fs = require('fs');
 const { default: axios } = require('axios');
 const { RecordMonitoring } = require('../utils/monitoring');
-const { SendToPythia } = require('../pythia/pythia.sender');
 
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
@@ -21,10 +20,9 @@ const BLOCKINFO_URL = process.env.BLOCKINFO_URL;
 /**
  * Precompute data for the risk oracle front
  * @param {number} daysToFetch 
- * @param {number} fetchEveryMinutes 
- * @param {boolean} sendToPythia whether or not to send to pythia contract
+ * @param {number} fetchEveryMinutes
  */
-async function precomputeData(daysToFetch, fetchEveryMinutes, sendToPythia) {
+async function precomputeData(daysToFetch, fetchEveryMinutes) {
     // eslint-disable-next-line no-constant-condition
     while(true) {
         const start = Date.now();
@@ -38,9 +36,6 @@ async function precomputeData(daysToFetch, fetchEveryMinutes, sendToPythia) {
             });
 
             console.log(`${fnName()}: Will precompute data for the last ${daysToFetch} day(s)`);
-            if(sendToPythia) {
-                console.log(`${fnName()}: Will send data to Pythia smart contract`);
-            }
 
             const startDate = Math.round(Date.now()/1000) - daysToFetch * 24 * 60 * 60;
             // get the blocknumber for this date
@@ -78,11 +73,6 @@ async function precomputeData(daysToFetch, fetchEveryMinutes, sendToPythia) {
             computeAverages(daysToFetch);
 
             renameConcatFiles(daysToFetch);
-
-            // send value to pythia contract
-            if(sendToPythia) {
-                await SendToPythia(daysToFetch);
-            }
         
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({
@@ -189,10 +179,7 @@ async function main() {
         throw new Error('Need to have a valid number as second command argument for fetchEveryMinutes');
     }
 
-    // number of days to fetch is passed in the args
-    const sendToPythia = process.argv[4] && process.argv[4].toLowerCase() == 'true';
-
-    await precomputeData(daysToFetch, fetchEveryMinutes, sendToPythia);
+    await precomputeData(daysToFetch, fetchEveryMinutes);
 }
 
 main();
