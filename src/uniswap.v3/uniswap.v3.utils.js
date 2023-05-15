@@ -561,7 +561,9 @@ function getUniV3DataFiles(dataDir, fromSymbol, toSymbol) {
 
 
 /**
- * 
+ * Returns all the data we have for uniswap v3 for a pair fromSymbol/toSymbol
+ * the results are returned for each blocks where we have data for each pools
+ * the results are the sum of each pools at every blocks where we have data for the most used pool
  * @param {string} dataDir 
  * @param {string} fromSymbol 
  * @param {string} toSymbol 

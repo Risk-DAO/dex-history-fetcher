@@ -6,7 +6,7 @@ const { fnName, roundTo, sleep } = require('../utils/utils');
 const { getConfTokenBySymbol } = require('../utils/token.utils');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
-const { getUniV3DataforBlockRange, getUniV3DataSinceBlock } = require('../uniswap.v3/uniswap.v3.utils');
+const { getUniV3DataSinceBlock } = require('../uniswap.v3/uniswap.v3.utils');
 const { RecordMonitoring } = require('../utils/monitoring');
 
 const DATA_DIR = process.cwd() + '/data';
