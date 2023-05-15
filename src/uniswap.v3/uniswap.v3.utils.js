@@ -559,6 +559,97 @@ function getUniV3DataFiles(dataDir, fromSymbol, toSymbol) {
     return {selectedFiles, reverse};
 }
 
+
+/**
+ * 
+ * @param {string} dataDir 
+ * @param {string} fromSymbol 
+ * @param {string} toSymbol 
+ * @param {number} sinceBlock 
+ * @returns {Promise<{[targetBlock: number]: {blockNumber: number, price: number, slippageMap: {[slippagePct: number]: number}}}>}
+ */
+function getUniV3DataSinceBlock(dataDir, fromSymbol, toSymbol, sinceBlock) {
+    console.log(`${fnName()}: Searching for ${fromSymbol}/${toSymbol}`);
+    
+    const results = {};
+
+    const {selectedFiles, reverse} = getUniV3DataFiles(dataDir, fromSymbol, toSymbol);
+
+    if(selectedFiles.length == 0) {
+        console.log(`Could not find univ3 files for ${fromSymbol}/${toSymbol}`);
+        return results;
+    }
+
+    const dataContents = getUniV3DataContents(selectedFiles, dataDir, sinceBlock);
+
+    // select base file = the file with the most lines
+    let baseFile = selectedFiles[0];
+    for(let i = 1; i < selectedFiles.length; i++) {
+        const selectedFile = selectedFiles[i];
+        if(Object.keys(dataContents[baseFile]).length < Object.keys(dataContents[selectedFile]).length) {
+            baseFile = selectedFile;
+        }
+    }
+
+    for(const baseFileBlockNumber of Object.keys(dataContents[baseFile])) {
+
+        // console.log(`[${targetBlock}] ${baseFile} nearest block value is ${nearestBlockNumber}. Distance: ${targetBlock-nearestBlockNumber}`);
+        results[baseFileBlockNumber] = {
+            blockNumber: baseFileBlockNumber,
+            price: reverse ? dataContents[baseFile][baseFileBlockNumber].p1vs0 : dataContents[baseFile][baseFileBlockNumber].p0vs1,
+        };
+
+        // clone the data because we need to modify it without modifying the source
+        const baseSlippageMap = structuredClone(dataContents[baseFile][baseFileBlockNumber][`${fromSymbol}-slippagemap`]);
+        
+        for(let slippagePct = 1; slippagePct <= CONSTANT_TARGET_SLIPPAGE; slippagePct++) {
+            const slippageValue = baseSlippageMap[slippagePct];
+            if(slippageValue == undefined) {
+                if(slippagePct == 1) {
+                    baseSlippageMap[slippagePct] = 0;
+                } else {
+                    baseSlippageMap[slippagePct] = baseSlippageMap[slippagePct-1];
+                }
+            }
+        }
+
+        results[baseFileBlockNumber].slippageMap = baseSlippageMap;
+
+        // do the same for every other data contents, but only summing the slippagemap
+        for(const filename of selectedFiles) {
+            if(filename == baseFile) {
+                continue; // base file already done
+            }
+
+            const blocknumbers = Object.keys(dataContents[filename]);
+            const nearestBlockNumbers = blocknumbers.filter(_ => Number(_) <= baseFileBlockNumber);
+            if(nearestBlockNumbers.length == 0) {
+                continue; // no available data in source?
+            }
+
+            const nearestBlockNumber = nearestBlockNumbers.at(-1);
+            // console.log(`[${targetBlock}] ${filename} nearest block value is ${nearestBlockNumber}. Distance: ${targetBlock-nearestBlockNumber}`);
+            const slippageMap = dataContents[filename][nearestBlockNumber][`${fromSymbol}-slippagemap`];
+            for(let slippagePct = 1; slippagePct <= CONSTANT_TARGET_SLIPPAGE; slippagePct++) {
+                let volumeToAdd = slippageMap[slippagePct];
+                if(!volumeToAdd && slippagePct > 1) {
+                    // when the tick spacing is high, there is not a value for each slippage percent
+                    // so for example there may be 4% and 6% in the slippages but not 5 in the file with 10000 fees
+                    // to add some value to the aggregated data, we will add the value of 4%
+                    volumeToAdd = slippageMap[slippagePct - 1];
+                }
+
+                if(volumeToAdd) {
+                    results[baseFileBlockNumber].slippageMap[slippagePct] += volumeToAdd;
+                    // console.log(`new volume for slippage ${slippagePct}%: ${baseData.slippageMap[slippagePct]} after adding ${volumeToAdd} from ${selectedFile}`);
+                }
+            }
+        }
+    }
+
+    return results;
+}
+
 /**
  * 
  * @param {string} dataDir 
@@ -568,7 +659,7 @@ function getUniV3DataFiles(dataDir, fromSymbol, toSymbol) {
  * @returns {Promise<{[targetBlock: number]: {blockNumber: number, price: number, slippageMap: {[slippagePct: number]: number}}}>}
  */
 function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
-    console.log(`${fnName()}: Searching for on ${fromSymbol}/${toSymbol}`);
+    console.log(`${fnName()}: Searching for ${fromSymbol}/${toSymbol}`);
     
     const results = {};
 
@@ -717,7 +808,9 @@ function getUniV3DataContents(selectedFiles, dataDir, minBlock=0) {
 
 // generateConfigOracleAndCompoundAssets();
 
-module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, generateConfigFromBaseAndQuote, getAvailableUniswapV3, getUniV3DataforBlockRange, getUniV3DataFiles, getUniV3DataContents };
+module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, 
+    generateConfigFromBaseAndQuote, getAvailableUniswapV3, getUniV3DataforBlockRange, getUniV3DataFiles, 
+    getUniV3DataContents, getUniV3DataSinceBlock };
 
 // getUniV3DataforBlockRange('./data', 'UNI', 'USDC', [])
 

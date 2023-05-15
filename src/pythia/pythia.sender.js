@@ -6,7 +6,7 @@ const { fnName, roundTo, sleep } = require('../utils/utils');
 const { getConfTokenBySymbol } = require('../utils/token.utils');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
-const { getUniV3DataforBlockRange } = require('../uniswap.v3/uniswap.v3.utils');
+const { getUniV3DataforBlockRange, getUniV3DataSinceBlock } = require('../uniswap.v3/uniswap.v3.utils');
 const { RecordMonitoring } = require('../utils/monitoring');
 
 const DATA_DIR = process.cwd() + '/data';
@@ -30,6 +30,7 @@ async function SendToPythia(daysToAvg) {
     
     // eslint-disable-next-line no-constant-condition
     while(true) {
+        const start = Date.now();
         await RecordMonitoring({
             'name': MONITORING_NAME,
             'status': 'running',
@@ -37,7 +38,6 @@ async function SendToPythia(daysToAvg) {
             'runEvery': 60 * 60
         });
 
-        const start = Date.now();
         try {
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
             const signer = new ethers.Wallet(process.env.ETH_PRIVATE_KEY, new ethers.providers.StaticJsonRpcProvider(process.env.PYTHIA_RPC_URL));
@@ -108,16 +108,21 @@ async function getUniv3Average(tokenConf, daysToAvg, blockRange) {
     console.log(`${fnName()}[${tokenConf.symbol}]: start finding data for ${TARGET_SLIPPAGE}% slippage since block ${blockRange[0]}`);
 
     // get all data for the block range, this returns a dictionary containing all the data for all the blocks in the blockrange
-    const allData = await getUniV3DataforBlockRange(DATA_DIR, tokenConf.symbol, 'USDC', blockRange);
+    const allData = await getUniV3DataSinceBlock(DATA_DIR, tokenConf.symbol, 'USDC', blockRange[0]);
     console.log(`${fnName()}[${tokenConf.symbol}]: found ${Object.keys(allData).length} data since ${blockRange[0]}`);
 
     // compute average liquidity
+    let lastValue = allData[Object.keys(allData)[0]];
     let totalLiquidity = 0;
-    for(const value of Object.values(allData)) {
-        totalLiquidity += value.slippageMap[TARGET_SLIPPAGE];
+    for(const blockNumber of blockRange) {
+        if(allData[blockNumber]) {
+            lastValue = allData[blockNumber];
+        }
+
+        totalLiquidity += lastValue.slippageMap[TARGET_SLIPPAGE];
     }
 
-    const avg = totalLiquidity / Object.keys(allData).length;
+    const avg = totalLiquidity / blockRange.length;
     console.log(`${fnName()}[${tokenConf.symbol}]: Computed average liquidity for ${TARGET_SLIPPAGE}% slippage: ${avg}`);
 
     // change the computed avg value to a BigNumber 
