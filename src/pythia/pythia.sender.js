@@ -7,9 +7,11 @@ const { getConfTokenBySymbol } = require('../utils/token.utils');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { getUniV3DataforBlockRange } = require('../uniswap.v3/uniswap.v3.utils');
+const { RecordMonitoring } = require('../utils/monitoring');
 
 const DATA_DIR = process.cwd() + '/data';
 const TARGET_SLIPPAGE = 5;
+const MONITORING_NAME = 'Pythia Sender';
 
 async function SendToPythia(daysToAvg) {
 
@@ -28,6 +30,13 @@ async function SendToPythia(daysToAvg) {
     
     // eslint-disable-next-line no-constant-condition
     while(true) {
+        await RecordMonitoring({
+            'name': MONITORING_NAME,
+            'status': 'running',
+            'lastStart': Math.round(start/1000),
+            'runEvery': 60 * 60
+        });
+
         const start = Date.now();
         try {
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
@@ -61,12 +70,24 @@ async function SendToPythia(daysToAvg) {
 
             await pythiaContract.multiSet(allAssets, allKeys, allValues);
 
-        } catch(e) {
-            console.error(e);
+            const runEndDate = Math.round(Date.now()/1000);
+            await RecordMonitoring({
+                'name': MONITORING_NAME,
+                'status': 'success',
+                'lastEnd': runEndDate,
+                'lastDuration': runEndDate - Math.round(start/1000)
+            });
+        } catch(error) {
+            const errorMsg = `An exception occurred: ${error}`;
+            console.log(errorMsg);
+            await RecordMonitoring({
+                'name': MONITORING_NAME,
+                'status': 'error',
+                'error': errorMsg
+            });
         }
-        
 
-        const sleepTime = 10 * 60 * 1000 - (Date.now() - start);
+        const sleepTime = 60 * 60 * 1000 - (Date.now() - start);
         if(sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
             await sleep(sleepTime);
