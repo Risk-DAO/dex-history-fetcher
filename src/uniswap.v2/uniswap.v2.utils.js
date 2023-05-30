@@ -42,6 +42,13 @@ function computeUniswapV2Price(normalizedFrom, normalizedTo) {
     return  normalizedTo / normalizedFrom;
 }
 
+function computePriceForReserve(fromSymbol, toSymbol, liquidity) { 
+    const normalizedFrom = normalize(liquidity.fromReserve, tokens[fromSymbol].decimals);
+    const normalizedTo = normalize(liquidity.toReserve, tokens[toSymbol].decimals);
+    return computeUniswapV2Price(normalizedFrom, normalizedTo);
+
+}
+
 function computePriceAndLiquidity(fromSymbol, toSymbol, liquidity) {
     const normalizedFrom = normalize(liquidity.fromReserve, tokens[fromSymbol].decimals);
     const normalizedTo = normalize(liquidity.toReserve, tokens[toSymbol].decimals);
@@ -208,6 +215,38 @@ function getUniV2DataforBlockRange(DATA_DIR, fromSymbol, toSymbol, blockRange) {
     return results;
 }
 
+function getUniV2DataforBlockInterval(DATA_DIR, fromSymbol, toSymbol, fromBlock, toBlock) {
+    const fileInfo = getUniV2DataFile(DATA_DIR, fromSymbol, toSymbol);
+    if(!fileInfo) {
+        throw new Error(`Could not find pool data for ${fromSymbol}/${toSymbol} on uniswapv2`);
+    }
+    // load the file in RAM
+    const fileContent = fs.readFileSync(fileInfo.path, 'utf-8').split('\n');
+
+    const results = {};
+    // start at 2 because first line is headers and second is in lastLine
+    for(let i = 1; i < fileContent.length - 1; i++) {
+        const line = fileContent[i];
+        const splitted = line.split(',');
+        const blockNumber = Number(splitted[0]);
+        if(blockNumber < fromBlock) {
+            continue;
+        }
+
+        if (blockNumber > toBlock) {
+            break;
+        }
+
+        results[blockNumber] = {
+            blockNumber: blockNumber,
+            fromReserve: fileInfo.reverse ? splitted[2] : splitted[1],
+            toReserve: fileInfo.reverse ? splitted[1] : splitted[2]
+        };
+    }
+
+    return results;
+}
+
 async function getUniV2DataForBlockNumber(dataDir, fromSymbol, toSymbol, targetBlockNumber) {
     const fileInfo = getUniV2DataFile(dataDir, fromSymbol, toSymbol);
     if(!fileInfo) {
@@ -363,4 +402,5 @@ function getAvailableUniswapV2(dataDir) {
 }
 
 module.exports = { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, computeUniswapV2Price,
-    getUniV2DataforBlockRange, computeLiquidityUniV2Pool, getAvailableUniswapV2, getUniV2DataFile};
+    getUniV2DataforBlockRange, computeLiquidityUniV2Pool, getAvailableUniswapV2, getUniV2DataFile,
+    getUniV2DataforBlockInterval, computePriceForReserve};
