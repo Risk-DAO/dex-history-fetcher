@@ -1,4 +1,6 @@
 const axios = require('axios');
+const dotenv = require('dotenv');
+dotenv.config();
 
 const uri = process.env.API_URI;
 let monitoringEnabled = true; // default to true
@@ -19,7 +21,7 @@ async function RecordMonitoring(monitoringData) {
     try {
         monitoringData['type'] = 'Dex History';
         monitoringData['lastUpdate'] = Math.round(Date.now() / 1000);
-        await axios.post(`${uri}/push`, monitoringData)
+        await axios.post(uri, monitoringData)
             .then((resp) => console.log(resp.data))
             .catch((error) => console.log(error));
     }
@@ -27,5 +29,16 @@ async function RecordMonitoring(monitoringData) {
         console.log('alerts pushed');
     }
 }
+
+// RecordMonitoring({
+//     'name': 'testDex',
+//     'status': 'success',
+//     'lastStart': '1685959134',
+//     'lastEnd': '1685959194',
+//     'lastDuration': '12',
+//     'lastUpdate': '1685959194',
+//     'error': 'undefined',
+//     'runEvery': '100000000'
+// });
 
 module.exports = { RecordMonitoring };
