@@ -43,7 +43,8 @@ const pairsToCompute = {
         'WBTC'
     ],
     'WBTC': [
-        'USDC'
+        'USDC',
+        'ETH'
     ]
 };
 
