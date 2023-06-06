@@ -41,6 +41,10 @@ const pairsToCompute = {
         'WETH',
         'USDC',
         'WBTC'
+    ],
+    'WBTC': [
+        'USDC',
+        'WETH'
     ]
 };
 
