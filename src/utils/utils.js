@@ -94,13 +94,14 @@ async function sleep(ms) {
 }
 
 /**
- * a small retry wrapper with an incrameting 5s sleep delay
+ * a small retry wrapper with an incremeting 5s sleep delay
  * @param {Function} fn 
  * @param {*[]} params 
  * @param {number} retries 
+ * @param {number} maxRetries 
  * @returns 
  */
-async function retry(fn, params, retries = 0) {
+async function retry(fn, params, retries = 0, maxRetries = 10) {
     try {
         const res = await  fn(...params);
         if(retries){
@@ -112,6 +113,9 @@ async function retry(fn, params, retries = 0) {
     } catch (e) {
         console.error(e);
         retries++;
+        if(retries >= maxRetries) {
+            throw e;
+        }
         console.log(`retry #${retries}`);
         await sleep(5000 * retries);
         return retry(fn, params, retries);
