@@ -2,7 +2,7 @@ const { ethers, utils, Contract } = require('ethers');
 const BigNumber = require('bignumber.js');
 const pythiaConfig = require('./pythia.config');
 const dotenv = require('dotenv');
-const { fnName, roundTo, sleep } = require('../utils/utils');
+const { fnName, roundTo, sleep, retry } = require('../utils/utils');
 const { getConfTokenBySymbol } = require('../utils/token.utils');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
@@ -68,7 +68,7 @@ async function SendToPythia(daysToAvg) {
                 allValues.push(dataToSend.value);
             }
 
-            await pythiaContract.multiSet(allAssets, allKeys, allValues, {gasLimit: 100000});
+            await retry(pythiaContract.multiSet, [allAssets, allKeys, allValues, {gasLimit: 100000}]);
 
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({

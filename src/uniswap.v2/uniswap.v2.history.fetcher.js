@@ -6,7 +6,7 @@ dotenv.config();
 const univ2Config = require('./uniswap.v2.config');
 const { tokens } = require('../global.config');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
-const { sleep, fnName, roundTo, readLastLine } = require('../utils/utils');
+const { sleep, fnName, roundTo, readLastLine, retry } = require('../utils/utils');
 const { RecordMonitoring } = require('../utils/monitoring');
 
 const RPC_URL = process.env.RPC_URL;
@@ -89,18 +89,18 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName, curre
     const token1Symbol = pairKey.split('-')[1];
     const token1Address = tokens[token1Symbol].address;
     const factoryContract = new ethers.Contract(univ2Config.uniswapV2FactoryAddress, univ2Config.uniswapV2FactoryABI, web3Provider);
-    const pairAddress = await factoryContract.getPair(token0Address, token1Address);
+    const pairAddress = await retry(factoryContract.getPair, [token0Address, token1Address]);
 
     if(pairAddress == ethers.constants.AddressZero) {
         throw new Error(`Could not find address with tokens  ${token0Symbol} and ${token1Symbol}`);
     }
 
     const pairContract = new ethers.Contract(pairAddress, univ2Config.uniswapV2PairABI, web3Provider);
-    const contractToken0 = await pairContract.token0();
+    const contractToken0 = await retry(pairContract.token0, []);
     if(contractToken0.toLowerCase() != token0Address.toLowerCase()) {
         throw new Error('Order mismatch between configuration and uniswapv2 pair');
     }
-    const contractToken1 = await pairContract.token1();
+    const contractToken1 = await retry(pairContract.token1, []);
     if(contractToken1.toLowerCase() != token1Address.toLowerCase()) {
         throw new Error('Order mismatch between configuration and uniswapv2 pair');
     }
