@@ -68,7 +68,7 @@ async function SendToPythia(daysToAvg) {
                 allValues.push(dataToSend.value);
             }
 
-            await pythiaContract.multiSet(allAssets, allKeys, allValues);
+            await pythiaContract.multiSet(allAssets, allKeys, allValues, {gasLimit: 100000});
 
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({
