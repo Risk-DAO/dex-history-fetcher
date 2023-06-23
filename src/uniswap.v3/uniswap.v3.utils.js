@@ -307,7 +307,7 @@ function get_dx_slippage(currentTick, tickSpacing, sqrtPriceX96, liquidity, toke
         dx = dx.plus(L.div(currSqrtPrice).minus(L.div(nextSqrtPrice)));
         // console.log(dx.toString());
         if(Object.keys(relevantTicks).map(_ => Number(_)).includes(currTick)) {
-            slippageData[relevantTicks[currTick]] = dx.div(decimalFactor).toNumber();
+            slippageData[relevantTicks[currTick]] = dx.div(decimalFactor).toNumber() || 0;
         }
 
         // move to next tick
@@ -379,7 +379,7 @@ function get_dy_slippage(currentTick, tickSpacing, sqrtPriceX96, liquidity, toke
         dy = dy.plus(L.times(dSqrtP));
 
         if(Object.keys(relevantTicks).map(_ => Number(_)).includes(currTick)) {
-            slippageData[relevantTicks[currTick]] = dy.div(decimalFactor).toNumber();
+            slippageData[relevantTicks[currTick]] = dy.div(decimalFactor).toNumber() || 0;
         }
 
         // move to next tick
