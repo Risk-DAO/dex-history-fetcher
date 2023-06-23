@@ -621,15 +621,22 @@ function getUniV3DataSinceBlock(dataDir, fromSymbol, toSymbol, sinceBlock) {
         // clone the data because we need to modify it without modifying the source
         const baseSlippageMap = structuredClone(dataContents[baseFile][baseFileBlockNumber][`${fromSymbol}-slippagemap`]);
         
-        for(let slippagePct = 1; slippagePct <= CONSTANT_TARGET_SLIPPAGE; slippagePct++) {
-            const slippageValue = baseSlippageMap[slippagePct];
-            if(slippageValue == undefined) {
-                if(slippagePct == 1) {
-                    baseSlippageMap[slippagePct] = 0;
+        let slippageBps = 50;
+        while (slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100) {
+            let slippageValue = baseSlippageMap[slippageBps];
+            
+            if(!slippageValue) {
+                // find the closest value that is < slippageBps
+                const sortedAvailableSlippageBps = Object.keys(baseSlippageMap).filter(_ => _ < slippageBps).sort((a,b) => b - a);
+                if(sortedAvailableSlippageBps.length == 0) {
+                    slippageValue = 0;
                 } else {
-                    baseSlippageMap[slippagePct] = baseSlippageMap[slippagePct-1];
-                }
+                    slippageValue = baseSlippageMap[sortedAvailableSlippageBps[0]];
+                } 
             }
+
+            baseSlippageMap[slippageBps] = slippageValue;
+            slippageBps += 50;
         }
 
         results[baseFileBlockNumber].slippageMap = baseSlippageMap;
@@ -649,19 +656,22 @@ function getUniV3DataSinceBlock(dataDir, fromSymbol, toSymbol, sinceBlock) {
             const nearestBlockNumber = nearestBlockNumbers.at(-1);
             // console.log(`[${targetBlock}] ${filename} nearest block value is ${nearestBlockNumber}. Distance: ${targetBlock-nearestBlockNumber}`);
             const slippageMap = dataContents[filename][nearestBlockNumber][`${fromSymbol}-slippagemap`];
-            for(let slippagePct = 1; slippagePct <= CONSTANT_TARGET_SLIPPAGE; slippagePct++) {
-                let volumeToAdd = slippageMap[slippagePct];
-                if(!volumeToAdd && slippagePct > 1) {
-                    // when the tick spacing is high, there is not a value for each slippage percent
-                    // so for example there may be 4% and 6% in the slippages but not 5 in the file with 10000 fees
-                    // to add some value to the aggregated data, we will add the value of 4%
-                    volumeToAdd = slippageMap[slippagePct - 1];
-                }
+           
+            let slippageBps = 50;
+            while (slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100) {
+                let volumeToAdd = slippageMap[slippageBps];
+                if(!volumeToAdd) {
+                    // find the closest value that is < slippageBps
+                    const sortedAvailableSlippageBps = Object.keys(slippageMap).filter(_ => _ < slippageBps).sort((a,b) => b - a);
+                    if(sortedAvailableSlippageBps.length == 0) {
+                        volumeToAdd = 0;
+                    } else {
+                        volumeToAdd = slippageMap[sortedAvailableSlippageBps[0]];
+                    }
+                } 
 
-                if(volumeToAdd) {
-                    results[baseFileBlockNumber].slippageMap[slippagePct] += volumeToAdd;
-                    // console.log(`new volume for slippage ${slippagePct}%: ${baseData.slippageMap[slippagePct]} after adding ${volumeToAdd} from ${selectedFile}`);
-                }
+                results[baseFileBlockNumber].slippageMap[slippageBps] += volumeToAdd;
+                slippageBps += 50;
             }
         }
     }
