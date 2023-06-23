@@ -13,7 +13,7 @@ const { default: BigNumber } = require('bignumber.js');
 const { RecordMonitoring } = require('../utils/monitoring');
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
 // save liquidity data every 'CONSTANT_BLOCK_INTERVAL' blocks
-const CONSTANT_BLOCK_INTERVAL = 150;
+const CONSTANT_BLOCK_INTERVAL = 50;
 
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';

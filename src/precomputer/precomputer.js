@@ -56,8 +56,9 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
                 }
 
                 const blockToPush = startBlock + i*blockStep;
-                const blockTimestampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockToPush}`);
-                blockTimeStamps[blockToPush] = blockTimestampResp.data.timestamp;
+                // const blockTimestampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockToPush}`);
+                // blockTimeStamps[blockToPush] = blockTimestampResp.data.timestamp;
+                blockTimeStamps[blockToPush] = Date.now();
                 blockRange.push(blockToPush);
             }
 
@@ -65,14 +66,14 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
         
             // console.log(blockRange);
         
-            await precomputeUniswapV2Data(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
-            await precomputeCurveData(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
+            // await precomputeUniswapV2Data(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
+            // await precomputeCurveData(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
             await precomputeUniswapV3Data(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
 
-            // generate avg data for each pairs
-            computeAverages(daysToFetch);
+            // // generate avg data for each pairs
+            // computeAverages(daysToFetch);
 
-            renameConcatFiles(daysToFetch);
+            // renameConcatFiles(daysToFetch);
         
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({

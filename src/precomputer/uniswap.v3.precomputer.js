@@ -109,7 +109,7 @@ function precomputeDataForPair(univ3PrecomputedDir, daysToFetch, blockRange, tar
         liquidity['realBlockNumberDistance'] = Math.abs(Number(block) - blockValue.blockNumber);
 
         for(const slippagePct of targetSlippages) {
-            liquidity[slippagePct] = blockValue.slippageMap[slippagePct];
+            liquidity[slippagePct] = blockValue.slippageMap[slippagePct * 100];
         }
 
         volumeForSlippage.push(liquidity);
