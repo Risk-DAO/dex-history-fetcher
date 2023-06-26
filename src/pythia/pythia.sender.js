@@ -6,11 +6,11 @@ const { fnName, roundTo, sleep, retry } = require('../utils/utils');
 const { getConfTokenBySymbol } = require('../utils/token.utils');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
-const { getUniV3DataSinceBlock } = require('../uniswap.v3/uniswap.v3.utils');
+const { getAverageLiquidityForBlockRange } = require('../uniswap.v3/uniswap.v3.utils');
 const { RecordMonitoring } = require('../utils/monitoring');
 
 const DATA_DIR = process.cwd() + '/data';
-const TARGET_SLIPPAGE = 5;
+const TARGET_SLIPPAGE_BPS = 500;
 const MONITORING_NAME = 'Pythia Sender';
 
 async function SendToPythia(daysToAvg) {
@@ -48,9 +48,9 @@ async function SendToPythia(daysToAvg) {
             const allValues = [];
             
             // find block for 'daysToAvg' days ago
-            const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now()/1000) - (daysToAvg * 24 * 60 * 60));
+            const startBlock = await retry(getBlocknumberForTimestamp, Math.round(Date.now()/1000) - (daysToAvg * 24 * 60 * 60));
             console.log(`${fnName()}: Will avg liquidity since block ${startBlock}`);
-            const endBlock = await web3Provider.getBlockNumber();
+            const endBlock = await retry(web3Provider.getBlockNumber, []);
             const blockRange = [];
             for(let i = startBlock; i <= endBlock; i++) {
                 blockRange.push(i);
@@ -105,29 +105,14 @@ async function SendToPythia(daysToAvg) {
  */
 async function getUniv3Average(tokenConf, daysToAvg, blockRange) {
 
-    console.log(`${fnName()}[${tokenConf.symbol}]: start finding data for ${TARGET_SLIPPAGE}% slippage since block ${blockRange[0]}`);
-
-    // get all data for the block range, this returns a dictionary containing all the data for all the blocks in the blockrange
-    const allData = await getUniV3DataSinceBlock(DATA_DIR, tokenConf.symbol, 'USDC', blockRange[0]);
-    console.log(`${fnName()}[${tokenConf.symbol}]: found ${Object.keys(allData).length} data since ${blockRange[0]}`);
-
-    // compute average liquidity
-    let lastValue = allData[Object.keys(allData)[0]];
-    let totalLiquidity = 0;
-    for(const blockNumber of blockRange) {
-        if(allData[blockNumber]) {
-            lastValue = allData[blockNumber];
-        }
-
-        totalLiquidity += lastValue.slippageMap[TARGET_SLIPPAGE * 100];
-    }
-
-    const avg = totalLiquidity / blockRange.length;
-    console.log(`${fnName()}[${tokenConf.symbol}]: Computed average liquidity for ${TARGET_SLIPPAGE}% slippage: ${avg}`);
+    console.log(`${fnName()}[${tokenConf.symbol}]: start finding data for ${TARGET_SLIPPAGE_BPS}bps slippage since block ${blockRange[0]}`);
+    const avgResult = getAverageLiquidityForBlockRange(DATA_DIR, tokenConf.symbol, 'USDC', blockRange);
+    const avgLiquidityForTargetSlippage = avgResult.averageLiquidity[TARGET_SLIPPAGE_BPS];
+    console.log(`${fnName()}[${tokenConf.symbol}]: Computed average liquidity for ${TARGET_SLIPPAGE_BPS}bps slippage: ${avgLiquidityForTargetSlippage}`);
 
     // change the computed avg value to a BigNumber 
     // first round to 6 decimals: 6 being the minimum decimals for all the known tokens
-    const roundedLiquidity = roundTo(avg, 6);
+    const roundedLiquidity = roundTo(avgLiquidityForTargetSlippage, 6);
     console.log(`${fnName()}[${tokenConf.symbol}]: roundedLiquidity: ${roundedLiquidity}`);
     const liquidityInWei = (new BigNumber(roundedLiquidity)).times((new BigNumber(10)).pow(tokenConf.decimals));
     console.log(`${fnName()}[${tokenConf.symbol}]: liquidityInWei: ${liquidityInWei.toString(10)}`);
