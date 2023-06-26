@@ -119,7 +119,7 @@ async function getUniv3Average(tokenConf, daysToAvg, blockRange) {
             lastValue = allData[blockNumber];
         }
 
-        totalLiquidity += lastValue.slippageMap[TARGET_SLIPPAGE];
+        totalLiquidity += lastValue.slippageMap[TARGET_SLIPPAGE * 100];
     }
 
     const avg = totalLiquidity / blockRange.length;

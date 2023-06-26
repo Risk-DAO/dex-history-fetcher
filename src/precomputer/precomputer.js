@@ -58,6 +58,7 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
                 const blockToPush = startBlock + i*blockStep;
                 const blockTimestampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockToPush}`);
                 blockTimeStamps[blockToPush] = blockTimestampResp.data.timestamp;
+                // blockTimeStamps[blockToPush] = Date.now();
                 blockRange.push(blockToPush);
             }
 
@@ -69,7 +70,7 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
             await precomputeCurveData(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
             await precomputeUniswapV3Data(blockRange, TARGET_SLIPPAGES, daysToFetch, blockTimeStamps);
 
-            // generate avg data for each pairs
+            // // generate avg data for each pairs
             computeAverages(daysToFetch);
 
             renameConcatFiles(daysToFetch);
