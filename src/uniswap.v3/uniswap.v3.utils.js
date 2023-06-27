@@ -640,7 +640,9 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
                     slippageValue = baseFileSlippageMap[sortedAvailableSlippageBps[0]];
                 } 
             }
-
+            if(slippageValue < 0) {
+                slippageValue = 0;
+            }
             baseSlippageMap[slippageBps] = slippageValue;
             slippageBps += 50;
         }
@@ -676,6 +678,9 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
                     }
                 } 
 
+                if(volumeToAdd < 0) {
+                    volumeToAdd = 0;
+                }
                 results[targetBlock].slippageMap[slippageBps] += volumeToAdd;
                 slippageBps += 50;
             }
