@@ -155,7 +155,8 @@ async function getUniV2AggregatedDataForBlockNumbers(dataDir, fromSymbol, toSymb
 function getUniV2DataforBlockRange(DATA_DIR, fromSymbol, toSymbol, blockRange) {
     const fileInfo = getUniV2DataFile(DATA_DIR, fromSymbol, toSymbol);
     if(!fileInfo) {
-        throw new Error(`Could not find pool data for ${fromSymbol}/${toSymbol} on uniswapv2`);
+        console.log(`Could not find pool data for ${fromSymbol}/${toSymbol} on uniswapv2`);
+        return null;
     }
     // load the file in RAM
     const fileContent = fs.readFileSync(fileInfo.path, 'utf-8').split('\n');

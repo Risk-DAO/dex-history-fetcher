@@ -71,7 +71,7 @@ function precomputeDataForPair(univ3PrecomputedDir, daysToFetch, blockRange, tar
         fs.rmSync(destFileName);
     }
     
-    const resultsForRange = getCachedUniV3DataforBlockRange(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange);
+    const resultsForRange = getUniV3DataforBlockRange(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange);
     if(Object.keys(resultsForRange).length == 0)  {
         console.log(`${fnName()}: No data found for the last ${daysToFetch} day(s) for ${fromToken.symbol}/${toToken.symbol}`);
         return;
@@ -127,27 +127,6 @@ function precomputeDataForPair(univ3PrecomputedDir, daysToFetch, blockRange, tar
     fs.writeFileSync(destFileName, JSON.stringify(preComputedData, null, 2));
 }
 
-function getCachedUniV3DataforBlockRange(DATA_DIR, fromSymbol, toSymbol, blockRange) {
-
-    const disableCache = true;
-    if(disableCache) {
-        return getUniV3DataforBlockRange(DATA_DIR, fromSymbol, toSymbol, blockRange);
-    }
-
-    if(!liquidityDataCache[fromSymbol]) {
-        liquidityDataCache[fromSymbol] = {};
-    }
-
-    if(!liquidityDataCache[fromSymbol][toSymbol]) {
-        liquidityDataCache[fromSymbol][toSymbol] = getUniV3DataforBlockRange(DATA_DIR, fromSymbol, toSymbol, blockRange);
-        console.log(`loaded ${fromSymbol}/${toSymbol} from files`);
-    } else {
-        console.log(`obtained ${fromSymbol}/${toSymbol} from cache`);
-    }
-
-    return liquidityDataCache[fromSymbol][toSymbol];
-}
-
 const AGG_PIVOTS = ['USDC', 'WBTC', 'WETH'];
 function computeAggregatedVolumeForSlippage(DATA_DIR, base, quote, blockRange, targetSlippages, baseDataHistoryDataPoints) {
     const aggregVolumeForBlock = {};
@@ -157,8 +136,8 @@ function computeAggregatedVolumeForSlippage(DATA_DIR, base, quote, blockRange, t
             continue;
         }
     
-        const segment1HistoryDataPoints = getCachedUniV3DataforBlockRange(DATA_DIR, base, pivot, blockRange);
-        const segment2HistoryDataPoints = getCachedUniV3DataforBlockRange(DATA_DIR, pivot, quote, blockRange);
+        const segment1HistoryDataPoints = getUniV3DataforBlockRange(DATA_DIR, base, pivot, blockRange);
+        const segment2HistoryDataPoints = getUniV3DataforBlockRange(DATA_DIR, pivot, quote, blockRange);
         for(const blockNumber of blockRange) {
             if(!aggregVolumeForBlock[blockNumber]) {
                 aggregVolumeForBlock[blockNumber] = {};
