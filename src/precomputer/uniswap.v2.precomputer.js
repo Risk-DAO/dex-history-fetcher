@@ -69,7 +69,8 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
 
     console.log(`${fnName()}: computing data for ${fromToken.symbol}/${toToken.symbol}`);
     const resultsForRange = getUniV2DataforBlockRange(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange);
-    if(Object.keys(resultsForRange).length == 0)  {
+    
+    if(!resultsForRange || Object.keys(resultsForRange).length == 0)  {
         console.log(`${fnName()}: No data found for the last ${daysToFetch} day(s) for ${fromToken.symbol}/${toToken.symbol}`);
         return;
     }
