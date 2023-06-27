@@ -680,144 +680,52 @@ function getUniV3DataSinceBlock(dataDir, fromSymbol, toSymbol, sinceBlock) {
     return results;
 }
 
-function getAverageLiquidityForBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
-    // get all data for the block range, this returns a dictionary containing all the data for all the blocks in the blockrange
-    const allData = getUniV3DataSinceBlock(dataDir, fromSymbol, toSymbol, blockRange[0]);
-    // console.log(`${fnName()}[${fromSymbol}/${toSymbol}]: found ${Object.keys(allData).length} data since block ${blockRange[0]}`);
 
-    // compute average liquidity
+function getLiquiditiesForBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock) {
+    // get all data for the block range, this returns a dictionary containing all the data for all the blocks in the blockrange
+    const allData = getUniV3DataSinceBlock(dataDir, fromSymbol, toSymbol, sinceBlock);
+
     let currentValue = allData[Object.keys(allData)[0]];
-    let sumPrices = 0;
-    const slippageMap = {};
-    for(const blockNumber of blockRange) {
+    const resultData = {};
+    for(let blockNumber = sinceBlock; blockNumber <= toBlock; blockNumber++) {
         if(allData[blockNumber]) {
             currentValue = allData[blockNumber];
         }
 
-        for(const slippageBps of Object.keys(currentValue.slippageMap)) {
-            if(!slippageMap[slippageBps]) {
-                slippageMap[slippageBps] = 0;
-            }
-            slippageMap[slippageBps] += currentValue.slippageMap[slippageBps];
-        }
-        
-        sumPrices += currentValue.price;
+        resultData[blockNumber] = {
+            blockNumber: currentValue.blockNumber,
+            price: currentValue.price,
+            slippageMap: currentValue.slippageMap
+        };
     }
 
-    for(const slippageBps of Object.keys(slippageMap)) {
-        slippageMap[slippageBps] =  slippageMap[slippageBps] / blockRange.length;
-    }
-    const priceAvg = sumPrices / blockRange.length;
-    return {slippageMapAvg: slippageMap, averagePrice: priceAvg};
+    return resultData;
 }
 
-/**
- * 
- * @param {string} dataDir 
- * @param {string} fromSymbol 
- * @param {string} toSymbol 
- * @param {number[]} blockRange 
- * @returns {Promise<{[targetBlock: number]: {blockNumber: number, price: number, slippageMap: {[slippagePct: number]: number}}}>}
- */
-function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
-    console.log(`${fnName()}: Searching for ${fromSymbol}/${toSymbol}`);
-    
-    const results = {};
+function getAverageLiquidityForBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock) {
+    // get all data for the block range, this returns a dictionary containing all the data for all the blocks in the blockrange
+    const allData = getLiquiditiesForBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock);
+    // console.log(`${fnName()}[${fromSymbol}/${toSymbol}]: found ${Object.keys(allData).length} data since block ${blockRange[0]}`);
 
-    const {selectedFiles, reverse} = getUniV3DataFiles(dataDir, fromSymbol, toSymbol);
-
-    if(selectedFiles.length == 0) {
-        console.log(`Could not find univ3 files for ${fromSymbol}/${toSymbol}`);
-        return results;
+    // compute average liquidity
+    let sumPrices = 0;
+    const avgSlippageMap = {};
+    for(const liquidityData of Object.values(allData)) {
+        for(const slippageBps of Object.keys(liquidityData.slippageMap)) {
+            if(!avgSlippageMap[slippageBps]) {
+                avgSlippageMap[slippageBps] = 0;
+            }
+            avgSlippageMap[slippageBps] += liquidityData.slippageMap[slippageBps];
+        }
+        
+        sumPrices += liquidityData.price;
     }
 
-    const dataContents = getUniV3DataContents(selectedFiles, dataDir, blockRange[0]);
-
-    // select base file = the file with the most lines
-    let baseFile = selectedFiles[0];
-    for(let i = 1; i < selectedFiles.length; i++) {
-        const selectedFile = selectedFiles[i];
-        if(Object.keys(dataContents[baseFile]).length < Object.keys(dataContents[selectedFile]).length) {
-            baseFile = selectedFile;
-        }
+    for(const slippageBps of Object.keys(avgSlippageMap)) {
+        avgSlippageMap[slippageBps] =  avgSlippageMap[slippageBps] / Object.keys(allData).length;
     }
-
-    for(const targetBlock of blockRange) {
-
-        // find the closest value from the basefile and init the result with the data
-        const blocknumbers = Object.keys(dataContents[baseFile]);
-        const nearestBlockNumbers = blocknumbers.filter(_ => Number(_) <= targetBlock);
-        if(nearestBlockNumbers.length == 0) {
-            // if no data, ignore block
-            continue;
-        }
-
-        const nearestBlockNumber = Number(nearestBlockNumbers.at(-1));
-        // console.log(`[${targetBlock}] ${baseFile} nearest block value is ${nearestBlockNumber}. Distance: ${targetBlock-nearestBlockNumber}`);
-        results[targetBlock] = {
-            blockNumber: nearestBlockNumber,
-            price: reverse ? dataContents[baseFile][nearestBlockNumber].p1vs0 : dataContents[baseFile][nearestBlockNumber].p0vs1,
-        };
-
-        // clone the data because we need to modify it without modifying the source
-        const baseSlippageMap = {};
-        const baseFileSlippageMap = dataContents[baseFile][nearestBlockNumber][`${fromSymbol}-slippagemap`];
-        let slippageBps = 50;
-        while (slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100) {
-            let slippageValue = baseFileSlippageMap[slippageBps];
-            
-            if(!slippageValue) {
-                // find the closest value that is < slippageBps
-                const sortedAvailableSlippageBps = Object.keys(baseFileSlippageMap).filter(_ => _ < slippageBps).sort((a,b) => b - a);
-                if(sortedAvailableSlippageBps.length == 0) {
-                    slippageValue = 0;
-                } else {
-                    slippageValue = baseFileSlippageMap[sortedAvailableSlippageBps[0]];
-                } 
-            }
-
-            baseSlippageMap[slippageBps] = slippageValue;
-            slippageBps += 50;
-        }
-
-        results[targetBlock].slippageMap = baseSlippageMap;
-
-        // do the same for every other data contents, but only summing the slippagemap
-        for(const filename of selectedFiles) {
-            if(filename == baseFile) {
-                continue; // base file already done
-            }
-
-            const blocknumbers = Object.keys(dataContents[filename]);
-            const nearestBlockNumbers = blocknumbers.filter(_ => Number(_) <= targetBlock);
-            if(nearestBlockNumbers.length == 0) {
-                continue; // no available data in source?
-            }
-
-            const nearestBlockNumber = nearestBlockNumbers.at(-1);
-            // console.log(`[${targetBlock}] ${filename} nearest block value is ${nearestBlockNumber}. Distance: ${targetBlock-nearestBlockNumber}`);
-            const slippageMap = dataContents[filename][nearestBlockNumber][`${fromSymbol}-slippagemap`];
-
-            let slippageBps = 50;
-            while (slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100) {
-                let volumeToAdd = slippageMap[slippageBps];
-                if(!volumeToAdd) {
-                    // find the closest value that is < slippageBps
-                    const sortedAvailableSlippageBps = Object.keys(slippageMap).filter(_ => _ < slippageBps).sort((a,b) => b - a);
-                    if(sortedAvailableSlippageBps.length == 0) {
-                        volumeToAdd = 0;
-                    } else {
-                        volumeToAdd = slippageMap[sortedAvailableSlippageBps[0]];
-                    }
-                } 
-
-                results[targetBlock].slippageMap[slippageBps] += volumeToAdd;
-                slippageBps += 50;
-            }
-        }
-    }
-
-    return results;
+    const priceAvg = sumPrices /  Object.keys(allData).length;
+    return {slippageMapAvg: avgSlippageMap, averagePrice: priceAvg};
 }
 
 function getUniV3DataContents(selectedFiles, dataDir, minBlock=0) {
@@ -881,8 +789,8 @@ function getUniV3DataContents(selectedFiles, dataDir, minBlock=0) {
 // generateConfigOracleAndCompoundAssets();
 
 module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, 
-    generateConfigFromBaseAndQuote, getAvailableUniswapV3, getUniV3DataforBlockRange, getUniV3DataFiles, 
-    getUniV3DataContents, getUniV3DataSinceBlock, getAverageLiquidityForBlockRange };
+    generateConfigFromBaseAndQuote, getAvailableUniswapV3, getUniV3DataFiles, 
+    getUniV3DataContents, getUniV3DataSinceBlock, getAverageLiquidityForBlockInterval, getLiquiditiesForBlockInterval };
 
 // getUniV3DataforBlockRange('./data', 'UNI', 'USDC', [])
 

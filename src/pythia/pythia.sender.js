@@ -6,8 +6,8 @@ const { fnName, roundTo, sleep, retry } = require('../utils/utils');
 const { getConfTokenBySymbol } = require('../utils/token.utils');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
-const { getAverageLiquidityForBlockRange } = require('../uniswap.v3/uniswap.v3.utils');
 const { RecordMonitoring } = require('../utils/monitoring');
+const { getAverageLiquidityForBlockInterval } = require('../uniswap.v3/uniswap.v3.utils');
 
 const DATA_DIR = process.cwd() + '/data';
 const TARGET_SLIPPAGE_BPS = 500;
@@ -51,17 +51,13 @@ async function SendToPythia(daysToAvg) {
             const startBlock = await retry(getBlocknumberForTimestamp, Math.round(Date.now()/1000) - (daysToAvg * 24 * 60 * 60));
             console.log(`${fnName()}: Will avg liquidity since block ${startBlock}`);
             const endBlock = await retry(web3Provider.getBlockNumber, []);
-            const blockRange = [];
-            for(let i = startBlock; i <= endBlock; i++) {
-                blockRange.push(i);
-            }
 
             for(const tokenSymbol of pythiaConfig.tokensToPush) {
                 // get config 
                 const tokenConf = getConfTokenBySymbol(tokenSymbol);
                 console.log(`${fnName()}[${tokenSymbol}]: start working on token ${tokenConf.symbol} with address ${tokenConf.address}`);
                 
-                const dataToSend = await getUniv3Average(tokenConf, daysToAvg, blockRange);
+                const dataToSend = await getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock);
                 console.log(`${fnName()}[${tokenSymbol}]: data to send:`, dataToSend);
                 allAssets.push(dataToSend.asset);
                 allKeys.push(dataToSend.key);
@@ -100,13 +96,14 @@ async function SendToPythia(daysToAvg) {
  * Read the precomputed value from data/precomputed/uniswapv3/averages-{daysToAvg}d.json
  * @param {{symbol: string; decimals: number; address: string;}} tokenConf 
  * @param {number} daysToAvg 
- * @param {number[]} blockRange 
+ * @param {number} startBlock 
+ * @param {number} endBlock 
  * @returns 
  */
-async function getUniv3Average(tokenConf, daysToAvg, blockRange) {
+async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
 
-    console.log(`${fnName()}[${tokenConf.symbol}]: start finding data for ${TARGET_SLIPPAGE_BPS}bps slippage since block ${blockRange[0]}`);
-    const avgResult = getAverageLiquidityForBlockRange(DATA_DIR, tokenConf.symbol, 'USDC', blockRange);
+    console.log(`${fnName()}[${tokenConf.symbol}]: start finding data for ${TARGET_SLIPPAGE_BPS}bps slippage since block ${startBlock}`);
+    const avgResult = getAverageLiquidityForBlockInterval(DATA_DIR, tokenConf.symbol, 'USDC',  startBlock, endBlock);
     const avgLiquidityForTargetSlippage = avgResult.averageLiquidity[TARGET_SLIPPAGE_BPS];
     console.log(`${fnName()}[${tokenConf.symbol}]: Computed average liquidity for ${TARGET_SLIPPAGE_BPS}bps slippage: ${avgLiquidityForTargetSlippage}`);
 

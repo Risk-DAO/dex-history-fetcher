@@ -3,7 +3,7 @@ const { getConfTokenBySymbol } = require('../utils/token.utils');
 const { pairsToCompute } = require('./precomputer.config');
 const { fnName, logFnDuration } = require('../utils/utils');
 const path = require('path');
-const { getAvailableUniswapV3, getUniV3DataforBlockRange } = require('../uniswap.v3/uniswap.v3.utils');
+const { getAvailableUniswapV3, getLiquiditiesForBlockInterval } = require('../uniswap.v3/uniswap.v3.utils');
 
 
 const DATA_DIR = process.cwd() + '/data';
@@ -67,7 +67,7 @@ function precomputeDataForPair(univ3PrecomputedDir, daysToFetch, blockRange, tar
         fs.rmSync(destFileName);
     }
     
-    const resultsForRange = getUniV3DataforBlockRange(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange);
+    const resultsForRange = getLiquiditiesForBlockInterval(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange.at(0), blockRange.at(-1));
     if(Object.keys(resultsForRange).length == 0)  {
         console.log(`${fnName()}: No data found for the last ${daysToFetch} day(s) for ${fromToken.symbol}/${toToken.symbol}`);
         return;
