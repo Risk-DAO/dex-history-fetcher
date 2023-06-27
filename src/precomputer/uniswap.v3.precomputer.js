@@ -1,13 +1,14 @@
 const fs = require('fs');
-const { getConfTokenBySymbol } = require('../utils/token.utils');
+const { getConfTokenBySymbol, computeAggregatedVolumeFromPivot } = require('../utils/token.utils');
 const { pairsToCompute } = require('./precomputer.config');
 const { fnName, logFnDuration } = require('../utils/utils');
 const path = require('path');
-const { getAvailableUniswapV3, getLiquiditiesForBlockInterval } = require('../uniswap.v3/uniswap.v3.utils');
+const { getAvailableUniswapV3, getUniV3DataforBlockRange } = require('../uniswap.v3/uniswap.v3.utils');
 
 
 const DATA_DIR = process.cwd() + '/data';
 
+let liquidityDataCache = {};
 /**
  * Compute slippage data for a blockrange and target slippage array
  * @param {number[]} blockRange 
@@ -21,6 +22,8 @@ async function precomputeUniswapV3Data(blockRange, targetSlippages, daysToFetch,
         fs.mkdirSync(univ3PrecomputedDir, {recursive: true});
     }
 
+    // reset cache
+    liquidityDataCache = {};
     
     const availablePairs = getAvailableUniswapV3(DATA_DIR);
     // console.log(availablePairs);
@@ -67,13 +70,12 @@ function precomputeDataForPair(univ3PrecomputedDir, daysToFetch, blockRange, tar
         fs.rmSync(destFileName);
     }
     
-    const resultsForRange = getLiquiditiesForBlockInterval(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange.at(0), blockRange.at(-1));
+    const resultsForRange = getCachedUniV3DataforBlockRange(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange);
     if(Object.keys(resultsForRange).length == 0)  {
         console.log(`${fnName()}: No data found for the last ${daysToFetch} day(s) for ${fromToken.symbol}/${toToken.symbol}`);
         return;
     }
 
-    
     const preComputedData = {
         base: fromToken.symbol,
         quote: toToken.symbol,
@@ -116,7 +118,95 @@ function precomputeDataForPair(univ3PrecomputedDir, daysToFetch, blockRange, tar
     }
 
     preComputedData.volumeForSlippage = volumeForSlippage;
+
+    preComputedData.aggregatedVolumeForSlippage = computeAggregatedVolumeForSlippage(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange, targetSlippages, resultsForRange);
     fs.writeFileSync(destFileName, JSON.stringify(preComputedData, null, 2));
+}
+
+function getCachedUniV3DataforBlockRange(DATA_DIR, fromSymbol, toSymbol, blockRange) {
+
+    if(!liquidityDataCache[fromSymbol]) {
+        liquidityDataCache[fromSymbol] = {};
+    }
+
+    if(!liquidityDataCache[fromSymbol][toSymbol]) {
+        liquidityDataCache[fromSymbol][toSymbol] = getUniV3DataforBlockRange(DATA_DIR, fromSymbol, toSymbol, blockRange);
+        console.log(`loaded ${fromSymbol}/${toSymbol} from files`);
+    } else {
+        console.log(`obtained ${fromSymbol}/${toSymbol} from cache`);
+    }
+
+    return liquidityDataCache[fromSymbol][toSymbol];
+}
+
+const AGG_PIVOTS = ['USDC', 'WBTC', 'WETH'];
+function computeAggregatedVolumeForSlippage(DATA_DIR, base, quote, blockRange, targetSlippages, baseDataHistoryDataPoints) {
+    const aggResults = [];
+    for(const blockNumber of blockRange) {
+        const baseDataHistoryData = baseDataHistoryDataPoints[blockNumber];
+        if(!baseDataHistoryData) {
+            // if no base data for block, ignore
+            continue;
+
+        }
+        const aggResultForBlockNumber = {
+            blockNumber: blockNumber,
+            price: baseDataHistoryData.price,
+            realBlockNumber: baseDataHistoryData.blockNumber,
+            realBlockNumberDistance: blockNumber -  baseDataHistoryData.blockNumber
+        };
+
+        for(const slippagePct of targetSlippages) {
+            const targetSlippageBps = slippagePct * 100;
+            let liquidityAggreg = [];
+            for(const pivot of AGG_PIVOTS) {
+
+                if([base, quote].includes(pivot)) {
+                    continue;
+                }
+            
+                const segment1HistoryDataPoints = getCachedUniV3DataforBlockRange(DATA_DIR, base, pivot, blockRange);
+                const segment2HistoryDataPoints = getCachedUniV3DataforBlockRange(DATA_DIR, pivot, quote, blockRange);
+            
+                const segment1HistoryData = segment1HistoryDataPoints[blockNumber];
+                const segment2HistoryData = segment2HistoryDataPoints[blockNumber];
+                
+                if(!segment1HistoryData){
+                    console.warn(`cannot find history data for ${base}/${pivot}`);
+                    continue;
+                }
+                
+                if(!segment2HistoryData) {
+                    console.warn(`cannot find history data for ${pivot}/${quote}`);
+                    continue;
+                }
+
+                const aggregVolume = computeAggregatedVolumeFromPivot(segment1HistoryData.slippageMap, segment1HistoryData.price, segment2HistoryData.slippageMap, targetSlippageBps);
+                                
+                liquidityAggreg.push({
+                    pivot: pivot,
+                    liquidity: aggregVolume,
+                });
+            }
+
+            // here we found all the liquidity data for all pivots
+            
+            // console.log(`for ${base}->${quote}, base liquidity: ${baseDataHistoryData.slippageMap[targetSlippageBps]} ${base}`);
+            // console.log(`for ${base}->${quote} using pivots ${AGG_PIVOTS}, will add ${liquidityAggreg.length} liquidities`);
+            let aggregLiquidity = baseDataHistoryData.slippageMap[targetSlippageBps];
+            for(const liq of liquidityAggreg) {
+                // console.log(`${liq.liquidity} ${base} with route ${liq.description}`);
+                aggregLiquidity += liq.liquidity;
+            }
+            
+            console.log(`new aggregated liquidity for ${base}->${quote} for ${slippagePct}% slippage: ${aggregLiquidity}`);
+            aggResultForBlockNumber[slippagePct] = aggregLiquidity;
+        }
+
+        aggResults.push(aggResultForBlockNumber);
+    }
+
+    return aggResults;
 }
 
 function concatenateFiles(daysToFetch, blockTimeStamps) {
