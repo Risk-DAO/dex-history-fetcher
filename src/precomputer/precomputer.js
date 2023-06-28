@@ -83,6 +83,7 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
                 'lastDuration': runEndDate - runStartDate,
             });
         } catch(error) {
+            console.error(error);
             const errorMsg = `An exception occurred: ${error}`;
             console.log(errorMsg);
             await RecordMonitoring({
