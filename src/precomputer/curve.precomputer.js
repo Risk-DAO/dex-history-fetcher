@@ -121,16 +121,12 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
                 endPrices.push(basePrice);
             }
 
-            liquidity['aggregated'] = {};
             for(const slippage of targetSlippages) {
 
                 const targetPrice = basePrice - (basePrice * slippage / 100);
                 const liquidityAtSlippage = normalize(computeLiquidityForSlippageCurvePool(fromToken.symbol, toToken.symbol, BIGINT_1e18, targetPrice, reservesNorm18Dec, indexFrom, indexTo, blockValue.ampFactor).toString(), 18);
                 
                 liquidity[slippage] = liquidityAtSlippage;
-
-                // for now for curve, aggregated = same as normal slippage
-                liquidity['aggregated'][slippage] = liquidity[slippage];
             }
 
             volumeForSlippage.push(liquidity);
@@ -147,11 +143,14 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
         const aggregVolume = {
             blockNumber: block,
             realBlockNumber: block,
-            realBlockNumberDistance: 0
+            realBlockNumberDistance: 0,
+            aggregated: {}
         };
         
         for(const slippage of targetSlippages) {
             aggregVolume[slippage] = allValuesForSameBlock.reduce((accumulator, currentValue) => { return accumulator + currentValue[slippage]; }, 0);
+            // for now for curve, aggregated = same as normal slippage
+            aggregVolume.aggregated[slippage] = aggregVolume[slippage];
         }
 
         aggregVolumeForSlippage.push(aggregVolume);
