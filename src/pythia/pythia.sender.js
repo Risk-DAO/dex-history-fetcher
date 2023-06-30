@@ -50,7 +50,8 @@ async function SendToPythia(daysToAvg) {
             // find block for 'daysToAvg' days ago
             const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now()/1000) - (daysToAvg * 24 * 60 * 60));
             console.log(`${fnName()}: Will avg liquidity since block ${startBlock}`);
-            const endBlock = await retry(web3Provider.getBlockNumber, []);
+            /*library.externalFunction(param => this.doSomething(param));*/
+            const endBlock = await retry((() => web3Provider.getBlockNumber()), []);
 
             for(const tokenSymbol of pythiaConfig.tokensToPush) {
                 // get config 

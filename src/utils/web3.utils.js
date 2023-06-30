@@ -35,7 +35,7 @@ async function GetContractCreationBlockNumber(web3Provider, contractAddress) {
  * Get block closest of timestamp, using defillama api
  * Retry 10 times if needed
  * @param {number} timestamp in seconds
- * @returns {number} blocknumber
+ * @returns {Promise<number>} blocknumber
  */
 async function getBlocknumberForTimestamp(timestamp) {
     const defiLamaResp = await retry(axios.get, [`https://coins.llama.fi/block/ethereum/${timestamp}`]);

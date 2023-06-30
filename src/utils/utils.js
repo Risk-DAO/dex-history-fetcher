@@ -103,7 +103,7 @@ async function sleep(ms) {
  */
 async function retry(fn, params, retries = 0, maxRetries = 10) {
     try {
-        const res = await  fn(...params);
+        const res = await fn(...params);
         if(retries){
             console.log(`retry success after ${retries} retries`);
         } else {
