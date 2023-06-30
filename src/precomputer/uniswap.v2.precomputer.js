@@ -201,9 +201,9 @@ function computeAggregatedVolumeForSlippage(DATA_DIR, base, quote, blockRange, t
                 }
     
                 const aggregVolume = computeAggregatedVolumeFromPivot(segment1SlippageMap, segment1Price, segment2SlippageMap, slippagePct * 100);
-                console.log(`adding aggreg volume ${aggregVolume} from route ${base}->${pivot}->${quote} for slippage ${slippagePct}`);
+                // console.log(`adding aggreg volume ${aggregVolume} from route ${base}->${pivot}->${quote} for slippage ${slippagePct}`);
                 aggregVolumeForBlock[blockNumber][slippagePct] += aggregVolume;
-                console.log(`new aggreg volume for ${base}->${quote}: ${aggregVolumeForBlock[blockNumber][slippagePct]} for slippage ${slippagePct}`);
+                // console.log(`new aggreg volume for ${base}->${quote}: ${aggregVolumeForBlock[blockNumber][slippagePct]} for slippage ${slippagePct}`);
             }
         }
     }
