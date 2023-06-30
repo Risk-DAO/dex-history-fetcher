@@ -600,9 +600,12 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
 
     // select base file = the file with the most lines
     let baseFile = selectedFiles[0];
+    const keys = {};
+    keys[baseFile] = Object.keys(dataContents[baseFile]);
     for(let i = 1; i < selectedFiles.length; i++) {
         const selectedFile = selectedFiles[i];
-        if(Object.keys(dataContents[baseFile]).length < Object.keys(dataContents[selectedFile]).length) {
+        keys[selectedFile] = Object.keys(dataContents[selectedFile]);
+        if(Object.keys(dataContents[baseFile]).length < keys[selectedFile].length) {
             baseFile = selectedFile;
         }
     }
@@ -610,8 +613,7 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
     for(const targetBlock of blockRange) {
 
         // find the closest value from the basefile and init the result with the data
-        const blocknumbers = Object.keys(dataContents[baseFile]);
-        const nearestBlockNumbers = blocknumbers.filter(_ => Number(_) <= targetBlock);
+        const nearestBlockNumbers = keys[baseFile].filter(_ => Number(_) <= targetBlock);
         if(nearestBlockNumbers.length == 0) {
             // if no data, ignore block
             continue;
@@ -655,8 +657,7 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
                 continue; // base file already done
             }
 
-            const blocknumbers = Object.keys(dataContents[filename]);
-            const nearestBlockNumbers = blocknumbers.filter(_ => Number(_) <= targetBlock);
+            const nearestBlockNumbers = keys[filename].filter(_ => Number(_) <= targetBlock);
             if(nearestBlockNumbers.length == 0) {
                 continue; // no available data in source?
             }
@@ -690,6 +691,123 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
     return results;
 }
 
+
+/**
+ * 
+ * @param {string} dataDir 
+ * @param {string} fromSymbol 
+ * @param {string} toSymbol 
+ * @param {number[]} blockRange 
+ * @returns {Promise<{[targetBlock: number]: {blockNumber: number, price: number, slippageMap: {[slippagePct: number]: number}}}>}
+ */
+function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock) {
+    console.log(`${fnName()}: Searching for ${fromSymbol}/${toSymbol}`);
+    
+    const results = {};
+
+    const {selectedFiles, reverse} = getUniV3DataFiles(dataDir, fromSymbol, toSymbol);
+
+    if(selectedFiles.length == 0) {
+        console.log(`Could not find univ3 files for ${fromSymbol}/${toSymbol}`);
+        return results;
+    }
+
+    const dataContents = getUniV3DataContents(selectedFiles, dataDir, sinceBlock);
+
+    // select base file = the file with the most lines
+    let baseFile = selectedFiles[0];
+    const keys = {};
+    keys[baseFile] = Object.keys(dataContents[baseFile]);
+    for(let i = 1; i < selectedFiles.length; i++) {
+        const selectedFile = selectedFiles[i];
+        keys[selectedFile] = Object.keys(dataContents[selectedFile]);
+        if(Object.keys(dataContents[baseFile]).length < keys[selectedFile].length) {
+            baseFile = selectedFile;
+        }
+    }
+
+    for(const targetBlock of keys[baseFile]) {
+        if(targetBlock > toBlock) {
+            break;
+        }
+        // find the closest value from the basefile and init the result with the data
+        const nearestBlockNumbers = keys[baseFile].filter(_ => Number(_) <= targetBlock);
+        if(nearestBlockNumbers.length == 0) {
+            // if no data, ignore block
+            continue;
+        }
+
+        const nearestBlockNumber = Number(nearestBlockNumbers.at(-1));
+        // console.log(`[${targetBlock}] ${baseFile} nearest block value is ${nearestBlockNumber}. Distance: ${targetBlock-nearestBlockNumber}`);
+        results[targetBlock] = {
+            blockNumber: nearestBlockNumber,
+            price: reverse ? dataContents[baseFile][nearestBlockNumber].p1vs0 : dataContents[baseFile][nearestBlockNumber].p0vs1,
+        };
+
+        // clone the data because we need to modify it without modifying the source
+        const baseSlippageMap = {};
+        const baseFileSlippageMap = dataContents[baseFile][nearestBlockNumber][`${fromSymbol}-slippagemap`];
+        let slippageBps = 50;
+        while (slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100) {
+            let slippageValue = baseFileSlippageMap[slippageBps];
+            
+            if(!slippageValue) {
+                // find the closest value that is < slippageBps
+                const sortedAvailableSlippageBps = Object.keys(baseFileSlippageMap).filter(_ => _ < slippageBps).sort((a,b) => b - a);
+                if(sortedAvailableSlippageBps.length == 0) {
+                    slippageValue = 0;
+                } else {
+                    slippageValue = baseFileSlippageMap[sortedAvailableSlippageBps[0]];
+                } 
+            }
+            if(slippageValue < 0) {
+                slippageValue = 0;
+            }
+            baseSlippageMap[slippageBps] = slippageValue;
+            slippageBps += 50;
+        }
+
+        results[targetBlock].slippageMap = baseSlippageMap;
+
+        // do the same for every other data contents, but only summing the slippagemap
+        for(const filename of selectedFiles) {
+            if(filename == baseFile) {
+                continue; // base file already done
+            }
+
+            const nearestBlockNumbers = keys[filename].filter(_ => Number(_) <= targetBlock);
+            if(nearestBlockNumbers.length == 0) {
+                continue; // no available data in source?
+            }
+
+            const nearestBlockNumber = nearestBlockNumbers.at(-1);
+            // console.log(`[${targetBlock}] ${filename} nearest block value is ${nearestBlockNumber}. Distance: ${targetBlock-nearestBlockNumber}`);
+            const slippageMap = dataContents[filename][nearestBlockNumber][`${fromSymbol}-slippagemap`];
+
+            let slippageBps = 50;
+            while (slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100) {
+                let volumeToAdd = slippageMap[slippageBps];
+                if(!volumeToAdd) {
+                    // find the closest value that is < slippageBps
+                    const sortedAvailableSlippageBps = Object.keys(slippageMap).filter(_ => _ < slippageBps).sort((a,b) => b - a);
+                    if(sortedAvailableSlippageBps.length == 0) {
+                        volumeToAdd = 0;
+                    } else {
+                        volumeToAdd = slippageMap[sortedAvailableSlippageBps[0]];
+                    }
+                } 
+
+                if(volumeToAdd < 0) {
+                    volumeToAdd = 0;
+                }
+                results[targetBlock].slippageMap[slippageBps] += volumeToAdd;
+                slippageBps += 50;
+            }
+        }
+    }
+
+    return results;
+}
 
 /**
  * Returns all the data we have for uniswap v3 for a pair fromSymbol/toSymbol
@@ -795,34 +913,39 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
 
 
 function getAverageLiquidityForBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock) {
-    // get all data for the block range, this returns a dictionary containing all the data for all the blocks in the blockrange
     
-    const blockRange = [];
-    for(let blockNumber = sinceBlock; blockNumber <= toBlock; blockNumber++) {
-        blockRange.push(blockNumber);
-    }
 
-    const allData = getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange);
-    // console.log(`${fnName()}[${fromSymbol}/${toSymbol}]: found ${Object.keys(allData).length} data since block ${blockRange[0]}`);
+    const allData = getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock);
+    const allDataKeys = Object.keys(allData);
+    console.log(`${fnName()}[${fromSymbol}/${toSymbol}]: found ${allDataKeys.length} data since block ${sinceBlock}`);
 
     // compute average liquidity
     let sumPrices = 0;
+    let dataToUse = allData[allDataKeys[0]];
     const avgSlippageMap = {};
-    for(const liquidityData of Object.values(allData)) {
-        for(const slippageBps of Object.keys(liquidityData.slippageMap)) {
+
+    let cptValues = 0;
+    for(let targetBlock = sinceBlock; targetBlock <= toBlock; targetBlock++) {
+        cptValues++;
+        if(allData[targetBlock]) {
+            dataToUse = allData[targetBlock];
+        }
+
+        for(const slippageBps of Object.keys(dataToUse.slippageMap)) {
             if(!avgSlippageMap[slippageBps]) {
                 avgSlippageMap[slippageBps] = 0;
             }
-            avgSlippageMap[slippageBps] += liquidityData.slippageMap[slippageBps];
+            avgSlippageMap[slippageBps] += dataToUse.slippageMap[slippageBps];
         }
         
-        sumPrices += liquidityData.price;
+        sumPrices += dataToUse.price;
     }
 
     for(const slippageBps of Object.keys(avgSlippageMap)) {
-        avgSlippageMap[slippageBps] =  avgSlippageMap[slippageBps] / Object.keys(allData).length;
+        avgSlippageMap[slippageBps] =  avgSlippageMap[slippageBps] / cptValues;
     }
-    const priceAvg = sumPrices /  Object.keys(allData).length;
+
+    const priceAvg = sumPrices /  cptValues;
     return {slippageMapAvg: avgSlippageMap, averagePrice: priceAvg};
 }
 
