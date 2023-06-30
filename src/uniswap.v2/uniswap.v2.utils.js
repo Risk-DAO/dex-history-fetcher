@@ -224,6 +224,7 @@ function getUniV2DataforBlockRange(DATA_DIR, fromSymbol, toSymbol, blockRange) {
                 fromReserve: '0',
                 toReserve: '0',
             };
+            continue;
         }
         
         // data are sorted descending so nearest block is the last
@@ -397,6 +398,10 @@ function getUniV2DataFile(dataDir, fromSymbol, toSymbol) {
  * @returns {number} amount of token exchangeable for defined slippage
  */
 function computeLiquidityUniV2Pool(fromReserve, toReserve, targetSlippage) {
+    if(fromReserve == 0) {
+        return 0;
+    }
+    
     const initPrice = toReserve / fromReserve;
     const targetPrice = initPrice - (initPrice * targetSlippage);
     const amountOfFromToExchange = (toReserve / targetPrice) - fromReserve;
