@@ -39,6 +39,9 @@ async function getUniswapPriceAndLiquidity(dataDir, fromSymbol, toSymbol, target
 }
 
 function computeUniswapV2Price(normalizedFrom, normalizedTo) {
+    if(normalizedFrom == 0) {
+        return 0;
+    }
     return  normalizedTo / normalizedFrom;
 }
 
@@ -152,64 +155,85 @@ async function getUniV2AggregatedDataForBlockNumbers(dataDir, fromSymbol, toSymb
     return aggregatedLiquidity;
 }
 
+function getUniV2DataContent(filePath, isReverse, fromSymbol, toSymbol, sinceBlock) {
+    const dataContents = {};
+    // load the file in RAM
+    const fileContent = fs.readFileSync(filePath, 'utf-8').split('\n');
+    let lastValue = {};
+    for(let i = 1; i < fileContent.length - 1; i++) {
+        const line = fileContent[i];
+        const splt = line.split(',');
+        const blockNum = Number(splt[0]);
+        const fromReserve = isReverse ? splt[2] : splt[1];
+        const toReserve = isReverse ? splt[1] : splt[2];        
+
+        // if blockNum inferior to sinceBlock, ignore but save last value
+        if(blockNum < sinceBlock) {
+            lastValue = {
+                blockNumber: blockNum,
+                [`${fromSymbol}`]: fromReserve,
+                [`${toSymbol}`]: toReserve
+            };
+        } else {
+            // here it means we went through the sinceBlock, save the last value before 
+            // reaching sinceBlock to have one previous data
+            if(lastValue) {
+                dataContents[lastValue.blockNumber] = {
+                    blockNumber: lastValue.blockNumber,
+                    [`${fromSymbol}`]: lastValue[fromSymbol],
+                    [`${toSymbol}`]: lastValue[toSymbol]
+                };
+
+                // set lastValue to null, meaning we already saved it
+                lastValue = null;
+            } else {
+                // save current value
+                dataContents[blockNum] = {
+                    blockNumber: blockNum,
+                    [`${fromSymbol}`]: fromReserve,
+                    [`${toSymbol}`]: toReserve,
+                };
+            }
+
+        }
+
+    }
+
+    return dataContents;
+}
+
 function getUniV2DataforBlockRange(DATA_DIR, fromSymbol, toSymbol, blockRange) {
     const fileInfo = getUniV2DataFile(DATA_DIR, fromSymbol, toSymbol);
     if(!fileInfo) {
-        throw new Error(`Could not find pool data for ${fromSymbol}/${toSymbol} on uniswapv2`);
+        console.log(`Could not find pool data for ${fromSymbol}/${toSymbol} on uniswapv2`);
+        return null;
     }
-    // load the file in RAM
-    const fileContent = fs.readFileSync(fileInfo.path, 'utf-8').split('\n');
 
-    // loop through until finding infos for each block in the blockRange
-    let targetBlockNumberIndex = 0;
-    let targetBlockNumber = blockRange[targetBlockNumberIndex];
-    let lastLine = fileContent[1];
+    const dataContent = getUniV2DataContent(fileInfo.path, fileInfo.reverse, fromSymbol, toSymbol, blockRange[0]);
+
+    const blocknumbers = Object.keys(dataContent).sort((a,b) => b - a);
     const results = {};
-
-    // start at 2 because first line is headers and second is in lastLine
-    let fileContentIndex = 2;
-    while(targetBlockNumberIndex < blockRange.length) {
-        const splitted = fileContent[fileContentIndex].split(',');
-        const blockNumber = Number(splitted[0]);
-
-        if(blockNumber < targetBlockNumber) {
-            // do nothing except save that line in lastLine and incr fileContentIndex
-            lastLine = fileContent[fileContentIndex];
-            if(fileContentIndex < fileContent.length - 2) {
-                fileContentIndex++;
-            } else {
-                console.log(`${fnName()}: End of file reached with ${Object.keys(results).length} results found`);
-                break;
-            }
-        } else {
-            const lastLineSplitted = lastLine.split(',');
-            const lastLineBlocknumber = Number(lastLineSplitted[0]);
-
-            // here lastLine.blockNumber < currentTargetBlockNumber <= blockNumber
-            // need to find the closest block between blockNumber and lastLine.blockNumber
-            // and record the value of the closest
-            const distanceFromLast = Math.abs(targetBlockNumber - lastLineBlocknumber);
-            const distanceFromCurrent =  Math.abs(targetBlockNumber - blockNumber);
-            
-            // take current because distance is less
-            if(distanceFromLast > distanceFromCurrent) {
-                results[targetBlockNumber] = {
-                    blockNumber: blockNumber,
-                    fromReserve: fileInfo.reverse ? splitted[2] : splitted[1],
-                    toReserve: fileInfo.reverse ? splitted[1] : splitted[2]
-                };
-            } else {
-                results[targetBlockNumber] = {
-                    blockNumber: lastLineBlocknumber,
-                    fromReserve: fileInfo.reverse ? lastLineSplitted[2] : lastLineSplitted[1],
-                    toReserve: fileInfo.reverse ? lastLineSplitted[1] : lastLineSplitted[2]
-                };
-            }
-
-            targetBlockNumberIndex++;
-            targetBlockNumber = blockRange[targetBlockNumberIndex];
-            // here, we don't increment fileContentIndex because we might have multiple lines valid for the sale target block
+    for(const targetBlock of blockRange) {
+        // for each blocknumber in blockRange, 
+        // find the nearest blockNumber in data content that is <=
+        const nearestBlockNumbers = blocknumbers.filter(_ => Number(_) <= targetBlock);
+        if(nearestBlockNumbers.length == 0) {
+            // if no data, set 0
+            results[targetBlock] = {
+                blockNumber: targetBlock,
+                fromReserve: '0',
+                toReserve: '0',
+            };
         }
+        
+        // data are sorted descending so nearest block is the last
+        const nearestBlockNumber = Number(nearestBlockNumbers[0]);
+
+        results[targetBlock] = {
+            blockNumber: nearestBlockNumber,
+            fromReserve: dataContent[nearestBlockNumber][fromSymbol],
+            toReserve: dataContent[nearestBlockNumber][toSymbol],
+        };
     }
 
     return results;

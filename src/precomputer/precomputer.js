@@ -61,8 +61,6 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
                 // blockTimeStamps[blockToPush] = Date.now();
                 blockRange.push(blockToPush);
             }
-
-            // get blockrange timestamp
         
             // console.log(blockRange);
         
@@ -83,6 +81,7 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
                 'lastDuration': runEndDate - runStartDate,
             });
         } catch(error) {
+            console.error(error);
             const errorMsg = `An exception occurred: ${error}`;
             console.log(errorMsg);
             await RecordMonitoring({
@@ -136,10 +135,15 @@ function computeAverages(daysToFetch) {
             const volatility = std / avgPrice;
 
             const avgVolumeMap = {};
+            const avgVolumeMapAggreg = {};
             for (const slippage of TARGET_SLIPPAGES) {
                 const volumeArray = concatData.volumeForSlippage.map(_ => _[slippage]);
                 const avgLiquidity = volumeArray.reduce((a, b) => a + b, 0) / volumeArray.length;
                 avgVolumeMap[slippage] = avgLiquidity;
+
+                const volumeArrayAggreg = concatData.volumeForSlippage.map(_ => _.aggregated[slippage]);
+                const avgLiquidityAggreg = volumeArrayAggreg.reduce((a, b) => a + b, 0) / volumeArrayAggreg.length;
+                avgVolumeMapAggreg[slippage] = avgLiquidityAggreg;
             }
 
             // console.log(`[${platform}] ${concatData.base}/${concatData.quote} avgPrice: ${avgPrice}`);
@@ -150,6 +154,7 @@ function computeAverages(daysToFetch) {
 
             averageData[concatData.base][concatData.quote] = {
                 avgLiquidity: avgVolumeMap,
+                avgLiquidityAggreg: avgVolumeMapAggreg,
                 volatility: volatility
             };
         }

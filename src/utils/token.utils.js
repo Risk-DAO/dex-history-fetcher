@@ -51,4 +51,6 @@ function getTokenSymbolByAddress(address) {
 
     return null;
 }
-module.exports = { normalize, getTokenSymbolByAddress, getConfTokenBySymbol};
+
+
+module.exports = { normalize, getTokenSymbolByAddress, getConfTokenBySymbol };
