@@ -105,7 +105,7 @@ async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
 
     console.log(`${fnName()}[${tokenConf.symbol}]: start finding data for ${TARGET_SLIPPAGE_BPS}bps slippage since block ${startBlock}`);
     const avgResult = getAverageLiquidityForBlockInterval(DATA_DIR, tokenConf.symbol, 'USDC',  startBlock, endBlock);
-    const avgLiquidityForTargetSlippage = avgResult.averageLiquidity[TARGET_SLIPPAGE_BPS];
+    const avgLiquidityForTargetSlippage = avgResult.slippageMapAvg[TARGET_SLIPPAGE_BPS];
     console.log(`${fnName()}[${tokenConf.symbol}]: Computed average liquidity for ${TARGET_SLIPPAGE_BPS}bps slippage: ${avgLiquidityForTargetSlippage}`);
 
     // change the computed avg value to a BigNumber 
