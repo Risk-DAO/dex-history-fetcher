@@ -65,7 +65,8 @@ async function SendToPythia(daysToAvg) {
                 allValues.push(dataToSend.value);
             }
 
-            await retry(pythiaContract.multiSet, [allAssets, allKeys, allValues, {gasLimit: 100000}]);
+            const gas = pythiaConfig.tokensToPush.length * 12500;
+            await retry(pythiaContract.multiSet, [allAssets, allKeys, allValues, {gasLimit: gas}]);
 
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({
@@ -102,7 +103,6 @@ async function SendToPythia(daysToAvg) {
  * @returns 
  */
 async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
-
     console.log(`${fnName()}[${tokenConf.symbol}]: start finding data for ${TARGET_SLIPPAGE_BPS}bps slippage since block ${startBlock}`);
     const avgResult = getAverageLiquidityForBlockInterval(DATA_DIR, tokenConf.symbol, 'USDC',  startBlock, endBlock);
     const avgLiquidityForTargetSlippage = avgResult.slippageMapAvg[TARGET_SLIPPAGE_BPS];
