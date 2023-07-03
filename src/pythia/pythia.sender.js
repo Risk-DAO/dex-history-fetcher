@@ -8,6 +8,7 @@ dotenv.config();
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { RecordMonitoring } = require('../utils/monitoring');
 const { getAverageLiquidityForBlockInterval } = require('../uniswap.v3/uniswap.v3.utils');
+const { computeAggregatedVolumeFromPivot } = require('../utils/aggregator');
 
 const DATA_DIR = process.cwd() + '/data';
 const TARGET_SLIPPAGE_BPS = 500;
@@ -76,6 +77,7 @@ async function SendToPythia(daysToAvg) {
                 'lastDuration': runEndDate - Math.round(start/1000)
             });
         } catch(error) {
+            console.error(error);
             const errorMsg = `An exception occurred: ${error}`;
             console.log(errorMsg);
             await RecordMonitoring({
@@ -95,7 +97,6 @@ async function SendToPythia(daysToAvg) {
 
 
 /**
- * Read the precomputed value from data/precomputed/uniswapv3/averages-{daysToAvg}d.json
  * @param {{symbol: string; decimals: number; address: string;}} tokenConf 
  * @param {number} daysToAvg 
  * @param {number} startBlock 
@@ -105,8 +106,22 @@ async function SendToPythia(daysToAvg) {
 async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
     console.log(`${fnName()}[${tokenConf.symbol}]: start finding data for ${TARGET_SLIPPAGE_BPS}bps slippage since block ${startBlock}`);
     const avgResult = getAverageLiquidityForBlockInterval(DATA_DIR, tokenConf.symbol, 'USDC',  startBlock, endBlock);
-    const avgLiquidityForTargetSlippage = avgResult.slippageMapAvg[TARGET_SLIPPAGE_BPS];
+    let avgLiquidityForTargetSlippage = avgResult.slippageMapAvg[TARGET_SLIPPAGE_BPS];
     console.log(`${fnName()}[${tokenConf.symbol}]: Computed average liquidity for ${TARGET_SLIPPAGE_BPS}bps slippage: ${avgLiquidityForTargetSlippage}`);
+    
+    // add volumes from WBTC and WETH pivots
+    for(const pivot of ['WBTC', 'WETH']) {
+        if(tokenConf.symbol == pivot) {
+            continue;
+        }
+
+        const segment1AvgResult = getAverageLiquidityForBlockInterval(DATA_DIR, tokenConf.symbol, pivot,  startBlock, endBlock);
+        const segment2AvgResult = getAverageLiquidityForBlockInterval(DATA_DIR, pivot, 'USDC',  startBlock, endBlock);
+        const aggregVolume = computeAggregatedVolumeFromPivot(segment1AvgResult.slippageMapAvg, segment1AvgResult.averagePrice, segment2AvgResult.slippageMapAvg, TARGET_SLIPPAGE_BPS);
+        console.log(`adding aggreg volume ${aggregVolume} from route ${tokenConf.symbol}->${pivot}->USDC for slippage ${TARGET_SLIPPAGE_BPS} bps`);
+        avgLiquidityForTargetSlippage += aggregVolume;
+        console.log(`new aggreg volume for ${tokenConf.symbol}->USDC: ${avgLiquidityForTargetSlippage} for slippage ${TARGET_SLIPPAGE_BPS} bps`);
+    }
 
     // change the computed avg value to a BigNumber 
     // first round to 6 decimals: 6 being the minimum decimals for all the known tokens
@@ -114,6 +129,7 @@ async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
     console.log(`${fnName()}[${tokenConf.symbol}]: roundedLiquidity: ${roundedLiquidity}`);
     const liquidityInWei = (new BigNumber(roundedLiquidity)).times((new BigNumber(10)).pow(tokenConf.decimals));
     console.log(`${fnName()}[${tokenConf.symbol}]: liquidityInWei: ${liquidityInWei.toString(10)}`);
+
 
     // return the computed value
     return {
