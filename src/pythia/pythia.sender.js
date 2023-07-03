@@ -41,16 +41,18 @@ async function SendToPythia(daysToAvg) {
 
         try {
             console.log(`Starting pythia sender, will average data since ${daysToAvg} days ago`);
-            
+
             // reset cache
             slippageCache = {};
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
             const signer = new ethers.Wallet(process.env.ETH_PRIVATE_KEY, new ethers.providers.StaticJsonRpcProvider(process.env.PYTHIA_RPC_URL));
             const pythiaContract = new Contract(pythiaConfig.pythiaAddress, pythiaConfig.pythiaAbi, signer);
+            const keyEncoderContract = new Contract(pythiaConfig.keyEncoderAddress, pythiaConfig.keyEncoderAbi, signer);
 
             const allAssets = [];
             const allKeys = [];
             const allValues = [];
+            const allUpdateTimes = [];
             
             // find block for 'daysToAvg' days ago
             const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now()/1000) - (daysToAvg * 24 * 60 * 60));
@@ -58,20 +60,27 @@ async function SendToPythia(daysToAvg) {
             /*library.externalFunction(param => this.doSomething(param));*/
             const endBlock = await retry((() => web3Provider.getBlockNumber()), []);
 
+            const USDCConf = getConfTokenBySymbol('USDC');
+
             for(const tokenSymbol of pythiaConfig.tokensToPush) {
                 // get config 
                 const tokenConf = getConfTokenBySymbol(tokenSymbol);
                 console.log(`${fnName()}[${tokenSymbol}]: start working on token ${tokenConf.symbol} with address ${tokenConf.address}`);
                 
+                console.log(`calling keyEncoderContract.encodeLiquidityKey(${tokenConf.address}, ${USDCConf.address}, ${2}, ${(TARGET_SLIPPAGE_BPS/100)}, ${daysToAvg})`);
+                const key = await retry(keyEncoderContract.encodeLiquidityKey, [tokenConf.address, USDCConf.address, 2, (TARGET_SLIPPAGE_BPS/100), daysToAvg]);
                 const dataToSend = await getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock);
+                
+                // get the key from the key encoder contract
                 console.log(`${fnName()}[${tokenSymbol}]: data to send:`, dataToSend);
                 allAssets.push(dataToSend.asset);
-                allKeys.push(dataToSend.key);
+                allKeys.push(key);
                 allValues.push(dataToSend.value);
+                allUpdateTimes.push(dataToSend.updateTime);
             }
 
             const gas = pythiaConfig.tokensToPush.length * 12500;
-            await retry(pythiaContract.multiSet, [allAssets, allKeys, allValues, {gasLimit: gas}]);
+            await retry(pythiaContract.multiSet, [allAssets, allKeys, allValues, allUpdateTimes, {gasLimit: gas}]);
 
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({
@@ -150,8 +159,8 @@ async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
     // return the computed value
     return {
         asset: tokenConf.address,
-        key: utils.keccak256(utils.toUtf8Bytes(`avg ${daysToAvg} days uni v3 liquidity`)),
-        value: ethers.BigNumber.from(liquidityInWei.toString(10))
+        value: ethers.BigNumber.from(liquidityInWei.toString(10)),
+        updateTime: Math.round(Date.now()/1000), // timestamp in sec
     };
 }
 
