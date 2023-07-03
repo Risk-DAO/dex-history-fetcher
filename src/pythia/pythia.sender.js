@@ -13,7 +13,7 @@ const { computeAggregatedVolumeFromPivot } = require('../utils/aggregator');
 const DATA_DIR = process.cwd() + '/data';
 const TARGET_SLIPPAGE_BPS = 500;
 const MONITORING_NAME = 'Pythia Sender';
-
+let slippageCache = {};
 async function SendToPythia(daysToAvg) {
 
     if(!process.env.ETH_PRIVATE_KEY) {
@@ -40,6 +40,10 @@ async function SendToPythia(daysToAvg) {
         });
 
         try {
+            console.log(`Starting pythia sender, will average data since ${daysToAvg} days ago`);
+            
+            // reset cache
+            slippageCache = {};
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
             const signer = new ethers.Wallet(process.env.ETH_PRIVATE_KEY, new ethers.providers.StaticJsonRpcProvider(process.env.PYTHIA_RPC_URL));
             const pythiaContract = new Contract(pythiaConfig.pythiaAddress, pythiaConfig.pythiaAbi, signer);
@@ -88,12 +92,16 @@ async function SendToPythia(daysToAvg) {
         }
 
         const sleepTime = 60 * 60 * 1000 - (Date.now() - start);
+        
+        // reset cache
+        slippageCache = {};
         if(sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
             await sleep(sleepTime);
         }
     }
 }
+
 
 
 /**
@@ -105,7 +113,7 @@ async function SendToPythia(daysToAvg) {
  */
 async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
     console.log(`${fnName()}[${tokenConf.symbol}]: start finding data for ${TARGET_SLIPPAGE_BPS}bps slippage since block ${startBlock}`);
-    const avgResult = getAverageLiquidityForBlockInterval(DATA_DIR, tokenConf.symbol, 'USDC',  startBlock, endBlock);
+    const avgResult = getCachedAverageLiquidityForBlockInterval(DATA_DIR, tokenConf.symbol, 'USDC',  startBlock, endBlock);
     let avgLiquidityForTargetSlippage = avgResult.slippageMapAvg[TARGET_SLIPPAGE_BPS];
     console.log(`${fnName()}[${tokenConf.symbol}]: Computed average liquidity for ${TARGET_SLIPPAGE_BPS}bps slippage: ${avgLiquidityForTargetSlippage}`);
     
@@ -115,8 +123,16 @@ async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
             continue;
         }
 
-        const segment1AvgResult = getAverageLiquidityForBlockInterval(DATA_DIR, tokenConf.symbol, pivot,  startBlock, endBlock);
-        const segment2AvgResult = getAverageLiquidityForBlockInterval(DATA_DIR, pivot, 'USDC',  startBlock, endBlock);
+        const segment1AvgResult = getCachedAverageLiquidityForBlockInterval(DATA_DIR, tokenConf.symbol, pivot,  startBlock, endBlock);
+        if(!segment1AvgResult) {
+            console.log(`Could not find data for ${tokenConf.symbol}->${pivot}`);
+            continue;
+        }
+        const segment2AvgResult = getCachedAverageLiquidityForBlockInterval(DATA_DIR, pivot, 'USDC',  startBlock, endBlock);
+        if(!segment2AvgResult) {
+            console.log(`Could not find data for ${pivot}->USDC`);
+            continue;
+        }
         const aggregVolume = computeAggregatedVolumeFromPivot(segment1AvgResult.slippageMapAvg, segment1AvgResult.averagePrice, segment2AvgResult.slippageMapAvg, TARGET_SLIPPAGE_BPS);
         console.log(`adding aggreg volume ${aggregVolume} from route ${tokenConf.symbol}->${pivot}->USDC for slippage ${TARGET_SLIPPAGE_BPS} bps`);
         avgLiquidityForTargetSlippage += aggregVolume;
@@ -137,6 +153,22 @@ async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
         key: utils.keccak256(utils.toUtf8Bytes(`avg ${daysToAvg} days uni v3 liquidity`)),
         value: ethers.BigNumber.from(liquidityInWei.toString(10))
     };
+}
+
+function getCachedAverageLiquidityForBlockInterval(DATA_DIR, base, quote,  startBlock, endBlock) {
+
+    if(!slippageCache[base]) {
+        slippageCache[base] = {};
+    }
+
+    if(!slippageCache[base][quote]){
+        console.log(`loading ${base}->${quote} from files`);
+        slippageCache[base][quote] = getAverageLiquidityForBlockInterval(DATA_DIR, base, quote,  startBlock, endBlock);
+    } else {
+        console.log(`using cache for ${base}->${quote}`);
+    }
+
+    return slippageCache[base][quote];
 }
 
 async function PythiaSender() {
