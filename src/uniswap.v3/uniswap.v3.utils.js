@@ -817,7 +817,7 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
  * @param {string} fromSymbol 
  * @param {string} toSymbol 
  * @param {number} sinceBlock 
- * @returns {Promise<{[targetBlock: number]: {blockNumber: number, price: number, slippageMap: {[slippagePct: number]: number}}}>}
+ * @returns {Promise<{[targetBlock: number]: {blockNumber: number, averagePrice: number, slippageMapAvg: {[slippagePct: number]: number}}}>}
  */
 // function getUniV3DataSinceBlock(dataDir, fromSymbol, toSymbol, sinceBlock) {
 //     // console.log(`${fnName()}: Searching for ${fromSymbol}/${toSymbol}`);
