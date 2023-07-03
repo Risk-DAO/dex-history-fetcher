@@ -12,6 +12,7 @@ const tokensToPush = [
     "sUSD",
     "UNI",
     "USDT",
+    "WBTC"
 ]
 
 module.exports = { pythiaAbi, tokensToPush, pythiaAddress };
