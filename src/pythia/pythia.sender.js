@@ -83,7 +83,6 @@ async function SendToPythia(daysToAvg) {
             const txResponse = await retry(pythiaContract.multiSet, [allAssets, allKeys, allValues, allUpdateTimes, {gasLimit: gas}]);
 
             let txFinished = false;
-            await sleep(5000);
             while(!txFinished) {
                 const txReceipt = await pythiaProvider.getTransactionReceipt(txResponse.hash);
                 if (txReceipt && txReceipt.blockNumber) {
