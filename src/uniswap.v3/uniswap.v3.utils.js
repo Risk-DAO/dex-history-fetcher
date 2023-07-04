@@ -913,12 +913,12 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
 
 
 function getAverageLiquidityForBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock) {
-    
-
     const allData = getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock);
     const allDataKeys = Object.keys(allData);
     console.log(`${fnName()}[${fromSymbol}/${toSymbol}]: found ${allDataKeys.length} data since block ${sinceBlock}`);
-
+    if(allDataKeys.length == 0) {
+        return null;
+    }
     // compute average liquidity
     let sumPrices = 0;
     let dataToUse = allData[allDataKeys[0]];
