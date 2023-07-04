@@ -1,4 +1,4 @@
-const { ethers, utils, Contract } = require('ethers');
+const { ethers, Contract } = require('ethers');
 const BigNumber = require('bignumber.js');
 const pythiaConfig = require('./pythia.config');
 const dotenv = require('dotenv');
@@ -15,7 +15,6 @@ const TARGET_SLIPPAGE_BPS = 500;
 const MONITORING_NAME = 'Pythia Sender';
 let slippageCache = {};
 async function SendToPythia(daysToAvg) {
-
     if(!process.env.ETH_PRIVATE_KEY) {
         console.log('Could not find ETH_PRIVATE_KEY env variable');
     }
@@ -45,7 +44,8 @@ async function SendToPythia(daysToAvg) {
             // reset cache
             slippageCache = {};
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
-            const signer = new ethers.Wallet(process.env.ETH_PRIVATE_KEY, new ethers.providers.StaticJsonRpcProvider(process.env.PYTHIA_RPC_URL));
+            const pythiaProvider = new ethers.providers.StaticJsonRpcProvider(process.env.PYTHIA_RPC_URL);
+            const signer = new ethers.Wallet(process.env.ETH_PRIVATE_KEY, pythiaProvider);
             const pythiaContract = new Contract(pythiaConfig.pythiaAddress, pythiaConfig.pythiaAbi, signer);
             const keyEncoderContract = new Contract(pythiaConfig.keyEncoderAddress, pythiaConfig.keyEncoderAbi, signer);
 
@@ -79,8 +79,21 @@ async function SendToPythia(daysToAvg) {
                 allUpdateTimes.push(dataToSend.updateTime);
             }
 
-            const gas = pythiaConfig.tokensToPush.length * 12500;
-            await retry(pythiaContract.multiSet, [allAssets, allKeys, allValues, allUpdateTimes, {gasLimit: gas}]);
+            const gas = pythiaConfig.tokensToPush.length * 30000;
+            const txResponse = await retry(pythiaContract.multiSet, [allAssets, allKeys, allValues, allUpdateTimes, {gasLimit: gas}]);
+
+            let txFinished = false;
+            await sleep(5000);
+            while(!txFinished) {
+                const txReceipt = await pythiaProvider.getTransactionReceipt(txResponse.hash);
+                if (txReceipt && txReceipt.blockNumber) {
+                    console.log(`transaction has been mined in block ${txReceipt.blockNumber}`);
+                    txFinished = true;
+                } else {
+                    console.log(`waiting for transaction ${txResponse.hash} to be mined`);
+                    await sleep(5000);
+                }
+            }
 
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({
