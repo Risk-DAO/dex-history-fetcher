@@ -15,7 +15,7 @@ const DATA_DIR = process.cwd() + '/data';
 // getprecomputeddata?platform=uniswapv2&span=1
 app.get('/api/getprecomputeddata', async (req, res, next) => {
     try {
-        console.log('received getprecomputeddata request', req);
+        // console.log('received getprecomputeddata request', req);
         const platform = req.query.platform;
         const span = Number(req.query.span);
 
@@ -44,7 +44,7 @@ app.get('/api/getprecomputeddata', async (req, res, next) => {
 // getprecomputeddata?platform=uniswapv2&span=1
 app.get('/api/getaveragedata', async (req, res, next) => {
     try {
-        console.log('received getaveragedata request', req);
+        // console.log('received getaveragedata request', req);
         const platform = req.query.platform;
         const span = Number(req.query.span);
 
@@ -81,7 +81,7 @@ app.get('/api/available', (req, res) => {
 // getprice?platform=uniswapv2&from=ETH&to=USDC&timestamp=1658171864&poolName=3pool
 app.get('/api/getprice', async (req, res, next) => {
     try {
-        console.log('received getprice request', req);
+        // console.log('received getprice request', req);
         const platform = req.query.platform;
         const from = req.query.from;
         const to = req.query.to;
@@ -100,15 +100,15 @@ app.get('/api/getprice', async (req, res, next) => {
                 res.json(await getUniswapPriceAndLiquidity(DATA_DIR, from, to, blockNumber));
                 break;
             case 'curve':
-                {
-                    const poolName = req.query.poolName;
-                    if (!poolName) {
-                        res.status(400).json({ error: 'poolName required for curve' });
-                        next();
-                    }
-                    res.json(await getCurvePriceAndLiquidity(DATA_DIR, poolName, from, to, blockNumber));
-                    break;
+            {
+                const poolName = req.query.poolName;
+                if (!poolName) {
+                    res.status(400).json({ error: 'poolName required for curve' });
+                    next();
                 }
+                res.json(await getCurvePriceAndLiquidity(DATA_DIR, poolName, from, to, blockNumber));
+                break;
+            }
             default:
                 res.status(400).json({ error: `Wrong platform: ${platform}` });
                 break;
@@ -121,7 +121,7 @@ app.get('/api/getprice', async (req, res, next) => {
 // getprice?platform=uniswapv2&from=ETH&to=USDC&fromTimestamp=10008555&toTimestamp=11000000
 app.get('/api/getaverageprice', async (req, res, next) => {
     try {
-        console.log('received getaverageprice request', req);
+        // console.log('received getaverageprice request', req);
         const platform = req.query.platform;
         const from = req.query.from;
         const to = req.query.to;
