@@ -911,6 +911,39 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
 //     return results;
 // }
 
+function getUniv3PricesForBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock) { 
+    console.log(`${fnName()}: Searching for ${fromSymbol}/${toSymbol}`);
+    
+    const results = {};
+
+    const {selectedFiles, reverse} = getUniV3DataFiles(dataDir, fromSymbol, toSymbol);
+
+    if(selectedFiles.length == 0) {
+        console.log(`Could not find univ3 files for ${fromSymbol}/${toSymbol}`);
+        return results;
+    }
+
+    const dataContents = getUniV3DataContents(selectedFiles, dataDir, sinceBlock);
+    // select base file = the file with the most lines
+    let primaryFile = selectedFiles[0];
+    for(let i = 1; i < selectedFiles.length; i++) {
+        const selectedFile = selectedFiles[i];
+        if(Object.keys(dataContents[primaryFile]).length < Object.keys(dataContents[selectedFile]).length) {
+            primaryFile = selectedFile;
+        }
+    }
+
+    console.log(`selected file: ${primaryFile} with ${Object.keys(dataContents[primaryFile]).length} values`);
+
+    const result = {};
+
+    for(const [blockNum, data] of Object.entries(dataContents[primaryFile])) {
+        const price = reverse ? data.p1vs0 : data.p0vs1;
+        result[blockNum] = price;
+    }
+
+    return result;
+}
 
 function getAverageLiquidityForBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock) {
     const allData = getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock);
@@ -1011,7 +1044,7 @@ function getUniV3DataContents(selectedFiles, dataDir, minBlock=0) {
 
 module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, 
     generateConfigFromBaseAndQuote, getAvailableUniswapV3, getUniV3DataFiles, getUniV3DataforBlockRange,
-    getUniV3DataContents, getAverageLiquidityForBlockInterval };
+    getUniV3DataContents, getAverageLiquidityForBlockInterval, getUniv3PricesForBlockInterval };
 
 // getUniV3DataforBlockRange('./data', 'UNI', 'USDC', [])
 
