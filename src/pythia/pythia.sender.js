@@ -7,13 +7,13 @@ const { getConfTokenBySymbol } = require('../utils/token.utils');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { RecordMonitoring } = require('../utils/monitoring');
-const { getAverageLiquidityForBlockInterval, getUniV3DataforBlockRange, getUniv3PricesForBlockInterval } = require('../uniswap.v3/uniswap.v3.utils');
+const { getAverageLiquidityForBlockInterval, getUniv3PricesForBlockInterval } = require('../uniswap.v3/uniswap.v3.utils');
 const { computeAggregatedVolumeFromPivot } = require('../utils/aggregator');
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
 const DATA_DIR = process.cwd() + '/data';
 const TARGET_SLIPPAGE_BPS = 500;
-const BLOCK_PER_DAY = 7200; // considering blocktime of 12 seconds
+// const BLOCK_PER_DAY = 7100; // considering blocktime of 12 seconds
 const MONITORING_NAME = 'Pythia Sender';
 let slippageCache = {};
 async function SendToPythia(daysToAvg) {
@@ -45,11 +45,10 @@ async function SendToPythia(daysToAvg) {
             // find block for 'daysToAvg' days ago
             const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (daysToAvg * 24 * 60 * 60));
             console.log(`${fnName()}: Will avg liquidity since block ${startBlock}`);
-            /*library.externalFunction(param => this.doSomething(param));*/
             const endBlock = await retry((() => web3Provider.getBlockNumber()), []);
 
 
-            // await SendLiquidityData(daysToAvg, startBlock, endBlock);
+            await SendLiquidityData(daysToAvg, startBlock, endBlock);
             await SendVolatilityData(daysToAvg, startBlock, endBlock);
 
             const runEndDate = Math.round(Date.now() / 1000);
@@ -135,7 +134,7 @@ async function SendLiquidityData(daysToAvg, startBlock, endBlock) {
 
 
 async function SendVolatilityData(daysToAvg, startBlock, endBlock) {
-    console.log(`Starting volatility pythia sender, will compute parkinson's volatility since ${daysToAvg} day ago with T = ${BLOCK_PER_DAY} blocks`);
+    console.log(`Starting volatility pythia sender, will compute parkinson's volatility since ${daysToAvg} day ago`);
     const pythiaProvider = new ethers.providers.StaticJsonRpcProvider(process.env.PYTHIA_RPC_URL);
     const signer = new ethers.Wallet(process.env.ETH_PRIVATE_KEY, pythiaProvider);
     const pythiaContract = new Contract(pythiaConfig.pythiaAddress, pythiaConfig.pythiaAbi, signer);
@@ -216,18 +215,15 @@ async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
         console.log(`new aggreg volume for ${tokenConf.symbol}->USDC: ${avgLiquidityForTargetSlippage} for slippage ${TARGET_SLIPPAGE_BPS} bps`);
     }
 
-    // change the computed avg value to a BigNumber 
-    // first round to 6 decimals: 6 being the minimum decimals for all the known tokens
-    const roundedLiquidity = roundTo(avgLiquidityForTargetSlippage, 6);
-    console.log(`${fnName()}[${tokenConf.symbol}]: roundedLiquidity: ${roundedLiquidity}`);
-    const liquidityInWei = (new BigNumber(roundedLiquidity)).times((new BigNumber(10)).pow(tokenConf.decimals));
-    console.log(`${fnName()}[${tokenConf.symbol}]: liquidityInWei: ${liquidityInWei.toString(10)}`);
+    // change the computed avg value to a BigNumber with 18 decimals
+    const liquidityInWei = new BigNumber(avgLiquidityForTargetSlippage).times(CONSTANT_1e18).toFixed(0);
+    console.log(`${fnName()}[${tokenConf.symbol}]: liquidityInWei: ${liquidityInWei}`);
 
 
     // return the computed value
     return {
         asset: tokenConf.address,
-        value: ethers.BigNumber.from(liquidityInWei.toString(10)),
+        value: ethers.BigNumber.from(liquidityInWei),
         updateTime: Math.round(Date.now()/1000), // timestamp in sec
     };
 }
@@ -236,25 +232,34 @@ async function getUniv3ParkinsonVolatility(tokenConf, daysToAvg, startBlock, end
     const dataForRange = await getUniv3PricesForBlockInterval(DATA_DIR, tokenConf.symbol, 'USDC', startBlock, endBlock);
     // console.log(dataForRange);
     const blockNumbers = Object.keys(dataForRange);
-    let lastPrice = dataForRange[blockNumbers[0]];
+    let lastPriceHigh = dataForRange[blockNumbers[0]];
+    let lastPriceLow = dataForRange[blockNumbers[0]];
     const rangeValues = [];
+    const avgBlockPerDay = Math.round((endBlock - startBlock)/daysToAvg);
+    console.log(`avgBlockPerDay: ${avgBlockPerDay}`);
     for(let T = 0; T < daysToAvg; T++) {
-        const blockStart = T * BLOCK_PER_DAY + startBlock;
-        const blockEnd = blockStart + BLOCK_PER_DAY;
+        const blockStart = T * avgBlockPerDay + startBlock;
+        const blockEnd = Math.min(blockStart + avgBlockPerDay, endBlock);
         const blocksInRange = blockNumbers.filter(_ => _ >= blockStart && _ < blockEnd);
         // console.log(`# prices in range [${blockStart} - ${blockEnd}]: ${blocksInRange.length}`);
-        let highPrice = lastPrice;
-        let lowPrice = lastPrice;
-        for(const block of blocksInRange) {
-            const price = dataForRange[block];
-            if(highPrice < price) {
-                highPrice = price;
+        let highPrice = -1;
+        let lowPrice = Number.MAX_SAFE_INTEGER;
+        if(blocksInRange.length == 0) {
+            highPrice= lastPriceHigh;
+            lowPrice = lastPriceLow;
+        }
+        else {
+            for(const block of blocksInRange) {
+                const price = dataForRange[block];
+                if(highPrice < price) {
+                    highPrice = price;
+                    lastPriceHigh = price;
+                }
+                if(lowPrice > price) {
+                    lowPrice = price;
+                    lastPriceLow = price;
+                }
             }
-            if(lowPrice > price) {
-                lowPrice = price;
-            }
-
-            lastPrice = price;
         }
 
         if(highPrice < 0) {
@@ -273,7 +278,7 @@ async function getUniv3ParkinsonVolatility(tokenConf, daysToAvg, startBlock, end
         
     }
 
-    console.log(rangeValues);
+    // console.log(rangeValues);
     let sumOfLn = 0;
     
     for(let T = 0; T < daysToAvg; T++) { 
