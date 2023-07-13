@@ -6,6 +6,7 @@ const { tokens } = require('../global.config');
 const { BigNumber } = require('ethers');
 const path = require('path');
 const { fnName } = require('../utils/utils');
+const { computeParkinsonVolatility } = require('../utils/volatility');
 
 async function getUniswapAveragePriceAndLiquidity(dataDir, fromSymbol, toSymbol, fromBlock, toBlock) {
     const aggregatedLiquidity = await getUniV2AggregatedDataForBlockNumbers(dataDir, fromSymbol, toSymbol, fromBlock, toBlock);
@@ -408,6 +409,30 @@ function computeLiquidityUniV2Pool(fromReserve, toReserve, targetSlippage) {
     return amountOfFromToExchange;
 }
 
+function getUniv2PricesForBlockInterval(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock) {
+    const dataForRange = getUniV2DataforBlockInterval(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock);
+    const results = {};
+    for(const [blockNumber, data] of Object.entries(dataForRange)) {
+        if(blockNumber > endBlock) {
+            continue;
+        }
+
+        const price = computePriceForReserve(fromSymbol, toSymbol, data);
+        results[blockNumber] = price;
+    }
+
+    return results;
+}
+
+
+function computeUniv2ParkinsonVolatility(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock, daysToAvg) {
+    const dataForRange = getUniv2PricesForBlockInterval(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock);
+    // console.log(dataForRange);
+    return computeParkinsonVolatility(dataForRange, fromSymbol, toSymbol, startBlock, endBlock, daysToAvg);
+}
+
+// console.log('parkinson liquidity WETH/USDC:', computeUniv2ParkinsonVolatility('./data', 'WETH', 'USDC', 17469815, 17683325, 30));
+
 
 function getAvailableUniswapV2(dataDir) {
     const available = {};
@@ -432,4 +457,4 @@ function getAvailableUniswapV2(dataDir) {
 
 module.exports = { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, computeUniswapV2Price,
     getUniV2DataforBlockRange, computeLiquidityUniV2Pool, getAvailableUniswapV2, getUniV2DataFile,
-    getUniV2DataforBlockInterval, computePriceForReserve};
+    getUniV2DataforBlockInterval, computePriceForReserve, computeUniv2ParkinsonVolatility};

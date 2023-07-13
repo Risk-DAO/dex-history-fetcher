@@ -3,7 +3,7 @@ const { normalize, getConfTokenBySymbol } = require('../utils/token.utils');
 const { pairsToCompute } = require('./precomputer.config');
 const { fnName, logFnDuration } = require('../utils/utils');
 const path = require('path');
-const { getAvailableCurve, getCurveDataforBlockRange, getReservesNormalizedTo18Decimals, computeLiquidityForSlippageCurvePool, get_return } = require('../curve/curve.utils');
+const { getAvailableCurve, getCurveDataforBlockRange, getReservesNormalizedTo18Decimals, computeLiquidityForSlippageCurvePool, get_return, computeCurvePoolParkinsonVolatility } = require('../curve/curve.utils');
 
 
 const DATA_DIR = process.cwd() + '/data';
@@ -73,6 +73,7 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
     const volumeForSlippage = [];
     const startPrices = [];
     const endPrices = [];
+    let parkinsonLiquidityForPair = 0;
 
     for(const poolName of targetPools) {
         console.log(`${fnName()}: Start working on ${poolName}`);
@@ -132,7 +133,11 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
             volumeForSlippage.push(liquidity);
             lastBlockValue = blockValue;
         }
+
+        parkinsonLiquidityForPair += computeCurvePoolParkinsonVolatility(DATA_DIR, poolName, fromToken.symbol, toToken.symbol, blockRange[0], blockRange.at(-1), daysToFetch);
     }
+
+    parkinsonLiquidityForPair = parkinsonLiquidityForPair / targetPools.length;
 
     const aggregVolumeForSlippage = [];
     // here we must sum all the volumes for slippage
@@ -169,6 +174,8 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
         endPrice : endPrice,         
         volumeForSlippage : aggregVolumeForSlippage
     };
+
+    preComputedData.parkinsonVolatility = parkinsonLiquidityForPair;
 
     fs.writeFileSync(destFileName, JSON.stringify(preComputedData, null, 2));
 }

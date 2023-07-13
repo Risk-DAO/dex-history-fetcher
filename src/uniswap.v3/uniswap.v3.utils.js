@@ -6,6 +6,7 @@ const { roundTo, logFnDuration, fnName } = require('../utils/utils');
 const univ3Config = require('./uniswap.v3.config');
 const fs = require('fs');
 const path = require('path');
+const { computeParkinsonVolatility } = require('../utils/volatility');
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
 const CONSTANT_TARGET_SLIPPAGE = 20;
@@ -938,11 +939,21 @@ function getUniv3PricesForBlockInterval(dataDir, fromSymbol, toSymbol, sinceBloc
     const result = {};
 
     for(const [blockNum, data] of Object.entries(dataContents[primaryFile])) {
+        if(blockNum > toBlock) {
+            continue;
+        }
         const price = reverse ? data.p1vs0 : data.p0vs1;
         result[blockNum] = price;
     }
 
     return result;
+}
+
+
+function computeUniv3ParkinsonVolatility(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock, daysToAvg) {
+    const dataForRange = getUniv3PricesForBlockInterval(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock);
+    // console.log(dataForRange);
+    return computeParkinsonVolatility(dataForRange, fromSymbol, toSymbol, startBlock, endBlock, daysToAvg);
 }
 
 function getAverageLiquidityForBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock) {
@@ -1044,7 +1055,7 @@ function getUniV3DataContents(selectedFiles, dataDir, minBlock=0) {
 
 module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, 
     generateConfigFromBaseAndQuote, getAvailableUniswapV3, getUniV3DataFiles, getUniV3DataforBlockRange,
-    getUniV3DataContents, getAverageLiquidityForBlockInterval, getUniv3PricesForBlockInterval };
+    getUniV3DataContents, getAverageLiquidityForBlockInterval, getUniv3PricesForBlockInterval, computeUniv3ParkinsonVolatility };
 
 // getUniV3DataforBlockRange('./data', 'UNI', 'USDC', [])
 
