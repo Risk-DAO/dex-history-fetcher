@@ -13,10 +13,10 @@ const { computeAggregatedVolumeFromPivot } = require('../utils/aggregator');
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
 const DATA_DIR = process.cwd() + '/data';
 const TARGET_SLIPPAGE_BPS = 500;
-// const BLOCK_PER_DAY = 7100; // considering blocktime of 12 seconds
+const daysRange = [30]; //[1, 7, 30, 180, 365];
 const MONITORING_NAME = 'Pythia Sender';
 let slippageCache = {};
-async function SendToPythia(daysToAvg) {
+async function SendToPythia() {
     if(!process.env.ETH_PRIVATE_KEY) {
         console.log('Could not find ETH_PRIVATE_KEY env variable');
     }
@@ -42,14 +42,15 @@ async function SendToPythia(daysToAvg) {
             });
 
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
-            // find block for 'daysToAvg' days ago
-            const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (daysToAvg * 24 * 60 * 60));
-            console.log(`${fnName()}: Will avg liquidity since block ${startBlock}`);
             const endBlock = await retry((() => web3Provider.getBlockNumber()), []);
+            for(const daysToAvg of daysRange) {
+                // find block for 'daysToAvg' days ago
+                const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (daysToAvg * 24 * 60 * 60));
+                console.log(`${fnName()}: Will avg liquidity since block ${startBlock}`);
 
-
-            await SendLiquidityData(daysToAvg, startBlock, endBlock);
-            await SendVolatilityData(daysToAvg, startBlock, endBlock);
+                await SendVolatilityData(daysToAvg, startBlock, endBlock);
+                await SendLiquidityData(daysToAvg, startBlock, endBlock);
+            }
 
             const runEndDate = Math.round(Date.now() / 1000);
             await RecordMonitoring({
@@ -324,12 +325,12 @@ function getCachedAverageLiquidityForBlockInterval(DATA_DIR, base, quote,  start
 
 async function PythiaSender() {
     // number of days to avg is passed in the args
-    const daysToAvg = Number(process.argv[2]);
-    if(!daysToAvg) {
-        throw new Error('Need to have a valid number as first command argument for daysToAvg');
-    }
+    // const daysToAvg = Number(process.argv[2]);
+    // if(!daysToAvg) {
+    //     throw new Error('Need to have a valid number as first command argument for daysToAvg');
+    // }
 
-    await SendToPythia(daysToAvg);
+    await SendToPythia();
 }
 
 PythiaSender();
