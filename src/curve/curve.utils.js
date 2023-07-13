@@ -1,9 +1,11 @@
 
 const fs = require('fs');
 const readline = require('readline');
-const { normalize } = require('../utils/token.utils');
+const { normalize, getConfTokenBySymbol } = require('../utils/token.utils');
 const { tokens } = require('../global.config');
 const { BigNumber } = require('ethers');
+const { computeParkinsonVolatility } = require('../utils/volatility');
+const BIGINT_1e18 = (BigInt(10) ** BigInt(18));
 
 
 async function getCurvePriceAndLiquidity(dataDir, poolName, fromSymbol, toSymbol, targetBlockNumber) {
@@ -52,7 +54,6 @@ async function getCurvePriceAndLiquidity(dataDir, poolName, fromSymbol, toSymbol
     console.log('getCurvePriceAndLiquidity: duration for pool', poolName, ':', Date.now() - start);
     return result;
 }
-
 
 async function getCurveDataForBlockNumber(dataDir, poolName, targetBlockNumber) {
     const filePath = getCurveDataFile(dataDir, poolName);
@@ -148,6 +149,82 @@ async function getCurveDataForBlockNumber(dataDir, poolName, targetBlockNumber) 
 }
 
 
+function getCurveDataSinceBlock(dataDir, poolName, sinceBlock) {
+    const filePath = getCurveDataFile(dataDir, poolName);
+    if(!filePath) {
+        throw new Error(`Could not find pool data in ${dataDir}/curve/${poolName} for curve`);
+    }
+
+    const fileContent = fs.readFileSync(filePath, 'utf-8').split('\n');
+
+    let lastLine = undefined;
+    const poolTokens = [];
+    const results = {};
+
+    const headers = fileContent[0];
+
+    const splitted = headers.split(',');
+    for(let i = 3; i < splitted.length; i++) {
+        poolTokens.push(splitted[i].split('_')[1]);
+    }
+
+    for(let i = 1; i < fileContent.length - 1; i++) {
+        const line = fileContent[i];
+        const splitted = line.split(',');
+        const blockNumber = Number(splitted[0]);
+        if(blockNumber >= sinceBlock) {
+            if(blockNumber == sinceBlock) {
+                lastLine = '';
+            }
+
+            // save the last line if not undefined
+            if(lastLine) {
+                const lastLineSplitted = lastLine.split(',');
+                const lastLineBlockNumber = Number(lastLineSplitted[0]);
+                const lastLineAmplificationFactor = Number(lastLineSplitted[1]);
+                const lastLineLpTokenReserve = lastLineSplitted[2];
+                const lastLineReserves = [];
+                
+                for(let i = 3; i < lastLineSplitted.length; i++) {
+                    lastLineReserves.push(lastLineSplitted[i]);
+                }
+
+                results[lastLineBlockNumber] = {
+                    blockNumber: lastLineBlockNumber,
+                    lpTokenReserve: lastLineLpTokenReserve,
+                    ampFactor: lastLineAmplificationFactor,
+                    reserves: lastLineReserves
+                };
+
+                lastLine = undefined;
+            }
+
+            // save current value
+            const lineSplitted = line.split(',');
+            const ampFactor = Number(lineSplitted[1]);
+            const lpTokenReserves = lineSplitted[2];
+            const reserves = [];
+            
+            for(let i = 3; i < lineSplitted.length; i++) {
+                reserves.push(lineSplitted[i]);
+            }
+            results[blockNumber] = {
+                blockNumber: blockNumber,
+                lpTokenReserve: lpTokenReserves,
+                ampFactor: ampFactor,
+                reserves: reserves
+            };
+        } else {
+            // save last line if before sinceBlock
+            lastLine = line;
+        }
+    }
+
+    return {
+        tokens: poolTokens,
+        reserves: results,
+    };
+}
 
 function getCurveDataforBlockRange(dataDir, poolName, blockRange) {
     const filePath = getCurveDataFile(dataDir, poolName);
@@ -444,8 +521,43 @@ function getReservesNormalizedTo18Decimals(tokens, reserves) {
     return reservesNorm;
 }
 
+function getCurvePoolPricesForBlockInterval(DATA_DIR, poolName, fromSymbol, toSymbol, startBlock, endBlock) {
+    const dataForRange = getCurveDataSinceBlock(DATA_DIR, poolName, startBlock);
+    const results = {};
+    const tokens = [];
+    for (const token of dataForRange.tokens) {
+        tokens.push(getConfTokenBySymbol(token));
+    }
+    
+    const indexFrom = dataForRange.tokens.indexOf(fromSymbol);
+    const indexTo = dataForRange.tokens.indexOf(toSymbol);
+
+    for(const [blockNumber, data] of Object.entries(dataForRange.reserves)) {
+        if(blockNumber > endBlock) {
+            continue;
+        }
+
+        const reservesNorm18Dec = getReservesNormalizedTo18Decimals(tokens, data.reserves);
+        const returnVal = get_return(indexFrom, indexTo, BIGINT_1e18, reservesNorm18Dec, data.ampFactor);
+        const basePrice = normalize(returnVal.toString(), 18);
+        results[blockNumber] = basePrice;
+    }
+
+    return results;
+}
+
+function computeCurvePoolParkinsonVolatility(DATA_DIR, poolName, fromSymbol, toSymbol, startBlock, endBlock, daysToAvg) {
+    const dataForRange = getCurvePoolPricesForBlockInterval(DATA_DIR, poolName, fromSymbol, toSymbol, startBlock, endBlock);
+    // console.log(dataForRange);
+    
+    return computeParkinsonVolatility(dataForRange, fromSymbol, toSymbol, startBlock, endBlock, daysToAvg);
+}
+
+// console.log('curve parkinson liquidity DAI/USDC:', computeCurvePoolParkinsonVolatility('./data', '3Pool_3Crv', 'DAI', 'USDC', 17469815, 17683325, 30));
+
+
 module.exports = { getCurvePriceAndLiquidity, get_return, get_virtual_price, computeLiquidityForSlippageCurvePool, getAvailableCurve,
-    getCurveDataforBlockRange, getReservesNormalizedTo18Decimals };
+    getCurveDataforBlockRange, getReservesNormalizedTo18Decimals, computeCurvePoolParkinsonVolatility };
 
 // function test() {
 //     getCurvePriceAndLiquidity('./data', '3pool', 'DAI', 'USDC', 15487);

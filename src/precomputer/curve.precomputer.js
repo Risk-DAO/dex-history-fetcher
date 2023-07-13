@@ -73,6 +73,7 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
     const volumeForSlippage = [];
     const startPrices = [];
     const endPrices = [];
+    let parkinsonLiquidityForPair = 0;
 
     for(const poolName of targetPools) {
         console.log(`${fnName()}: Start working on ${poolName}`);
@@ -132,6 +133,8 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
             volumeForSlippage.push(liquidity);
             lastBlockValue = blockValue;
         }
+
+        parkinsonLiquidityForPair += computeCurvePoolParkinsonVolatility(DATA_DIR, poolName, fromToken.symbol, toToken.symbol, blockRange[0], blockRange.at(-1), daysToFetch);
     }
 
     const aggregVolumeForSlippage = [];
