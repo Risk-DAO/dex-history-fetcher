@@ -7,7 +7,7 @@ const { getConfTokenBySymbol } = require('../utils/token.utils');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { RecordMonitoring } = require('../utils/monitoring');
-const { getAverageLiquidityForBlockInterval, getUniv3PricesForBlockInterval, computeParkinsonVolatility } = require('../uniswap.v3/uniswap.v3.utils');
+const { getAverageLiquidityForBlockInterval, getUniv3PricesForBlockInterval, computeUniv3ParkinsonVolatility } = require('../uniswap.v3/uniswap.v3.utils');
 const { computeAggregatedVolumeFromPivot } = require('../utils/aggregator');
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
@@ -230,7 +230,7 @@ async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
 }
 
 function getUniv3ParkinsonVolatility(tokenConf, daysToAvg, startBlock, endBlock) {
-    const volatilityParkinson = computeParkinsonVolatility(DATA_DIR, tokenConf.symbol, 'USDC', startBlock, endBlock, daysToAvg);
+    const volatilityParkinson = computeUniv3ParkinsonVolatility(DATA_DIR, tokenConf.symbol, 'USDC', startBlock, endBlock, daysToAvg);
     console.log(volatilityParkinson);
     // transform to 1e18
     const volatilityParkinsonWei = new BigNumber(volatilityParkinson).times(CONSTANT_1e18).toFixed(0);

@@ -408,6 +408,93 @@ function computeLiquidityUniV2Pool(fromReserve, toReserve, targetSlippage) {
     return amountOfFromToExchange;
 }
 
+function getUniv2PricesForBlockInterval(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock) {
+    const dataForRange = getUniV2DataforBlockInterval(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock);
+    const results = {};
+    for(const [blockNumber, data] of Object.entries(dataForRange)) {
+        if(blockNumber > endBlock) {
+            continue;
+        }
+
+        const price = computePriceForReserve(fromSymbol, toSymbol, data);
+        results[blockNumber] = price;
+    }
+
+    return results;
+}
+
+
+function computeUniv2ParkinsonVolatility(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock, daysToAvg) {
+    const dataForRange = getUniv2PricesForBlockInterval(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock);
+    // console.log(dataForRange);
+    const blockNumbers = Object.keys(dataForRange);
+    let lastPriceHigh = dataForRange[blockNumbers[0]];
+    let lastPriceLow = dataForRange[blockNumbers[0]];
+    const rangeValues = [];
+    const avgBlockPerDay = Math.round((endBlock - startBlock) / daysToAvg);
+    console.log(`avgBlockPerDay: ${avgBlockPerDay}`);
+    for (let T = 0; T < daysToAvg; T++) {
+        const blockStart = T * avgBlockPerDay + startBlock;
+        const blockEnd = Math.min(blockStart + avgBlockPerDay, endBlock);
+        const blocksInRange = blockNumbers.filter(_ => _ >= blockStart && _ < blockEnd);
+        // console.log(`# prices in range [${blockStart} - ${blockEnd}]: ${blocksInRange.length}`);
+        let highPrice = -1;
+        let lowPrice = Number.MAX_SAFE_INTEGER;
+        if (blocksInRange.length == 0) {
+            highPrice = lastPriceHigh;
+            lowPrice = lastPriceLow;
+        }
+        else {
+            for (const block of blocksInRange) {
+                const price = dataForRange[block];
+                if (highPrice < price) {
+                    highPrice = price;
+                    lastPriceHigh = price;
+                }
+                if (lowPrice > price) {
+                    lowPrice = price;
+                    lastPriceLow = price;
+                }
+            }
+        }
+
+        if (highPrice < 0) {
+            console.log(`Could not find prices for range [${blockStart} - ${blockEnd}]. Will use last value`);
+            if (rangeValues.length == 0) {
+                throw new Error(`Could not find even the first value for ${fromSymbol}/${toSymbol}`);
+            } else {
+                const lastValue = rangeValues.at(-1);
+                highPrice = lastValue.high;
+                lowPrice = lastValue.low;
+            }
+        }
+
+        console.log(`For range [${blockStart} - ${blockEnd}]: low: ${lowPrice} <> high: ${highPrice}. Data #: ${blocksInRange.length}`);
+        rangeValues.push({ low: lowPrice, high: highPrice });
+
+    }
+
+    // console.log(rangeValues);
+    let sumOfLn = 0;
+
+    for (let T = 0; T < daysToAvg; T++) {
+        const valuesForRange = rangeValues[T];
+        const htltRatio = valuesForRange.high / valuesForRange.low;
+        const htltRatioSquare = htltRatio * htltRatio;
+        const lnHtltRatioSquare = Math.log(htltRatioSquare);
+        sumOfLn += lnHtltRatioSquare;
+    }
+
+    const prefix = 1 / ((4 * daysToAvg) * Math.log(2));
+
+    const insideSqrt = prefix * sumOfLn;
+
+    const volatilityParkinson = Math.sqrt(insideSqrt);
+    return volatilityParkinson;
+}
+
+console.log('parkinson liquidity WETH/USDC:', computeUniv2ParkinsonVolatility('./data', 'WETH', 'USDC', 17469815, 17683325, 30));
+
 
 function getAvailableUniswapV2(dataDir) {
     const available = {};
@@ -432,4 +519,4 @@ function getAvailableUniswapV2(dataDir) {
 
 module.exports = { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, computeUniswapV2Price,
     getUniV2DataforBlockRange, computeLiquidityUniV2Pool, getAvailableUniswapV2, getUniV2DataFile,
-    getUniV2DataforBlockInterval, computePriceForReserve};
+    getUniV2DataforBlockInterval, computePriceForReserve, computeUniv2ParkinsonVolatility};

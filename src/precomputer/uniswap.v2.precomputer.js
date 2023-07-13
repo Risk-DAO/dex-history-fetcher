@@ -1,6 +1,6 @@
 const fs = require('fs');
 const { normalize, getConfTokenBySymbol } = require('../utils/token.utils');
-const { getAvailableUniswapV2, getUniV2DataforBlockRange, computeLiquidityUniV2Pool, computeUniswapV2Price } = require('../uniswap.v2/uniswap.v2.utils');
+const { getAvailableUniswapV2, getUniV2DataforBlockRange, computeLiquidityUniV2Pool, computeUniswapV2Price, computeUniv2ParkinsonVolatility } = require('../uniswap.v2/uniswap.v2.utils');
 const { pairsToCompute } = require('./precomputer.config');
 const { fnName, logFnDuration } = require('../utils/utils');
 const path = require('path');
@@ -125,7 +125,7 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
         volumeForSlippage : volumeForSlippage
     };
 
-    preComputedData.parkinsonVolatility = 0;
+    preComputedData.parkinsonVolatility = computeUniv2ParkinsonVolatility(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange[0], blockRange.at(-1), daysToFetch);
 
     fs.writeFileSync(destFileName, JSON.stringify(preComputedData, null, 2));
 }

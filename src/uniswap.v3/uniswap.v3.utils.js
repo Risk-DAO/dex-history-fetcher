@@ -949,7 +949,7 @@ function getUniv3PricesForBlockInterval(dataDir, fromSymbol, toSymbol, sinceBloc
 }
 
 
-function computeParkinsonVolatility(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock, daysToAvg) {
+function computeUniv3ParkinsonVolatility(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock, daysToAvg) {
     const dataForRange = getUniv3PricesForBlockInterval(DATA_DIR, fromSymbol, toSymbol, startBlock, endBlock);
     // console.log(dataForRange);
     const blockNumbers = Object.keys(dataForRange);
@@ -1117,7 +1117,7 @@ function getUniV3DataContents(selectedFiles, dataDir, minBlock=0) {
 
 module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, 
     generateConfigFromBaseAndQuote, getAvailableUniswapV3, getUniV3DataFiles, getUniV3DataforBlockRange,
-    getUniV3DataContents, getAverageLiquidityForBlockInterval, getUniv3PricesForBlockInterval, computeParkinsonVolatility };
+    getUniV3DataContents, getAverageLiquidityForBlockInterval, getUniv3PricesForBlockInterval, computeUniv3ParkinsonVolatility };
 
 // getUniV3DataforBlockRange('./data', 'UNI', 'USDC', [])
 

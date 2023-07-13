@@ -3,7 +3,7 @@ const { getConfTokenBySymbol } = require('../utils/token.utils');
 const { pairsToCompute } = require('./precomputer.config');
 const { fnName, logFnDuration } = require('../utils/utils');
 const path = require('path');
-const { getAvailableUniswapV3, getUniV3DataforBlockRange, computeParkinsonVolatility } = require('../uniswap.v3/uniswap.v3.utils');
+const { getAvailableUniswapV3, getUniV3DataforBlockRange, computeUniv3ParkinsonVolatility } = require('../uniswap.v3/uniswap.v3.utils');
 const { computeAggregatedVolumeFromPivot } = require('../utils/aggregator');
 
 
@@ -124,7 +124,7 @@ function precomputeDataForPair(univ3PrecomputedDir, daysToFetch, blockRange, tar
 
     preComputedData.volumeForSlippage = volumeForSlippage;
 
-    preComputedData.parkinsonVolatility = computeParkinsonVolatility(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange[0], blockRange.at(-1), daysToFetch);
+    preComputedData.parkinsonVolatility = computeUniv3ParkinsonVolatility(DATA_DIR, fromToken.symbol, toToken.symbol, blockRange[0], blockRange.at(-1), daysToFetch);
     console.log(preComputedData.parkinsonVolatility);
 
     fs.writeFileSync(destFileName, JSON.stringify(preComputedData, null, 2));
