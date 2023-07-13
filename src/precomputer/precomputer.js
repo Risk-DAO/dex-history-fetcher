@@ -56,9 +56,9 @@ async function precomputeData(daysToFetch, fetchEveryMinutes) {
                 }
 
                 const blockToPush = startBlock + i*blockStep;
-                // const blockTimestampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockToPush}`);
-                // blockTimeStamps[blockToPush] = blockTimestampResp.data.timestamp;
-                blockTimeStamps[blockToPush] = Date.now();
+                const blockTimestampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockToPush}`);
+                blockTimeStamps[blockToPush] = blockTimestampResp.data.timestamp;
+                // blockTimeStamps[blockToPush] = Date.now();
                 blockRange.push(blockToPush);
             }
         
