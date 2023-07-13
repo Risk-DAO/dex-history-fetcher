@@ -73,6 +73,7 @@ function computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, startBlo
     const insideSqrt = prefix * sumOfLn;
 
     const volatilityParkinson = Math.sqrt(insideSqrt);
+    console.log(`parkinson volatility for ${fromSymbol}/${toSymbol} for the last ${daysToAvg} days: ${volatilityParkinson}`);
     return volatilityParkinson;
 }
 
