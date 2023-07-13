@@ -155,7 +155,7 @@ async function SendVolatilityData(daysToAvg, startBlock, endBlock) {
 
         console.log(`calling keyEncoderContract.encodeVolatilityKey(${tokenConf.address}, ${USDCConf.address}, ${0}, ${daysToAvg})`);
         const key = await retry(keyEncoderContract.encodeVolatilityKey, [tokenConf.address, USDCConf.address, 0, daysToAvg]);
-        const dataToSend = await getUniv3ParkinsonVolatility(tokenConf, daysToAvg, startBlock, endBlock);
+        const dataToSend = getUniv3ParkinsonVolatility(tokenConf, daysToAvg, startBlock, endBlock);
 
         // get the key from the key encoder contract
         console.log(`${fnName()}[${tokenSymbol}]: data to send:`, dataToSend);
@@ -229,8 +229,8 @@ async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
     };
 }
 
-async function getUniv3ParkinsonVolatility(tokenConf, daysToAvg, startBlock, endBlock) {
-    const volatilityParkinson = await computeParkinsonVolatility(DATA_DIR, tokenConf.symbol, 'USDC', startBlock, endBlock, daysToAvg);
+function getUniv3ParkinsonVolatility(tokenConf, daysToAvg, startBlock, endBlock) {
+    const volatilityParkinson = computeParkinsonVolatility(DATA_DIR, tokenConf.symbol, 'USDC', startBlock, endBlock, daysToAvg);
     console.log(volatilityParkinson);
     // transform to 1e18
     const volatilityParkinsonWei = new BigNumber(volatilityParkinson).times(CONSTANT_1e18).toFixed(0);
