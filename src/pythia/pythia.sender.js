@@ -14,6 +14,8 @@ const CONSTANT_1e18 = new BigNumber(10).pow(18);
 const DATA_DIR = process.cwd() + '/data';
 const TARGETS_SLIPPAGE_BPS = [100, 500, 1000, 1500, 2000];
 const daysRange = [7, 30, 180, 365];
+// const TARGETS_SLIPPAGE_BPS = [500];
+// const daysRange = [30];
 const MONITORING_NAME = 'Pythia Sender';
 let slippageCache = {};
 async function SendToPythia() {
@@ -70,7 +72,7 @@ async function SendToPythia() {
             });
         }
 
-        const sleepTime = 60 * 60 * 1000 - (Date.now() - start);
+        const sleepTime = 3*60 * 60 * 1000 - (Date.now() - start);
         if(sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
             await sleep(sleepTime);
@@ -226,7 +228,7 @@ async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock, signe
         
 
         // change the computed avg value to a BigNumber with 18 decimals
-        const liquidityInWei = new BigNumber(avgLiquidityForTargetSlippage).times(CONSTANT_1e18).toFixed(0);
+        const liquidityInWei = new BigNumber(avgLiquidityForTargetSlippage).times(BigNumber(10).pow(tokenConf.decimals)).toFixed(0);
         console.log(`${fnName()}[${tokenConf.symbol}]: liquidityInWei: ${liquidityInWei} for slippage ${TARGET_SLIPPAGE_BPS} bps`);
         results.push({
             key: key,
@@ -239,7 +241,7 @@ async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock, signe
     // return all the computed value
     for(let i = 0; i < TARGETS_SLIPPAGE_BPS.length; i++) {
         const TARGET_SLIPPAGE_BPS = TARGETS_SLIPPAGE_BPS[i];
-        console.log(`${tokenConf.symbol}/USDC liquidity for ${TARGET_SLIPPAGE_BPS/100}% slippage: ${normalize(results[i].value, 18)} ${tokenConf.symbol}`);
+        console.log(`${tokenConf.symbol}/USDC liquidity for ${TARGET_SLIPPAGE_BPS/100}% slippage: ${normalize(results[i].value, tokenConf.decimals)} ${tokenConf.symbol}`);
     }
 
     return results;
