@@ -125,6 +125,8 @@ function precomputeDataForPair(precomputedDirectory, daysToFetch, blockRange, ta
         volumeForSlippage : volumeForSlippage
     };
 
+    preComputedData.parkinsonVolatility = 0;
+
     fs.writeFileSync(destFileName, JSON.stringify(preComputedData, null, 2));
 }
 

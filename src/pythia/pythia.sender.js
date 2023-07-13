@@ -7,7 +7,7 @@ const { getConfTokenBySymbol } = require('../utils/token.utils');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { RecordMonitoring } = require('../utils/monitoring');
-const { getAverageLiquidityForBlockInterval, getUniv3PricesForBlockInterval } = require('../uniswap.v3/uniswap.v3.utils');
+const { getAverageLiquidityForBlockInterval, getUniv3PricesForBlockInterval, computeParkinsonVolatility } = require('../uniswap.v3/uniswap.v3.utils');
 const { computeAggregatedVolumeFromPivot } = require('../utils/aggregator');
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
@@ -230,71 +230,7 @@ async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock) {
 }
 
 async function getUniv3ParkinsonVolatility(tokenConf, daysToAvg, startBlock, endBlock) {
-    const dataForRange = await getUniv3PricesForBlockInterval(DATA_DIR, tokenConf.symbol, 'USDC', startBlock, endBlock);
-    // console.log(dataForRange);
-    const blockNumbers = Object.keys(dataForRange);
-    let lastPriceHigh = dataForRange[blockNumbers[0]];
-    let lastPriceLow = dataForRange[blockNumbers[0]];
-    const rangeValues = [];
-    const avgBlockPerDay = Math.round((endBlock - startBlock)/daysToAvg);
-    console.log(`avgBlockPerDay: ${avgBlockPerDay}`);
-    for(let T = 0; T < daysToAvg; T++) {
-        const blockStart = T * avgBlockPerDay + startBlock;
-        const blockEnd = Math.min(blockStart + avgBlockPerDay, endBlock);
-        const blocksInRange = blockNumbers.filter(_ => _ >= blockStart && _ < blockEnd);
-        // console.log(`# prices in range [${blockStart} - ${blockEnd}]: ${blocksInRange.length}`);
-        let highPrice = -1;
-        let lowPrice = Number.MAX_SAFE_INTEGER;
-        if(blocksInRange.length == 0) {
-            highPrice= lastPriceHigh;
-            lowPrice = lastPriceLow;
-        }
-        else {
-            for(const block of blocksInRange) {
-                const price = dataForRange[block];
-                if(highPrice < price) {
-                    highPrice = price;
-                    lastPriceHigh = price;
-                }
-                if(lowPrice > price) {
-                    lowPrice = price;
-                    lastPriceLow = price;
-                }
-            }
-        }
-
-        if(highPrice < 0) {
-            console.log(`Could not find prices for range [${blockStart} - ${blockEnd}]. Will use last value`);
-            if(rangeValues.length == 0) {
-                throw new Error(`Could not find even the first value for ${tokenConf.symbol}/USDC`);
-            } else {
-                const lastValue = rangeValues.at(-1);
-                highPrice = lastValue.high;
-                lowPrice = lastValue.low;
-            }
-        }
-
-        console.log(`For range [${blockStart} - ${blockEnd}]: low: ${lowPrice} <> high: ${highPrice}. Data #: ${blocksInRange.length}`);
-        rangeValues.push({low: lowPrice, high: highPrice});
-        
-    }
-
-    // console.log(rangeValues);
-    let sumOfLn = 0;
-    
-    for(let T = 0; T < daysToAvg; T++) { 
-        const valuesForRange = rangeValues[T];
-        const htltRatio = valuesForRange.high / valuesForRange.low;
-        const htltRatioSquare = htltRatio * htltRatio;
-        const lnHtltRatioSquare = Math.log(htltRatioSquare);
-        sumOfLn += lnHtltRatioSquare;
-    }
-
-    const prefix = 1 / ((4 * daysToAvg ) * Math.log(2));
-
-    const insideSqrt = prefix * sumOfLn;
-
-    const volatilityParkinson = Math.sqrt(insideSqrt);
+    const volatilityParkinson = await computeParkinsonVolatility(DATA_DIR, tokenConf.symbol, 'USDC', startBlock, endBlock, daysToAvg);
     console.log(volatilityParkinson);
     // transform to 1e18
     const volatilityParkinsonWei = new BigNumber(volatilityParkinson).times(CONSTANT_1e18).toFixed(0);
