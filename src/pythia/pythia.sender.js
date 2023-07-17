@@ -18,6 +18,7 @@ const daysRange = [7, 30, 180, 365];
 // const daysRange = [30];
 const MONITORING_NAME = 'Pythia Sender';
 let slippageCache = {};
+const RUN_EVERY = 3 * 60 * 60;
 async function SendToPythia() {
     if(!process.env.ETH_PRIVATE_KEY) {
         console.log('Could not find ETH_PRIVATE_KEY env variable');
@@ -40,7 +41,7 @@ async function SendToPythia() {
                 'name': MONITORING_NAME,
                 'status': 'running',
                 'lastStart': Math.round(start/1000),
-                'runEvery': 60 * 60
+                'runEvery': RUN_EVERY
             });
 
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
@@ -72,7 +73,7 @@ async function SendToPythia() {
             });
         }
 
-        const sleepTime = 3*60 * 60 * 1000 - (Date.now() - start);
+        const sleepTime = RUN_EVERY * 1000 - (Date.now() - start);
         if(sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
             await sleep(sleepTime);
