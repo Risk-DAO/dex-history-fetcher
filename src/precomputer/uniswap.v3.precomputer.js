@@ -168,12 +168,13 @@ function computeAggregatedVolumeForSlippage(DATA_DIR, base, quote, blockRange, t
                 const targetSlippageBps = slippagePct * 100;
                 if(!aggregVolumeForBlock[blockNumber][slippagePct]) {
                     aggregVolumeForBlock[blockNumber][slippagePct] = baseDataHistoryData.slippageMap[targetSlippageBps];
+                    console.log(`base volume for ${base}->${quote}: ${aggregVolumeForBlock[blockNumber][slippagePct]} ${base}`);
                 }
     
                 const aggregVolume = computeAggregatedVolumeFromPivot(segment1HistoryData.slippageMap, segment1HistoryData.price, segment2HistoryData.slippageMap, targetSlippageBps);
-                // console.log(`adding aggreg volume ${aggregVolume} from route ${base}->${pivot}->${quote} for slippage ${slippagePct}`);
+                console.log(`adding aggreg volume ${aggregVolume} from route ${base}->${pivot}->${quote} for slippage ${slippagePct}`);
                 aggregVolumeForBlock[blockNumber][slippagePct] += aggregVolume;
-                // console.log(`new aggreg volume for ${base}->${quote}: ${aggregVolumeForBlock[blockNumber][slippagePct]} for slippage ${slippagePct}`);
+                console.log(`new aggreg volume for ${base}->${quote}: ${aggregVolumeForBlock[blockNumber][slippagePct]} for slippage ${slippagePct}`);
             }
         }
     }
