@@ -49,7 +49,7 @@ app.get('/api/getprecomputeddata', async (req, res, next) => {
             console.log(`returning key ${cacheKey} from cache. Cache remaining duration ${roundTo(cacheRemaining/1000, 2)} seconds`);
         }
 
-        res.json(cache[cacheKey]);
+        res.json(cache[cacheKey].data);
     } catch (error) {
         next(error);
     }
@@ -90,7 +90,7 @@ app.get('/api/getaveragedata', async (req, res, next) => {
             console.log(`returning key ${cacheKey} from cache. Cache remaining duration ${roundTo(cacheRemaining/1000, 2)} seconds`);
         }
 
-        res.json(cache[cacheKey]);
+        res.json(cache[cacheKey].data);
     } catch (error) {
         next(error);
     }
