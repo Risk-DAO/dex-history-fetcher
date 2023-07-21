@@ -5,12 +5,14 @@ const { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, getAvai
 var cors = require('cors');
 var path = require('path');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
+const { roundTo } = require('../utils/utils');
 const app = express();
 app.use(cors());
 const port = process.env.API_PORT || 3000;
 const DATA_DIR = process.cwd() + '/data';
 
-
+const cache = {};
+const cacheDuration = 30 * 60 * 1000; // 30 min cache duration
 
 // getprecomputeddata?platform=uniswapv2&span=1
 app.get('/api/getprecomputeddata', async (req, res, next) => {
@@ -25,17 +27,29 @@ app.get('/api/getprecomputeddata', async (req, res, next) => {
         }
 
         const fileName = `concat-${span}d.json`;
-        const filePath = path.join(DATA_DIR, 'precomputed', platform, fileName);
-        if (!fs.existsSync(filePath)) {
-            res.status(404).json({ error: 'file does not exist' });
-            next();
-        }
-        else {
-            const returnObject = JSON.parse(fs.readFileSync(filePath));
-            res.json(returnObject);
+        const cacheKey = `concat_${platform}_${span}`;
+        if (!cache[cacheKey]
+            || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
+            const filePath = path.join(DATA_DIR, 'precomputed', platform, fileName);
+            console.log(`try reading file ${filePath}`);
+            if (!fs.existsSync(filePath)) {
+                console.log(`${filePath} does not exists`);
+                res.status(404).json({ error: 'file does not exist' });
+                return;
+            }
+            else {
+                console.log(`${filePath} exists, saving data to cache`);
+                cache[cacheKey] = {
+                    data: JSON.parse(fs.readFileSync(filePath)),
+                    cachedDate: Date.now(),
+                };
+            }
+        } else {
+            const cacheRemaining = cacheDuration - (Date.now() - cache[cacheKey].cachedDate);
+            console.log(`returning key ${cacheKey} from cache. Cache remaining duration ${roundTo(cacheRemaining/1000, 2)} seconds`);
         }
 
-
+        res.json(cache[cacheKey].data);
     } catch (error) {
         next(error);
     }
@@ -54,17 +68,29 @@ app.get('/api/getaveragedata', async (req, res, next) => {
         }
 
         const fileName = `averages-${span}d.json`;
-        const filePath = path.join(DATA_DIR, 'precomputed', platform, fileName);
-        if (!fs.existsSync(filePath)) {
-            res.status(404).json({ error: 'file does not exist' });
-            next();
-        }
-        else {
-            const returnObject = JSON.parse(fs.readFileSync(filePath));
-            res.json(returnObject);
+        const cacheKey = `averages_${platform}_${span}`;
+        if (!cache[cacheKey]
+            || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
+            const filePath = path.join(DATA_DIR, 'precomputed', platform, fileName);
+            console.log(`try reading file ${filePath}`);
+            if (!fs.existsSync(filePath)) {
+                console.log(`${filePath} does not exists`);
+                res.status(404).json({ error: 'file does not exist' });
+                return;
+            }
+            else {
+                console.log(`${filePath} exists, saving data to cache`);
+                cache[cacheKey] = {
+                    data: JSON.parse(fs.readFileSync(filePath)),
+                    cachedDate: Date.now(),
+                };
+            }
+        } else {
+            const cacheRemaining = cacheDuration - (Date.now() - cache[cacheKey].cachedDate);
+            console.log(`returning key ${cacheKey} from cache. Cache remaining duration ${roundTo(cacheRemaining/1000, 2)} seconds`);
         }
 
-
+        res.json(cache[cacheKey].data);
     } catch (error) {
         next(error);
     }
