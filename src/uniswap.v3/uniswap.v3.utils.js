@@ -699,10 +699,10 @@ function getUniV3DataforBlockRange(dataDir, fromSymbol, toSymbol, blockRange) {
  * @param {string} fromSymbol 
  * @param {string} toSymbol 
  * @param {number[]} blockRange 
- * @returns {Promise<{[targetBlock: number]: {blockNumber: number, price: number, slippageMap: {[slippagePct: number]: number}}}>}
+ * @returns {{[targetBlock: number]: {blockNumber: number, price: number, slippageMap: {[slippagePct: number]: number}}}}
  */
 function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock, toBlock) {
-    console.log(`${fnName()}: Searching for ${fromSymbol}/${toSymbol}`);
+    console.log(`${fnName()}: Searching for ${fromSymbol}/${toSymbol} since ${sinceBlock} to ${toBlock}`);
     
     const results = {};
 
@@ -1055,7 +1055,7 @@ function getUniV3DataContents(selectedFiles, dataDir, minBlock=0) {
 
 module.exports = { getPriceNormalized, getVolumeForSlippage, getVolumeForSlippageRange, getSlippages, 
     generateConfigFromBaseAndQuote, getAvailableUniswapV3, getUniV3DataFiles, getUniV3DataforBlockRange,
-    getUniV3DataContents, getAverageLiquidityForBlockInterval, getUniv3PricesForBlockInterval, computeUniv3ParkinsonVolatility };
+    getUniV3DataContents, getAverageLiquidityForBlockInterval, getUniv3PricesForBlockInterval, computeUniv3ParkinsonVolatility, getUniV3DataforBlockInterval };
 
 // getUniV3DataforBlockRange('./data', 'UNI', 'USDC', [])
 
