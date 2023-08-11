@@ -11,7 +11,7 @@ let lastCallEtherscan = 0;
  * WILL ONLY WORK ON MAINNET
  * @param {ethers.providers.BaseProvider} web3Provider 
  * @param {string} contractAddress 
- * @returns {number} blocknumber where the contract was created
+ * @returns {Promise<number>} blocknumber where the contract was created
  */
 async function GetContractCreationBlockNumber(web3Provider, contractAddress) {
     console.log(`${fnName()}: fetching data for contract ${contractAddress}`);

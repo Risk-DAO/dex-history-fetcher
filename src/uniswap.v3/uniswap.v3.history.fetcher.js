@@ -11,6 +11,7 @@ const { getConfTokenBySymbol } = require('../utils/token.utils');
 const { getPriceNormalized, getSlippages } = require('./uniswap.v3.utils');
 const { default: BigNumber } = require('bignumber.js');
 const { RecordMonitoring } = require('../utils/monitoring');
+const { createUnifiedFile } = require('./uniswap.v3.concat');
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
 // save liquidity data every 'CONSTANT_BLOCK_INTERVAL' blocks
 const CONSTANT_BLOCK_INTERVAL = 50;
@@ -52,6 +53,9 @@ async function UniswapV3HistoryFetcher() {
             for(const pairToFetch of univ3Config.pairsToFetch) {
                 await FetchUniswapV3HistoryForPair(pairToFetch, web3Provider, univ3Factory, currentBlock);
             }
+
+            // at the end, call the concatener script
+            await createUnifiedFile(currentBlock);
 
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({
