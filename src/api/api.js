@@ -175,6 +175,45 @@ app.get('/api/getaverageprice', async (req, res, next) => {
     }
 });
 
+// getclfs?platform=compoundV3
+app.get('/api/getclfs', async (req, res, next) => {
+    try {
+        const platform = req.query.platform;
+
+        if (!platform) {
+            res.status(400).json({ error: 'platform required' });
+            next();
+        }
+
+        const fileName = `${platform}CLFs.json`;
+        const cacheKey = `${platform}_CLFs`;
+        if (!cache[cacheKey]
+            || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
+            const filePath = path.join(DATA_DIR, 'clf', platform, fileName);
+            console.log(`try reading file ${filePath}`);
+            if (!fs.existsSync(filePath)) {
+                console.log(`${filePath} does not exists`);
+                res.status(404).json({ error: 'file does not exist' });
+                return;
+            }
+            else {
+                console.log(`${filePath} exists, saving data to cache`);
+                cache[cacheKey] = {
+                    data: JSON.parse(fs.readFileSync(filePath)),
+                    cachedDate: Date.now(),
+                };
+            }
+        } else {
+            const cacheRemaining = cacheDuration - (Date.now() - cache[cacheKey].cachedDate);
+            console.log(`returning key ${cacheKey} from cache. Cache remaining duration ${roundTo(cacheRemaining/1000, 2)} seconds`);
+        }
+
+        res.json(cache[cacheKey].data);
+    } catch (error) {
+        next(error);
+    }
+});
+
 app.listen(port, () => {
     console.log(`Example app listening on port ${port}`);
 });
