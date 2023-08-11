@@ -12,13 +12,12 @@ async function createUnifiedFile(endBlock) {
     for(const base of Object.keys(available)) {
         for(const quote of available[base]) {
             await createUnifiedFileForPair(endBlock, base, quote);
-            await createUnifiedFileForPair(endBlock, quote, base);
         }
     }
 }
 
 async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol) {
-    console.log(`${fnName()} ${fromSymbol} ${toSymbol}`);
+    console.log(`${fnName()}: create/append for ${fromSymbol} ${toSymbol}`);
     const unifiedFilename = `${fromSymbol}-${toSymbol}-unified-data.csv`;
     const unifiedFullFilename = path.join(DATA_DIR, 'precomputed', 'uniswapv3', unifiedFilename);
     let sinceBlock = 0;
@@ -46,7 +45,11 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol) {
 
     }
 
-    fs.appendFileSync(unifiedFullFilename, toWrite.join(''));
+    if(toWrite.length == 0) {
+        console.log(`${fnName()}: nothing to add to file`);
+    } else {
+        fs.appendFileSync(unifiedFullFilename, toWrite.join(''));
+    }
 }
 
 createUnifiedFile(18000000);
