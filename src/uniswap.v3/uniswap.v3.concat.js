@@ -52,4 +52,6 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol) {
     }
 }
 
-createUnifiedFile(18000000);
+// createUnifiedFile(18000000);
+
+module.exports = { createUnifiedFile };
