@@ -1,37 +1,100 @@
 const { ethers } = require('ethers');
-const BigNumber = require('bignumber.js');
 const dotenv = require('dotenv');
+const path = require('path');
 const { fnName, retry } = require('../../utils/utils');
+const fs = require('fs');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../../utils/web3.utils');
 const { computeUniv3ParkinsonVolatility, getAverageLiquidityForBlockInterval } = require('../../uniswap.v3/uniswap.v3.utils');
 const { computeAggregatedVolumeFromPivot } = require('../../utils/aggregator');
 const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
+const { RecordMonitoring } = require('../../utils/monitoring');
 
-const CONSTANT_1e18 = new BigNumber(10).pow(18);
 const DATA_DIR = process.cwd() + '/data';
 const spans = [7, 30, 180];
 
+async function compoundV3Computer() {
+    const start = Date.now();
+    try {
+        await RecordMonitoring({
+            'name': 'CompoundV3 CLF Computer',
+            'status': 'running',
+            'lastStart': Math.round(start / 1000),
+            'runEvery': 10 * 60
+        });
+        if (!process.env.RPC_URL) {
+            throw new Error('Could not find RPC_URL env variable');
+        }
 
-async function main() {
-    /// for all pools in compound v3
-    for (const pool of Object.values(compoundV3Pools)) {
-        console.log(`Started work on Compound v3 --- ${pool.baseAsset} --- pool`);
+        if (!fs.existsSync(`${DATA_DIR}/clf/`)) {
+            fs.mkdirSync(`${DATA_DIR}/clf/`);
+            if (!fs.existsSync(`${DATA_DIR}/clf/compoundV3`)) {
+                fs.mkdirSync(`${DATA_DIR}/clf/compoundV3`);
+            }
+        }
+
+        console.log(`${fnName()}: starting`);
         const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
-        const cometContract = new ethers.Contract(pool.cometAddress, cometABI, web3Provider);
-        /// for all collaterals in selected pool
-        for (const collateral of Object.values(pool.collateralTokens)) {
-            console.log(`Computing CLFs for ${collateral.symbol}`);
-            const poolCLFs = await computeMarketCLF(web3Provider, cometContract, collateral, pool.baseAsset);
-            console.log('---------------------------');
-            console.log('---------------------------');
-            console.log('poolCLFs', poolCLFs);
-            console.log('---------------------------');
-            console.log('---------------------------');
+        const currentBlock = await web3Provider.getBlockNumber() - 10;
 
+        const results = {};
+        /// for all pools in compound v3
+        for (const pool of Object.values(compoundV3Pools)) {
+            results[pool.baseAsset] = await computeCLFForPool(pool);
+        }
+
+        recordResults(results);
+
+        console.log('CompoundV3 CLF Computer: ending');
+
+        const runEndDate = Math.round(Date.now() / 1000);
+        await RecordMonitoring({
+            'name': 'CompoundV3 CLF Computer',
+            'status': 'success',
+            'lastEnd': runEndDate,
+            'lastDuration': runEndDate - Math.round(start / 1000),
+            'lastBlockFetched': currentBlock
+        });
+    } catch (error) {
+        const errorMsg = `An exception occurred: ${error}`;
+        console.log(errorMsg);
+        await RecordMonitoring({
+            'name': 'CompoundV3 CLF Computer',
+            'status': 'error',
+            'error': errorMsg
+        });
+    }
+}
+
+function recordResults(results) {
+    const unifiedFullFilename = path.join(DATA_DIR, 'clf/compoundV3/compoundV3CLFs.json');
+    const objectToWrite = JSON.stringify(results);
+    fs.writeFileSync(unifiedFullFilename, objectToWrite, 'utf8');
+}
+
+async function computeCLFForPool(pool) {
+    const resultsData = {};
+    console.log(`Started work on Compound v3 --- ${pool.baseAsset} --- pool`);
+    const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
+    const cometContract = new ethers.Contract(pool.cometAddress, cometABI, web3Provider);
+    /// for all collaterals in selected pool
+    for (const collateral of Object.values(pool.collateralTokens)) {
+        try {
+            console.log(`Computing CLFs for ${collateral.symbol}`);
+            resultsData[collateral.symbol] = await computeMarketCLF(web3Provider, cometContract, collateral, pool.baseAsset);
+            console.log('---------------------------');
+            console.log('---------------------------');
+            console.log('resultsData', resultsData);
+            console.log('---------------------------');
+            console.log('---------------------------');
+        }
+        catch (error) {
+            console.log('error', error);
+            resultsData[collateral.symbol] = null;
         }
     }
+    return resultsData;
 }
 
 
@@ -62,26 +125,23 @@ async function computeMarketCLF(web3Provider, cometContract, compoundV3Asset, to
     console.log('parameters', parameters);
     /// compute CLFs for all spans and all volatilities
     const results = {};
-    for(let i = 0; i < spans.length; i++){
+    for (let i = 0; i < spans.length; i++) {
         const volatilitySpan = spans[i];
-        console.log('volatilitySpan', volatilitySpan);
         results[volatilitySpan] = {};
-        for(let j = 0; j < spans.length; j ++){
+        for (let j = 0; j < spans.length; j++) {
             const liquiditySpan = spans[j];
-            console.log('liquiditySpan', liquiditySpan);
 
             results[volatilitySpan][liquiditySpan] = findCLFFromParameters(parameters[volatilitySpan].volatility, parameters[liquiditySpan].liquidity, assetParameters.liquidationBonusBPS / 10000, assetParameters.LTV, assetParameters.supplyCap);
         }
     }
+    console.log('results', results);
     return results;
 }
 
 
 function findCLFFromParameters(volatility, liquidity, liquidationBonus, ltv, borrowCap) {
-    console.log('findCLFFromParameters');
-    console.log(volatility, liquidity, liquidationBonus, ltv, borrowCap);
     ltv = Number(ltv) / 100;
-    const sqrtResult = Math.sqrt(liquidity/borrowCap);
+    const sqrtResult = Math.sqrt(liquidity / borrowCap);
     const sqrtBySigma = sqrtResult / volatility;
     const ltvPlusBeta = Number(ltv) + Number(liquidationBonus);
     const lnLtvPlusBeta = Math.log(ltvPlusBeta);
@@ -138,4 +198,4 @@ function getLiquidity(liquididationBonus, from, to, startBlock, endBlock) {
     return avgLiquidityForTargetSlippage;
 }
 
-main();
+compoundV3Computer();
