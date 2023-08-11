@@ -6,7 +6,7 @@ const { getAvailableUniswapV3, getUniV3DataforBlockInterval } = require('./unisw
 const DATA_DIR = process.cwd() + '/data';
 
 
-async function createUnifiedFile(endBlock) {
+async function generateUnifiedFileUniv3(endBlock) {
     const available = getAvailableUniswapV3(DATA_DIR);
 
     for(const base of Object.keys(available)) {
@@ -54,4 +54,4 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol) {
 
 // createUnifiedFile(18000000);
 
-module.exports = { createUnifiedFile };
+module.exports = { generateUnifiedFileUniv3 };
