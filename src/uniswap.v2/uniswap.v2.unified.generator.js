@@ -63,6 +63,6 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol) {
     }
 }
 
-generateUnifiedFileUniv2(18000000);
+// generateUnifiedFileUniv2(18000000);
 
 module.exports = { generateUnifiedFileUniv2 };
