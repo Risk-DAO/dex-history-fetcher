@@ -8,31 +8,31 @@ const compoundV3Pools = {
         baseAsset: "USDC",
         cometAddress: "0xc3d688B66703497DAA19211EEdff47f25384cdc3",
         collateralTokens: {
-            // comp: {
-            //     index: 0,
-            //     symbol: "COMP",
-            //     address: "0xc00e94Cb662C3520282E6f5717214004A7f26888"
-            // },
-            // wbtc: {
-            //     index: 1,
-            //     symbol: "WBTC",
-            //     address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"
-            // },
-            // weth: {
-            //     index: 2,
-            //     symbol: "WETH",
-            //     address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-            // },
+            comp: {
+                index: 0,
+                symbol: "COMP",
+                address: "0xc00e94Cb662C3520282E6f5717214004A7f26888"
+            },
+            wbtc: {
+                index: 1,
+                symbol: "WBTC",
+                address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"
+            },
+            weth: {
+                index: 2,
+                symbol: "WETH",
+                address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+            },
             uni: {
                 index: 3,
                 symbol: "UNI",
                 address: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984"
             },
-            // link: {
-            //     index: 4,
-            //     symbol: "LINK",
-            //     address: "0x514910771AF9Ca656af840dff83E8264EcF986CA"
-            // }
+            link: {
+                index: 4,
+                symbol: "LINK",
+                address: "0x514910771AF9Ca656af840dff83E8264EcF986CA"
+            }
         }
     },
     weth: {
