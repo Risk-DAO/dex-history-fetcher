@@ -93,6 +93,14 @@ async function sleep(ms) {
     });
 }
 
+const getDay = () => {
+    const dateObj = new Date();
+    const month = dateObj.getUTCMonth() + 1; //months from 1-12
+    const day = dateObj.getUTCDate();
+    const year = dateObj.getUTCFullYear();
+    return day + '.' + month + '.' + year
+  }
+
 /**
  * a small retry wrapper with an incremeting 5s sleep delay
  * @param {Function} fn 
@@ -122,4 +130,4 @@ async function retry(fn, params, retries = 0, maxRetries = 10) {
     }
 }
 
-module.exports = { retry, sleep, fnName, roundTo, logFnDuration, readLastLine };
+module.exports = { retry, sleep, fnName, getDay, roundTo, logFnDuration, readLastLine };

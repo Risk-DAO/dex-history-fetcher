@@ -11,27 +11,32 @@ const compoundV3Pools = {
             comp: {
                 index: 0,
                 symbol: "COMP",
-                address: "0xc00e94Cb662C3520282E6f5717214004A7f26888"
+                address: "0xc00e94Cb662C3520282E6f5717214004A7f26888",
+                coinGeckoID: "compound-governance-token"
             },
             wbtc: {
                 index: 1,
                 symbol: "WBTC",
-                address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"
+                address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+                coinGeckoID: "wrapped-bitcoin"
             },
             weth: {
                 index: 2,
                 symbol: "WETH",
-                address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+                coinGeckoID: "weth"
             },
             uni: {
                 index: 3,
                 symbol: "UNI",
-                address: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984"
+                address: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+                coinGeckoID: "uniswap"
             },
             link: {
                 index: 4,
                 symbol: "LINK",
-                address: "0x514910771AF9Ca656af840dff83E8264EcF986CA"
+                address: "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+                coinGeckoID: "chainlink"
             }
         }
     },
@@ -42,12 +47,14 @@ const compoundV3Pools = {
             cbeth: {
                 index: 0,
                 symbol: "cbETH",
-                address: "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704"
+                address: "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704",
+                coinGeckoID: "coinbase-wrapped-staked-eth"
             },
             wsteth: {
                 index: 1,
                 symbol: "wstETH",
-                address: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0"
+                address: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+                coinGeckoID: "wrapped-steth"
             }
         }
     }

@@ -1,8 +1,9 @@
 const { ethers } = require('ethers');
 const dotenv = require('dotenv');
 const path = require('path');
-const { fnName, retry } = require('../../utils/utils');
+const { fnName, retry, getDay } = require('../../utils/utils');
 const fs = require('fs');
+const { default: axios } = require('axios');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../../utils/web3.utils');
 const { computeUniv3ParkinsonVolatility, getAverageLiquidityForBlockInterval } = require('../../uniswap.v3/uniswap.v3.utils');
@@ -10,6 +11,7 @@ const { computeAggregatedVolumeFromPivot } = require('../../utils/aggregator');
 const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
 const { RecordMonitoring } = require('../../utils/monitoring');
+const { tokens } = require('../../global.config');
 
 const DATA_DIR = process.cwd() + '/data';
 const spans = [7, 30, 180];
@@ -42,6 +44,7 @@ async function compoundV3Computer() {
         /// for all pools in compound v3
         for (const pool of Object.values(compoundV3Pools)) {
             results[pool.baseAsset] = await computeCLFForPool(pool);
+            console.log(`results[${pool.baseAsset}]`, results[pool.baseAsset]);
         }
 
         recordResults(results);
@@ -68,7 +71,8 @@ async function compoundV3Computer() {
 }
 
 function recordResults(results) {
-    const unifiedFullFilename = path.join(DATA_DIR, 'clf/compoundV3/compoundV3CLFs.json');
+    const date = getDay();
+    const unifiedFullFilename = path.join(DATA_DIR, `clf/compoundV3/${date}_compoundV3CLFs.json`);
     const objectToWrite = JSON.stringify(results);
     fs.writeFileSync(unifiedFullFilename, objectToWrite, 'utf8');
 }
@@ -82,7 +86,9 @@ async function computeCLFForPool(pool) {
     for (const collateral of Object.values(pool.collateralTokens)) {
         try {
             console.log(`Computing CLFs for ${collateral.symbol}`);
-            resultsData[collateral.symbol] = await computeMarketCLF(web3Provider, cometContract, collateral, pool.baseAsset);
+            resultsData[collateral.symbol] = {};
+            resultsData[collateral.symbol]['collateral'] = await getCollateralAmount(collateral, cometContract);
+            resultsData[collateral.symbol]['clfs'] = await computeMarketCLF(web3Provider, cometContract, collateral, pool.baseAsset);
             console.log('---------------------------');
             console.log('---------------------------');
             console.log('resultsData', resultsData);
@@ -95,6 +101,28 @@ async function computeCLFForPool(pool) {
         }
     }
     return resultsData;
+}
+
+async function getCollateralAmount(collateral, cometContract){
+    const [ totalSupplyAsset ] = await cometContract.callStatic.totalsCollateral(collateral.address);
+    const decimals = tokens[collateral.symbol.toUpperCase()].decimals;
+    const results = {};
+    let price = undefined;
+    try{
+    price = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${collateral.coinGeckoID}&vs_currencies=usd`);
+}
+catch(error){
+    console.log('error fetching price', error);
+}
+    price = price.data[collateral.coinGeckoID]['usd']; 
+    results["inKindSupply"] = normalize(totalSupplyAsset, decimals);
+    results["usdSupply"] = results["inKindSupply"] * price;
+    return results;
+}
+
+async function computeCollateralWeightsForPool(pool){
+    for(const market of Object.values(pool)){
+    }
 }
 
 
