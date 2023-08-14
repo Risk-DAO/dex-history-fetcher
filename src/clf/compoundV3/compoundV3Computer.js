@@ -44,14 +44,28 @@ async function compoundV3Computer() {
         /// for all pools in compound v3
         for (const pool of Object.values(compoundV3Pools)) {
             results[pool.baseAsset] = await computeCLFForPool(pool);
+            const poolData = computeAverageCLFForPool(results[pool.baseAsset]);
+             results[pool.baseAsset]['weightedCLF'] = poolData['weightedCLF'];
+             results[pool.baseAsset]['totalCollateral'] = poolData['totalCollateral'];
             console.log(`results[${pool.baseAsset}]`, results[pool.baseAsset]);
         }
 
-        for(const [k,v] of Object.entries(results)){
-           results[pool.baseAsset]['weightedCLF'] = computeAverageCLFForPool(v);
-        }
+        let protocolWeightedCLF = undefined;
+        try{
+            protocolWeightedCLF = computeProtocolWeightedCLF(results);
+    }
+    catch(error){
+        console.log(error);
+    }
+        const toRecord = {
+            protocol: "compound v3",
+            weightedCLF: protocolWeightedCLF ? protocolWeightedCLF : undefined,
+            results
+        };
 
-        recordResults(results);
+        
+
+        recordResults(toRecord);
 
         console.log('CompoundV3 CLF Computer: ending');
 
@@ -78,7 +92,39 @@ function recordResults(results) {
     const date = getDay();
     const unifiedFullFilename = path.join(DATA_DIR, `clf/compoundV3/${date}_compoundV3CLFs.json`);
     const objectToWrite = JSON.stringify(results);
-    fs.writeFileSync(unifiedFullFilename, objectToWrite, 'utf8');
+    try {
+        fs.writeFileSync(unifiedFullFilename, objectToWrite, 'utf8');
+    }
+    catch (error) {
+        console.log(error);
+    }
+}
+
+function computeProtocolWeightedCLF(protocolData){
+    console.log('protocolData', protocolData);
+    let protocolCollateral = 0;
+    const weightMap = {};
+        for (const [k, v] of Object.entries(protocolData)) {
+            console.log(k, v);
+            if (v) {
+                protocolCollateral += v['totalCollateral'];
+            }
+        }
+        // get each collateral weight
+        for (const [k, v] of Object.entries(protocolData)) {
+            console.log('second loop', k, v)
+            if (v) {
+                const weight = v['totalCollateral'] / protocolCollateral;
+                const clf = v['weightedCLF'];
+                weightMap[k] = weight * clf;
+            }
+        }
+        let weightedCLF = 0;
+        for (const [k, v] of Object.entries(weightMap)) {
+            weightedCLF += v;
+        }
+        weightedCLF = (weightedCLF).toFixed(2)
+        return weightedCLF;
 }
 
 async function computeCLFForPool(pool) {
@@ -128,17 +174,17 @@ async function getCollateralAmount(collateral, cometContract) {
 
 function computeAverageCLFForPool(poolData) {
     //get pool total collateral in usd
-    let total = 0
+    let totalCollateral = 0
     for (const [k, v] of Object.entries(poolData['data'])) {
         if (v) {
-            total += v['collateral']['usdSupply'];
+            totalCollateral += v['collateral']['usdSupply'];
         }
     }
     const weightMap = {};
     // get each collateral weight
     for (const [k, v] of Object.entries(poolData['data'])) {
         if (v) {
-            const weight = v['collateral']['usdSupply'] / total;
+            const weight = v['collateral']['usdSupply'] / totalCollateral;
             const clf = v['clfs']['7']['7'];
             weightMap[k] = weight * clf;
         }
@@ -147,7 +193,8 @@ function computeAverageCLFForPool(poolData) {
     for (const [k, v] of Object.entries(weightMap)) {
         weightedCLF += v;
     }
-    return weightedCLF.toFixed(2);
+    weightedCLF = (weightedCLF * 100).toFixed(2)
+    return {weightedCLF, totalCollateral};
 }
 
 
