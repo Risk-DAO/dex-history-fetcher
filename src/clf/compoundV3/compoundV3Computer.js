@@ -12,7 +12,7 @@ const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
 const { RecordMonitoring } = require('../../utils/monitoring');
 const { tokens } = require('../../global.config');
-
+const { readFile } = require('fs/promises');
 const DATA_DIR = process.cwd() + '/data';
 const spans = [7, 30, 180];
 
@@ -47,6 +47,10 @@ async function compoundV3Computer() {
             console.log(`results[${pool.baseAsset}]`, results[pool.baseAsset]);
         }
 
+        for(const [k,v] of Object.entries(results)){
+           results[pool.baseAsset]['weightedCLF'] = computeAverageCLFForPool(v);
+        }
+
         recordResults(results);
 
         console.log('CompoundV3 CLF Computer: ending');
@@ -79,6 +83,8 @@ function recordResults(results) {
 
 async function computeCLFForPool(pool) {
     const resultsData = {};
+    resultsData['data'] = {};
+
     console.log(`Started work on Compound v3 --- ${pool.baseAsset} --- pool`);
     const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
     const cometContract = new ethers.Contract(pool.cometAddress, cometABI, web3Provider);
@@ -86,9 +92,9 @@ async function computeCLFForPool(pool) {
     for (const collateral of Object.values(pool.collateralTokens)) {
         try {
             console.log(`Computing CLFs for ${collateral.symbol}`);
-            resultsData[collateral.symbol] = {};
-            resultsData[collateral.symbol]['collateral'] = await getCollateralAmount(collateral, cometContract);
-            resultsData[collateral.symbol]['clfs'] = await computeMarketCLF(web3Provider, cometContract, collateral, pool.baseAsset);
+            resultsData['data'][collateral.symbol] = {};
+            resultsData['data'][collateral.symbol]['collateral'] = await getCollateralAmount(collateral, cometContract);
+            resultsData['data'][collateral.symbol]['clfs'] = await computeMarketCLF(web3Provider, cometContract, collateral, pool.baseAsset);
             console.log('---------------------------');
             console.log('---------------------------');
             console.log('resultsData', resultsData);
@@ -97,32 +103,51 @@ async function computeCLFForPool(pool) {
         }
         catch (error) {
             console.log('error', error);
-            resultsData[collateral.symbol] = null;
+            resultsData['data'][collateral.symbol] = null;
         }
     }
     return resultsData;
 }
 
-async function getCollateralAmount(collateral, cometContract){
-    const [ totalSupplyAsset ] = await cometContract.callStatic.totalsCollateral(collateral.address);
+async function getCollateralAmount(collateral, cometContract) {
+    const [totalSupplyAsset] = await cometContract.callStatic.totalsCollateral(collateral.address);
     const decimals = tokens[collateral.symbol.toUpperCase()].decimals;
     const results = {};
     let price = undefined;
-    try{
-    price = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${collateral.coinGeckoID}&vs_currencies=usd`);
-}
-catch(error){
-    console.log('error fetching price', error);
-}
-    price = price.data[collateral.coinGeckoID]['usd']; 
+    try {
+        price = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${collateral.coinGeckoID}&vs_currencies=usd`);
+    }
+    catch (error) {
+        console.log('error fetching price', error);
+    }
+    price = price.data[collateral.coinGeckoID]['usd'];
     results["inKindSupply"] = normalize(totalSupplyAsset, decimals);
     results["usdSupply"] = results["inKindSupply"] * price;
     return results;
 }
 
-async function computeCollateralWeightsForPool(pool){
-    for(const market of Object.values(pool)){
+function computeAverageCLFForPool(poolData) {
+    //get pool total collateral in usd
+    let total = 0
+    for (const [k, v] of Object.entries(poolData['data'])) {
+        if (v) {
+            total += v['collateral']['usdSupply'];
+        }
     }
+    const weightMap = {};
+    // get each collateral weight
+    for (const [k, v] of Object.entries(poolData['data'])) {
+        if (v) {
+            const weight = v['collateral']['usdSupply'] / total;
+            const clf = v['clfs']['7']['7'];
+            weightMap[k] = weight * clf;
+        }
+    }
+    let weightedCLF = 0;
+    for (const [k, v] of Object.entries(weightMap)) {
+        weightedCLF += v;
+    }
+    return weightedCLF.toFixed(2);
 }
 
 
