@@ -31,9 +31,6 @@ async function compoundV3Computer() {
 
         if (!fs.existsSync(`${DATA_DIR}/clf/`)) {
             fs.mkdirSync(`${DATA_DIR}/clf/`);
-            if (!fs.existsSync(`${DATA_DIR}/clf/compoundV3`)) {
-                fs.mkdirSync(`${DATA_DIR}/clf/compoundV3`);
-            }
         }
 
         console.log(`${fnName()}: starting`);
@@ -90,7 +87,10 @@ async function compoundV3Computer() {
 
 function recordResults(results) {
     const date = getDay();
-    const unifiedFullFilename = path.join(DATA_DIR, `clf/compoundV3/${date}_compoundV3CLFs.json`);
+    if (!fs.existsSync(`${DATA_DIR}/clf/${date}`)) {
+        fs.mkdirSync(`${DATA_DIR}/clf/${date}`);
+    }
+    const unifiedFullFilename = path.join(DATA_DIR, `clf/${date}/${date}_compoundV3CLFs.json`);
     const objectToWrite = JSON.stringify(results);
     try {
         fs.writeFileSync(unifiedFullFilename, objectToWrite, 'utf8');
@@ -297,5 +297,4 @@ function getLiquidity(liquididationBonus, from, to, startBlock, endBlock) {
     }
     return avgLiquidityForTargetSlippage;
 }
-
-compoundV3Computer();
+module.exports = { compoundV3Computer };
