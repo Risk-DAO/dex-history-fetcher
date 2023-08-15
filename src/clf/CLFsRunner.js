@@ -10,8 +10,12 @@ const DATA_DIR = process.cwd() + '/data';
 
 async function main() {
     console.log("launching CLFs Runner");
+    await compoundV3Computer();
+    console.log("unifying all the protocols files");
     const toWrite = unifyFiles();
+    console.log("writing global file");
     recordResults(toWrite);
+    console.log("global file written, CLF runner stopping.")
 }
 
 
