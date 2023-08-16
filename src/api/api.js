@@ -175,7 +175,7 @@ app.get('/api/getaverageprice', async (req, res, next) => {
     }
 });
 // getallclfs?date=18.2.2023 (date optional)
-app.get('/api/getclfs', async (req, res, next) => {
+app.get('/api/getallclfs', async (req, res, next) => {
     try {
         const date = req.query.date ? req.query.date : getDay();
         const folder = req.query.latest ? 'latest' : date;
