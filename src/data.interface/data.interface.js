@@ -11,10 +11,19 @@ const { fnName, roundTo, retry, arrayAverage } = require('../utils/utils');
 const { computeParkinsonVolatility } = require('../utils/volatility');
 const { ethers } = require('ethers');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
+const { computeAggregatedVolumeFromPivot } = require('../utils/aggregator');
 
 const PIVOTS = ['USDC', 'WETH', 'WBTC'];
 const ALL_PLATFORMS = ['uniswapv2', 'uniswapv3', 'curve'];
 const DATA_DIR = process.cwd() + '/data';
+
+function getDefaultSlippageMap() {
+    const slippageMap = {};
+    for(let i = 50; i <= 2000; i+=50) {
+        slippageMap[i] = 0;
+    }
+    return slippageMap;
+}
 
 
 
@@ -27,7 +36,7 @@ const DATA_DIR = process.cwd() + '/data';
  * @param {number} toBlock 
  * @param {string[] | undefined} platforms 
  * @param {number} daysToAvg the number of days the interval spans
- * 
+ * @return {number} parkinson's volatility
  */
 function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, daysToAvg) {
     if(!platforms || platforms.length == 0) {
@@ -41,15 +50,8 @@ function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBl
     const label = `${fnName()}[${fromSymbol}/${toSymbol}] [${fromBlock}-${toBlock}] [${platforms.join(',')}]`;
 
     console.log(`${label}: getting data for all platforms, will average volatility`);
-    let data = {};
-    for(const platform of platforms) {
-        const unifiedData = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock);
-        if(!unifiedData) {
-            console.log(`${label}: could not find data on platform ${platform}`);
-        } else {
-            data[platform] = unifiedData;
-        }
-    }
+
+    const data = getUnifiedDataForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, toBlock);
 
     if(Object.keys(data).length == 0) {
         return undefined;
@@ -77,6 +79,28 @@ function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBl
 }
 
 /**
+ * Get unified data for each target platforms
+ * @param {string[]} platforms 
+ * @param {string} fromSymbol 
+ * @param {string} toSymbol 
+ * @param {number} fromBlock 
+ * @param {number} toBlock 
+ * @returns {{[platform: string]: {[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
+ */
+function getUnifiedDataForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, toBlock) {
+    const data = {};
+    for (const platform of platforms) {
+        const unifiedData = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock);
+        if (!unifiedData) {
+            console.log(`getUnifiedDataForPlatforms for ${fromSymbol}/${toSymbol}: could not find data on platform ${platform}`);
+        } else {
+            data[platform] = unifiedData;
+        }
+    }
+    return data;
+}
+
+/**
  * Get the slippage map for a pair
  * @param {string} fromSymbol 
  * @param {string} toSymbol 
@@ -85,7 +109,7 @@ function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBl
  * @param {string[] | undefined} platforms 
  * @param {bool} withJumps 
  */
-async function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps) {
+function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps) {
     if(!platforms || platforms.length == 0) {
         platforms = ALL_PLATFORMS;
     }
@@ -94,13 +118,179 @@ async function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBloc
         throw new Error(`At least one platform request is not known: ${platforms.join(',')}`);
     }
 
-    // if(withJumps) {
-    //     return await getCombinedSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms);
-    // } else {
-    //     return await getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms);
-    // }
+    // with jumps mean that we will try to add pivot routes (with WBTC, WETH and USDC as pivot)
+    if(withJumps) {
+        const sumSlippageMapsCombined = getCombinedSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms);
+        return sumSlippageMapsCombined;
+    } else {
+        const sumSlippageMaps = getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms);
+        return sumSlippageMaps;
+    }
 }
 
+
+
+/**
+ * Get the slippage maps for each blocks of the interval
+ * Using WBTC, WETH and USDC as pivot to try to find aggregated volumes
+ * example, for UNI->USDC, we will add UNI/USDC volume to UNI->WETH->USDC and UNI->WBTC->USDC volumes
+ * Summing the slippage map for each platforms
+ * @param {string} fromSymbol 
+ * @param {string} toSymbol 
+ * @param {number} fromBlock 
+ * @param {number} toBlock 
+ * @param {string[]} platforms 
+ * @returns {{[blocknumber: number]: {[slippageBps: number]: number}}}
+ */
+function getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms) {
+    const blocksSlippageMaps = {};
+    const data = getUnifiedDataForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, toBlock);
+    for(const platform of Object.keys(data)) {
+        for(const [blockNumber, platformData] of Object.entries(data[platform])) {
+            if(!blocksSlippageMaps[blockNumber]) {
+                blocksSlippageMaps[blockNumber] = getDefaultSlippageMap();
+            }
+
+            for(const slippageBps of Object.keys(platformData.slippageMap)) {
+                const slippageToAdd = platformData.slippageMap[slippageBps];
+                blocksSlippageMaps[blockNumber][slippageBps] += slippageToAdd;
+            }
+        }
+    }
+
+    return blocksSlippageMaps;
+}
+
+/**
+ * Get the slippage maps for each blocks of the interval
+ * Summing the slippage map for each platforms
+ * @param {string} fromSymbol 
+ * @param {string} toSymbol 
+ * @param {number} fromBlock 
+ * @param {number} toBlock 
+ * @param {string[]} platforms 
+ * @returns {{[blocknumber: number]: {[slippageBps: number]: number}}}
+ */
+function getCombinedSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms) {
+    const blocksSlippageMaps = {};
+    const data = getUnifiedDataForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, toBlock);
+
+    const pivotData = getPivotUnifiedData(data, fromSymbol, toSymbol, fromBlock, toBlock);
+
+    for(const platform of Object.keys(data)) {
+        for(const [blockNumber, platformData] of Object.entries(data[platform])) {
+            if(!blocksSlippageMaps[blockNumber]) {
+                blocksSlippageMaps[blockNumber] = getDefaultSlippageMap();
+            }
+
+            const aggregatedSlippageMap = structuredClone(platformData.slippageMap);
+            // try to add pivot routes
+            for(const pivot of PIVOTS) {
+                if(fromSymbol == pivot) {
+                    continue;
+                }
+                if(toSymbol == pivot) {
+                    continue;
+                }
+
+                const segment1DataForBlock = getPivotDataForBlock(pivotData, platform, fromSymbol, pivot, blockNumber);
+                
+                if(!segment1DataForBlock) {
+                    continue;
+                }
+
+                const segment2DataForBlock = getPivotDataForBlock(pivotData, platform, pivot, toSymbol, blockNumber);
+                if(!segment2DataForBlock) {
+                    continue;
+                }
+
+
+                for(const slippageBps of Object.keys(aggregatedSlippageMap)) {
+                    const aggregVolume = computeAggregatedVolumeFromPivot(segment1DataForBlock.slippageMap, segment1DataForBlock.price, segment2DataForBlock.slippageMap, slippageBps);
+                    aggregatedSlippageMap[slippageBps] += aggregVolume;
+                }
+            }
+
+            for(const slippageBps of Object.keys(aggregatedSlippageMap)) {
+                const slippageToAdd = aggregatedSlippageMap[slippageBps];
+                blocksSlippageMaps[blockNumber][slippageBps] += slippageToAdd;
+            }
+        }
+    }
+
+    return blocksSlippageMaps;
+}
+
+function getPivotDataForBlock(pivotData, platform, base, quote, blockNumber) {
+    if(!pivotData[platform]) {
+        return undefined;
+    }
+
+    if(!pivotData[platform][base]) {
+        return undefined;
+    }
+
+    if(!pivotData[platform][base][quote]) {
+        return undefined;
+    }
+
+    if(!pivotData[platform][base][quote][blockNumber]) {
+        return undefined;
+    }
+
+    return pivotData[platform][base][quote][blockNumber];
+}
+
+function getPivotUnifiedData(data, fromSymbol, toSymbol, fromBlock, toBlock) {
+    const pivotData = {};
+
+    for (const platform of Object.keys(data)) {
+        for (const pivot of PIVOTS) {
+            if (fromSymbol == pivot) {
+                continue;
+            }
+            if (toSymbol == pivot) {
+                continue;
+            }
+
+            const segment1Data = getUnifiedDataForInterval(platform, fromSymbol, pivot, fromBlock, toBlock);
+            if (!segment1Data) {
+                continue;
+            }
+
+            const segment2Data = getUnifiedDataForInterval(platform, pivot, toSymbol, fromBlock, toBlock);
+            if (!segment2Data) {
+                continue;
+            }
+
+            if (!pivotData[platform]) {
+                pivotData[platform] = {};
+            }
+
+            if (!pivotData[platform][fromSymbol]) {
+                pivotData[platform][fromSymbol] = {};
+            }
+
+            if (!pivotData[platform][pivot]) {
+                pivotData[platform][pivot] = {};
+            }
+
+            pivotData[platform][fromSymbol][pivot] = segment1Data;
+            pivotData[platform][pivot][toSymbol] = segment2Data;
+        }
+    }
+    return pivotData;
+}
+
+/**
+ * Gets the unified data from csv files
+ * @param {string} platform 
+ * @param {string} fromSymbol 
+ * @param {string} toSymbol 
+ * @param {number} fromBlock 
+ * @param {number} toBlock 
+ * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
+ */
 function getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock) {
     // try to find the data
     const filename = `${fromSymbol}-${toSymbol}-unified-data.csv`;
@@ -113,23 +303,62 @@ function getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, to
 
     console.log(`${fnName()}: ${fullFilename} found! Extracting data since ${fromBlock} to ${toBlock}`);
     
+
     const fileContent = fs.readFileSync(fullFilename, 'utf-8').split('\n');
-    const unifiedData = {};
-    for(let i = 1; i < fileContent.length - 1; i++) {
+    const unifiedData = getBlankUnifiedData(fromBlock, toBlock);
+    const blocksToFill = Object.keys(unifiedData).map(_ => Number(_));
+    let currentIndexToFill = 0;
+    
+
+    for(let i = 1; i < fileContent.length - 2; i++) {
         const blockNumber = Number(fileContent[i].split(',')[0]);
-        if(blockNumber < fromBlock) {
-            continue;
-        }
 
         if(blockNumber > toBlock) {
             break;
         }
+        const nextBlockNumber = Number(fileContent[i+1].split(',')[0]);
 
-        const data = extractDataFromUnifiedLine(fileContent[i]);
-        unifiedData[data.blockNumber] = {
-            price: data.price,
-            slippageMap: data.slippageMap
+        if(nextBlockNumber > blocksToFill[currentIndexToFill]) {
+            const data = extractDataFromUnifiedLine(fileContent[i]);
+
+            while(nextBlockNumber > blocksToFill[currentIndexToFill]) {
+                unifiedData[blocksToFill[currentIndexToFill]] = {
+                    price: data.price,
+                    slippageMap: data.slippageMap
+                };
+                currentIndexToFill++;
+                if(currentIndexToFill >= blocksToFill.length) {
+                    break;
+                }
+            }
+        }
+    }
+
+    // if exited before filling every blocks, add last value to all remaining
+    const lastFilledIndex = currentIndexToFill-1;
+    while(currentIndexToFill < blocksToFill.length) {
+        unifiedData[blocksToFill[currentIndexToFill]] = {
+            price: unifiedData[blocksToFill[lastFilledIndex]].price,
+            slippageMap: unifiedData[blocksToFill[lastFilledIndex]].slippageMap
         };
+        currentIndexToFill++;
+    }
+
+    return unifiedData;
+}
+
+/**
+ * This function returns an object preinstanciated with all the blocks that will need to be filled
+ * @param {number} startBlock 
+ * @param {number} endBlock 
+ * @returns {{[blocknumber: number]: {}}}
+ */
+function getBlankUnifiedData(startBlock, endBlock) {
+    const unifiedData = {};
+    let currentBlock = startBlock;
+    while(currentBlock < endBlock) {
+        unifiedData[currentBlock] = {};
+        currentBlock+= 50;
     }
 
     return unifiedData;
@@ -149,12 +378,12 @@ function extractDataFromUnifiedLine(line) {
     };
 }
 
-async function test() {
+async function testVolatility() {
     const daysToAvg = 180;
     const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
     const endBlock = await retry((() => web3Provider.getBlockNumber()), []);
     const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (daysToAvg * 24 * 60 * 60));
-    const base = 'DAI';
+    const base = 'WETH';
     const quote = 'USDC';
     const allVol = getParkinsonVolatilityForInterval(base, quote, startBlock, endBlock, undefined, daysToAvg);
     const univ2Vol = getParkinsonVolatilityForInterval(base, quote, startBlock, endBlock, ['uniswapv2'], daysToAvg);
@@ -163,7 +392,25 @@ async function test() {
 
     console.log({allVol}, {univ2Vol}, {univ3Vol}, {curve});
 }
+async function testLiquidity() {
+    const daysToAvg = 180;
+    const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
+    const endBlock = await retry((() => web3Provider.getBlockNumber()), []);
+    const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (daysToAvg * 24 * 60 * 60));
+    const base = 'UNI';
+    const quote = 'USDC';
+    // const slippageMaps = getSlippageMapForInterval(base, quote, startBlock, endBlock, undefined, false);
+    // const univ2slippageMaps = getSlippageMapForInterval(base, quote, startBlock, endBlock, ['uniswapv2'], false);
+    const univ3slippageMaps = getSlippageMapForInterval(base, quote, startBlock, endBlock, ['uniswapv3'], false);
+    const univ3slippageMapsCombined = getSlippageMapForInterval(base, quote, startBlock, endBlock, ['uniswapv3'], true);
+    // const curveSlippageMaps = getSlippageMapForInterval(base, quote, startBlock, endBlock, ['curve'], false);
+    console.log(JSON.stringify(univ3slippageMaps[startBlock]));
+    console.log('-----------------------');
+    console.log(JSON.stringify(univ3slippageMapsCombined[startBlock]));
+    // console.log(slippageMaps[startBlock], univ2slippageMaps[startBlock], univ3slippageMaps[startBlock], curveSlippageMaps[startBlock]);
+}
 
-test();
+// testVolatility();
+testLiquidity();
 
 module.exports = { getParkinsonVolatilityForInterval, getSlippageMapForInterval };
