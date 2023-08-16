@@ -178,8 +178,7 @@ app.get('/api/getaverageprice', async (req, res, next) => {
 app.get('/api/getclfs', async (req, res, next) => {
     try {
         const date = req.query.date ? req.query.date : getDay();
-        const latest = req.query.latest ? req.query.latest : false;
-        const folder = latest ? 'latest' : date;
+        const folder = req.query.latest ? 'latest' : date;
 
         const fileName = `${date}_all_CLFs.json`;
         const cacheKey = `${date}_all_CLFs`;
@@ -215,8 +214,8 @@ app.get('/api/getclfs', async (req, res, next) => {
     try {
         const platform = req.query.platform;
         const date = req.query.date ? req.query.date : getDay();
-        const latest = req.query.latest ? req.query.latest : false;
-        const folder = latest ? 'latest' : date;
+        const folder = req.query.latest ? 'latest' : date;
+
 
         if (!platform) {
             res.status(400).json({ error: 'platform required' });
