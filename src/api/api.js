@@ -178,12 +178,14 @@ app.get('/api/getaverageprice', async (req, res, next) => {
 app.get('/api/getclfs', async (req, res, next) => {
     try {
         const date = req.query.date ? req.query.date : getDay();
+        const latest = req.query.latest ? req.query.latest : false;
+        const folder = latest ? 'latest' : date;
 
         const fileName = `${date}_all_CLFs.json`;
         const cacheKey = `${date}_all_CLFs`;
         if (!cache[cacheKey]
             || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
-            const filePath = path.join(DATA_DIR, 'clf', date, fileName);
+            const filePath = path.join(DATA_DIR, 'clf', folder, fileName);
             console.log(`try reading file ${filePath}`);
             if (!fs.existsSync(filePath)) {
                 console.log(`${filePath} does not exists`);
@@ -213,6 +215,8 @@ app.get('/api/getclfs', async (req, res, next) => {
     try {
         const platform = req.query.platform;
         const date = req.query.date ? req.query.date : getDay();
+        const latest = req.query.latest ? req.query.latest : false;
+        const folder = latest ? 'latest' : date;
 
         if (!platform) {
             res.status(400).json({ error: 'platform required' });
@@ -222,7 +226,7 @@ app.get('/api/getclfs', async (req, res, next) => {
         const cacheKey = `${date}_${platform}_CLFs`;
         if (!cache[cacheKey]
             || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
-            const filePath = path.join(DATA_DIR, 'clf', date, fileName);
+            const filePath = path.join(DATA_DIR, 'clf', folder, fileName);
             console.log(`try reading file ${filePath}`);
             if (!fs.existsSync(filePath)) {
                 console.log(`${filePath} does not exists`);

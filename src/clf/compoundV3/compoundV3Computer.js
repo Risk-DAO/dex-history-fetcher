@@ -90,10 +90,15 @@ function recordResults(results) {
     if (!fs.existsSync(`${DATA_DIR}/clf/${date}`)) {
         fs.mkdirSync(`${DATA_DIR}/clf/${date}`);
     }
+    if (!fs.existsSync(`${DATA_DIR}/clf/latest`)) {
+        fs.mkdirSync(`${DATA_DIR}/clf/latest`);
+    }
     const unifiedFullFilename = path.join(DATA_DIR, `clf/${date}/${date}_compoundV3_CLFs.json`);
+    const latestFullFilename = path.join(DATA_DIR, `clf/latest/${date}_compoundV3_CLFs.json`);
     const objectToWrite = JSON.stringify(results);
     try {
         fs.writeFileSync(unifiedFullFilename, objectToWrite, 'utf8');
+        fs.writeFileSync(latestFullFilename, objectToWrite, 'utf8');
     }
     catch (error) {
         console.log(error);
