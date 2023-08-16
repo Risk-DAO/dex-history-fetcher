@@ -7,7 +7,7 @@
  * @param {number} startBlock 
  * @param {number} endBlock 
  * @param {number} daysToAvg 
- * @returns 
+ * @returns {number}
  */
 function computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, startBlock, endBlock, daysToAvg) {
     const blockNumbers = Object.keys(priceAtBlock);
