@@ -25,8 +25,6 @@ function getDefaultSlippageMap() {
     return slippageMap;
 }
 
-
-
 /**
  * Compute the parkinson's volatility for a pair
  * If 'platforms' is undefined, will find the volatility across all platforms (avg)
@@ -54,7 +52,8 @@ function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBl
     const data = getUnifiedDataForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, toBlock);
 
     if(Object.keys(data).length == 0) {
-        return undefined;
+        console.log(`${label}: Cannot find volatility, returning 0`);
+        return 0;
     }
 
     console.log(`${label}: will compute parkinson volatility from ${Object.keys(data).length} platforms data`);
@@ -101,6 +100,44 @@ function getUnifiedDataForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, 
 }
 
 /**
+ * Get the average liquidity in a block interval, for X platforms, with or without pivot route jumps
+ * @param {string} fromSymbol 
+ * @param {string} toSymbol 
+ * @param {number} fromBlock 
+ * @param {number} toBlock 
+ * @param {string[] | undefined} platforms 
+ * @param {bool} withJumps 
+ */
+function getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps) {
+    const slippageMapForInterval = getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps);
+
+    if(!slippageMapForInterval) {
+        return getDefaultSlippageMap();
+    }
+
+    let dataToUse = slippageMapForInterval[fromBlock];
+    const avgSlippageMap = getDefaultSlippageMap();
+
+    let cptValues = 0;
+    for(let targetBlock = fromBlock; targetBlock <= toBlock; targetBlock++) {
+        cptValues++;
+        if(slippageMapForInterval[targetBlock]) {
+            dataToUse = slippageMapForInterval[targetBlock];
+        }
+
+        for(const slippageBps of Object.keys(dataToUse)) {
+            avgSlippageMap[slippageBps] += dataToUse[slippageBps];
+        }
+    }
+
+    for(const slippageBps of Object.keys(avgSlippageMap)) {
+        avgSlippageMap[slippageBps] =  avgSlippageMap[slippageBps] / cptValues;
+    }
+
+    return avgSlippageMap;
+}
+
+/**
  * Get the slippage map for a pair
  * @param {string} fromSymbol 
  * @param {string} toSymbol 
@@ -127,8 +164,6 @@ function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, pla
         return sumSlippageMaps;
     }
 }
-
-
 
 /**
  * Get the slippage maps for each blocks of the interval
@@ -295,20 +330,18 @@ function getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, to
     // try to find the data
     const filename = `${fromSymbol}-${toSymbol}-unified-data.csv`;
     const fullFilename = path.join(DATA_DIR, 'precomputed', platform, filename);
-    console.log(`${fnName()}: searching file ${fullFilename}`);
+    // console.log(`${fnName()}: searching file ${fullFilename}`);
     if(!fs.existsSync(fullFilename)) {
         console.log(`Could not find file ${fullFilename}`);
         return undefined;
     }
 
-    console.log(`${fnName()}: ${fullFilename} found! Extracting data since ${fromBlock} to ${toBlock}`);
-    
+    // console.log(`${fnName()}: ${fullFilename} found! Extracting data since ${fromBlock} to ${toBlock}`);
 
     const fileContent = fs.readFileSync(fullFilename, 'utf-8').split('\n');
     const unifiedData = getBlankUnifiedData(fromBlock, toBlock);
     const blocksToFill = Object.keys(unifiedData).map(_ => Number(_));
     let currentIndexToFill = 0;
-    
 
     for(let i = 1; i < fileContent.length - 2; i++) {
         const blockNumber = Number(fileContent[i].split(',')[0]);
@@ -334,6 +367,25 @@ function getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, to
         }
     }
 
+    // if currentIndexToFill == 0, it means that no data was found, return empty
+    if(currentIndexToFill == 0) {
+        console.log(`Could not find data in file ${fullFilename} since block ${fromBlock}`);
+        const latestData = extractDataFromUnifiedLine(fileContent[fileContent.length-2]);
+        if(latestData.blockNumber < fromBlock) {
+            console.log(`Will use latest data at block ${latestData.blockNumber} to fill unified data`);
+            for(const blockNumber of blocksToFill) {
+                unifiedData[blockNumber] = {
+                    price: latestData.price,
+                    slippageMap: latestData.slippageMap
+                };
+            }
+
+            return unifiedData;
+        } else {
+            console.log(`Could not find any blocks before ${fromBlock} in file ${fullFilename}`);
+            return undefined;
+        }
+    }
     // if exited before filling every blocks, add last value to all remaining
     const lastFilledIndex = currentIndexToFill-1;
     while(currentIndexToFill < blocksToFill.length) {
@@ -393,24 +445,36 @@ async function testVolatility() {
     console.log({allVol}, {univ2Vol}, {univ3Vol}, {curve});
 }
 async function testLiquidity() {
-    const daysToAvg = 180;
+    const daysToAvg = 30;
     const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
     const endBlock = await retry((() => web3Provider.getBlockNumber()), []);
     const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (daysToAvg * 24 * 60 * 60));
     const base = 'UNI';
-    const quote = 'USDC';
+    const quote = 'WETH';
     // const slippageMaps = getSlippageMapForInterval(base, quote, startBlock, endBlock, undefined, false);
     // const univ2slippageMaps = getSlippageMapForInterval(base, quote, startBlock, endBlock, ['uniswapv2'], false);
-    const univ3slippageMaps = getSlippageMapForInterval(base, quote, startBlock, endBlock, ['uniswapv3'], false);
-    const univ3slippageMapsCombined = getSlippageMapForInterval(base, quote, startBlock, endBlock, ['uniswapv3'], true);
-    // const curveSlippageMaps = getSlippageMapForInterval(base, quote, startBlock, endBlock, ['curve'], false);
-    console.log(JSON.stringify(univ3slippageMaps[startBlock]));
-    console.log('-----------------------');
-    console.log(JSON.stringify(univ3slippageMapsCombined[startBlock]));
+    // const univ3slippageMaps = getSlippageMapForInterval(base, quote, startBlock, endBlock, ['uniswapv3'], false);
+    // const univ3slippageMapsCombined = getSlippageMapForInterval(base, quote, startBlock, endBlock, ['uniswapv3'], true);
+    // // const curveSlippageMaps = getSlippageMapForInterval(base, quote, startBlock, endBlock, ['curve'], false);
+    // console.log(JSON.stringify(univ3slippageMaps[startBlock]));
+    // console.log('-----------------------');
+    // console.log(JSON.stringify(univ3slippageMapsCombined[startBlock]));
+
+    // const resultMulti = getAverageLiquidityForInterval(base, quote, startBlock, endBlock, ['uniswapv2','uniswapv3'], false);
+    // console.log(resultMulti[500]);
+    // const result = getAverageLiquidityForInterval(base, quote, startBlock, endBlock, ['uniswapv3'], false);
+    // console.log(result[500]);
+    // const resultJumps = getAverageLiquidityForInterval(base, quote, startBlock, endBlock, ['uniswapv3'], true);
+    // console.log(resultJumps[500]);
+    // const resultJumpsMulti = getAverageLiquidityForInterval(base, quote, startBlock, endBlock, ['uniswapv2','uniswapv3'], true);
+    // console.log(resultJumpsMulti[500]);
+
+    const avg = getAverageLiquidityForInterval('MANA', 'USDC', 17878273, 17928316, ['uniswapv3'], true);
+    console.log(avg);
     // console.log(slippageMaps[startBlock], univ2slippageMaps[startBlock], univ3slippageMaps[startBlock], curveSlippageMaps[startBlock]);
 }
 
 // testVolatility();
-testLiquidity();
+// testLiquidity();
 
-module.exports = { getParkinsonVolatilityForInterval, getSlippageMapForInterval };
+module.exports = { getParkinsonVolatilityForInterval, getSlippageMapForInterval, getAverageLiquidityForInterval };
