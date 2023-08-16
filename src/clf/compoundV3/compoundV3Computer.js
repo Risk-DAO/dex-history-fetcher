@@ -1,7 +1,7 @@
 const { ethers } = require('ethers');
 const dotenv = require('dotenv');
 const path = require('path');
-const { fnName, retry, getDay } = require('../../utils/utils');
+const { fnName, retry, getDay, roundTo, sleep } = require('../../utils/utils');
 const fs = require('fs');
 const { default: axios } = require('axios');
 dotenv.config();
@@ -12,18 +12,17 @@ const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
 const { RecordMonitoring } = require('../../utils/monitoring');
 const { tokens } = require('../../global.config');
-const { readFile } = require('fs/promises');
 const DATA_DIR = process.cwd() + '/data';
 const spans = [7, 30, 180];
 
-async function compoundV3Computer() {
+async function compoundV3Computer(fetchEveryMinutes) {
     const start = Date.now();
     try {
         await RecordMonitoring({
             'name': 'CompoundV3 CLF Computer',
             'status': 'running',
             'lastStart': Math.round(start / 1000),
-            'runEvery': 10 * 60
+            'runEvery': fetchEveryMinutes * 60
         });
         if (!process.env.RPC_URL) {
             throw new Error('Could not find RPC_URL env variable');
@@ -42,25 +41,25 @@ async function compoundV3Computer() {
         for (const pool of Object.values(compoundV3Pools)) {
             results[pool.baseAsset] = await computeCLFForPool(pool);
             const poolData = computeAverageCLFForPool(results[pool.baseAsset]);
-             results[pool.baseAsset]['weightedCLF'] = poolData['weightedCLF'];
-             results[pool.baseAsset]['totalCollateral'] = poolData['totalCollateral'];
+            results[pool.baseAsset]['weightedCLF'] = poolData['weightedCLF'];
+            results[pool.baseAsset]['totalCollateral'] = poolData['totalCollateral'];
             console.log(`results[${pool.baseAsset}]`, results[pool.baseAsset]);
         }
 
         let protocolWeightedCLF = undefined;
-        try{
+        try {
             protocolWeightedCLF = computeProtocolWeightedCLF(results);
-    }
-    catch(error){
-        console.log(error);
-    }
+        }
+        catch (error) {
+            console.log(error);
+        }
         const toRecord = {
-            protocol: "compound v3",
+            protocol: 'compound v3',
             weightedCLF: protocolWeightedCLF ? protocolWeightedCLF : undefined,
             results
         };
 
-        
+
 
         recordResults(toRecord);
 
@@ -83,6 +82,7 @@ async function compoundV3Computer() {
             'error': errorMsg
         });
     }
+
 }
 
 function recordResults(results) {
@@ -100,31 +100,31 @@ function recordResults(results) {
     }
 }
 
-function computeProtocolWeightedCLF(protocolData){
+function computeProtocolWeightedCLF(protocolData) {
     console.log('protocolData', protocolData);
     let protocolCollateral = 0;
     const weightMap = {};
-        for (const [k, v] of Object.entries(protocolData)) {
-            console.log(k, v);
-            if (v) {
-                protocolCollateral += v['totalCollateral'];
-            }
+    for (const [k, v] of Object.entries(protocolData)) {
+        console.log(k, v);
+        if (v) {
+            protocolCollateral += v['totalCollateral'];
         }
-        // get each collateral weight
-        for (const [k, v] of Object.entries(protocolData)) {
-            console.log('second loop', k, v)
-            if (v) {
-                const weight = v['totalCollateral'] / protocolCollateral;
-                const clf = v['weightedCLF'];
-                weightMap[k] = weight * clf;
-            }
+    }
+    // get each collateral weight
+    for (const [k, v] of Object.entries(protocolData)) {
+        console.log('second loop', k, v)
+        if (v) {
+            const weight = v['totalCollateral'] / protocolCollateral;
+            const clf = v['weightedCLF'];
+            weightMap[k] = weight * clf;
         }
-        let weightedCLF = 0;
-        for (const [k, v] of Object.entries(weightMap)) {
-            weightedCLF += v;
-        }
-        weightedCLF = (weightedCLF).toFixed(2)
-        return weightedCLF;
+    }
+    let weightedCLF = 0;
+    for (const [k, v] of Object.entries(weightMap)) {
+        weightedCLF += v;
+    }
+    weightedCLF = (weightedCLF).toFixed(2)
+    return weightedCLF;
 }
 
 async function computeCLFForPool(pool) {
@@ -167,8 +167,8 @@ async function getCollateralAmount(collateral, cometContract) {
         console.log('error fetching price', error);
     }
     price = price.data[collateral.coinGeckoID]['usd'];
-    results["inKindSupply"] = normalize(totalSupplyAsset, decimals);
-    results["usdSupply"] = results["inKindSupply"] * price;
+    results['inKindSupply'] = normalize(totalSupplyAsset, decimals);
+    results['usdSupply'] = results['inKindSupply'] * price;
     return results;
 }
 
@@ -194,7 +194,7 @@ function computeAverageCLFForPool(poolData) {
         weightedCLF += v;
     }
     weightedCLF = (weightedCLF * 100).toFixed(2)
-    return {weightedCLF, totalCollateral};
+    return { weightedCLF, totalCollateral };
 }
 
 

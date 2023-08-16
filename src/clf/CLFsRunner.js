@@ -1,27 +1,35 @@
 const dotenv = require('dotenv');
 const path = require('path');
-const { fnName, retry, getDay } = require('../utils/utils');
+const { getDay, fnName, roundTo, sleep } = require('../utils/utils');
 const fs = require('fs');
 dotenv.config();
-const { readFile } = require('fs/promises');
-const compoundV3Computer = require("./compoundV3/compoundV3Computer");
+const compoundV3Computer = require('./compoundV3/compoundV3Computer');
 const DATA_DIR = process.cwd() + '/data';
 
 
 async function main() {
-    console.log("launching CLFs Runner");
-    await compoundV3Computer();
-    console.log("unifying all the protocols files");
-    const toWrite = unifyFiles();
-    console.log("writing global file");
-    recordResults(toWrite);
-    console.log("global file written, CLF runner stopping.")
+    const fetchEveryMinutes = 1440;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        console.log('launching CLFs Runner');
+        await compoundV3Computer(fetchEveryMinutes);
+        console.log('unifying all the protocols files');
+        const toWrite = unifyFiles();
+        console.log('writing global file');
+        recordResults(toWrite);
+        console.log('global file written, CLF runner stopping.')
+        const sleepTime = fetchEveryMinutes * 60 * 1000 - (Date.now() - start);
+        if (sleepTime > 0) {
+            console.log(`${fnName()}: sleeping ${roundTo(sleepTime / 1000 / 60)} minutes`);
+            await sleep(sleepTime);
+        }
+    }
 }
 
 
 function unifyFiles() {
     const date = getDay();
-    const folderPath = DATA_DIR + "/clf/" + date;
+    const folderPath = DATA_DIR + '/clf/' + date;
     const toWrite = [];
     try {
         const files = fs.readdirSync(folderPath);
