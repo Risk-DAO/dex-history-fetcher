@@ -3,11 +3,12 @@ const path = require('path');
 const { getDay, fnName, roundTo, sleep } = require('../utils/utils');
 const fs = require('fs');
 dotenv.config();
-const compoundV3Computer = require('./compoundV3/compoundV3Computer');
+const {compoundV3Computer} = require('./compoundV3/compoundV3Computer');
 const DATA_DIR = process.cwd() + '/data';
 
 
 async function main() {
+    const start = Date.now();
     const fetchEveryMinutes = 1440;
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -17,7 +18,7 @@ async function main() {
         const toWrite = unifyFiles();
         console.log('writing global file');
         recordResults(toWrite);
-        console.log('global file written, CLF runner stopping.')
+        console.log('global file written, CLF runner stopping.');
         const sleepTime = fetchEveryMinutes * 60 * 1000 - (Date.now() - start);
         if (sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime / 1000 / 60)} minutes`);
