@@ -122,4 +122,13 @@ async function retry(fn, params, retries = 0, maxRetries = 10) {
     }
 }
 
-module.exports = { retry, sleep, fnName, roundTo, logFnDuration, readLastLine };
+/**
+ * Compute array average
+ * @param {number[]} array 
+ * @returns 
+ */
+function arrayAverage(array) {
+    return array.reduce((a, b) => a + b, 0) / array.length;
+}
+
+module.exports = { retry, sleep, fnName, roundTo, logFnDuration, readLastLine, arrayAverage };

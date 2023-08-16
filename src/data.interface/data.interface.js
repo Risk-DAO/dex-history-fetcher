@@ -7,8 +7,10 @@
 
 const path = require('path');
 const fs = require('fs');
-const { fnName } = require('../utils/utils');
+const { fnName, roundTo, retry, arrayAverage } = require('../utils/utils');
 const { computeParkinsonVolatility } = require('../utils/volatility');
+const { ethers } = require('ethers');
+const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 
 const PIVOTS = ['USDC', 'WETH', 'WBTC'];
 const ALL_PLATFORMS = ['uniswapv2', 'uniswapv3', 'curve'];
@@ -18,7 +20,7 @@ const DATA_DIR = process.cwd() + '/data';
 
 /**
  * Compute the parkinson's volatility for a pair
- * If 'platforms' is undefined, will find the volatility across all platforms (find the best one?)
+ * If 'platforms' is undefined, will find the volatility across all platforms (avg)
  * @param {string} fromSymbol 
  * @param {string} toSymbol 
  * @param {number} fromBlock 
@@ -36,35 +38,42 @@ function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBl
         throw new Error(`At least one platform request is not known: ${platforms.join(',')}`);
     }
 
-    const label = `${fnName()}[${fromSymbol}/${toSymbol}] [${fromBlock}-${toBlock}] [${platforms.join(',')}`;
+    const label = `${fnName()}[${fromSymbol}/${toSymbol}] [${fromBlock}-${toBlock}] [${platforms.join(',')}]`;
 
-    console.log(`${label}: getting data for all platforms, will keep the one with the most data`);
-    let selectedData = undefined;
-    let selectedPlatform = undefined;
+    console.log(`${label}: getting data for all platforms, will average volatility`);
+    let data = {};
     for(const platform of platforms) {
         const unifiedData = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock);
         if(!unifiedData) {
             console.log(`${label}: could not find data on platform ${platform}`);
         } else {
-            if(!selectedData || Object.keys(selectedData).length < Object.keys(unifiedData).length) {
-                selectedData = structuredClone(unifiedData);
-                selectedPlatform = platform;
-            }
+            data[platform] = unifiedData;
         }
     }
 
-    if(!selectedData || !selectedPlatform) {
-        throw new Error(`${label}: Could not find data anywhere`);
+    if(Object.keys(data).length == 0) {
+        return undefined;
     }
 
-    console.log(`${label}: selected data from ${selectedPlatform}`);
-    // generate the priceAtBlock object
-    const priceAtBlock = {};
-    for(const [blockNumber, unifiedData] of Object.entries(selectedData)) {
-        priceAtBlock[blockNumber] = unifiedData.price;
+    console.log(`${label}: will compute parkinson volatility from ${Object.keys(data).length} platforms data`);
+    const volatilities = [];
+    for(const platform of Object.keys(data)) {
+
+        // generate the priceAtBlock object
+        const priceAtBlock = {};
+        for(const [blockNumber, unifiedData] of Object.entries(data[platform])) {
+            priceAtBlock[blockNumber] = unifiedData.price;
+        }
+
+        const volatility = computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, fromBlock, toBlock, daysToAvg);
+        console.log(`${label}: volatility found for ${platform}: ${roundTo(volatility*100, 2)}%`);
+        volatilities.push(volatility);
     }
 
-    return computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, fromBlock, toBlock, daysToAvg);
+    // return avg volatility
+    const avgVolatility = arrayAverage(volatilities);
+    console.log(`${label}: returning volatility from platforms ${Object.keys(data)} of ${roundTo(avgVolatility*100, 2)}%`);
+    return avgVolatility;
 }
 
 /**
@@ -139,5 +148,22 @@ function extractDataFromUnifiedLine(line) {
         slippageMap: slippageMap
     };
 }
+
+async function test() {
+    const daysToAvg = 180;
+    const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
+    const endBlock = await retry((() => web3Provider.getBlockNumber()), []);
+    const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (daysToAvg * 24 * 60 * 60));
+    const base = 'DAI';
+    const quote = 'USDC';
+    const allVol = getParkinsonVolatilityForInterval(base, quote, startBlock, endBlock, undefined, daysToAvg);
+    const univ2Vol = getParkinsonVolatilityForInterval(base, quote, startBlock, endBlock, ['uniswapv2'], daysToAvg);
+    const univ3Vol = getParkinsonVolatilityForInterval(base, quote, startBlock, endBlock, ['uniswapv3'], daysToAvg);
+    const curve = getParkinsonVolatilityForInterval(base, quote, startBlock, endBlock, ['curve'], daysToAvg);
+
+    console.log({allVol}, {univ2Vol}, {univ3Vol}, {curve});
+}
+
+test();
 
 module.exports = { getParkinsonVolatilityForInterval, getSlippageMapForInterval };
