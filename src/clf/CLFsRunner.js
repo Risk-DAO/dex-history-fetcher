@@ -56,7 +56,7 @@ function recordResults(results) {
         fs.mkdirSync(`${DATA_DIR}/clf/latest`);
     }
     const unifiedFullFilename = path.join(DATA_DIR,  `clf/${date}/${date}_all_CLFs.json`);
-    const latestFullFilename = path.join(DATA_DIR, `clf/latest/${date}_all_CLFs.json`);
+    const latestFullFilename = path.join(DATA_DIR, 'clf/latest/all_CLFs.json');
     const objectToWrite = JSON.stringify(results);
     try {
         fs.writeFileSync(unifiedFullFilename, objectToWrite, 'utf8');
