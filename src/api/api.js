@@ -174,16 +174,16 @@ app.get('/api/getaverageprice', async (req, res, next) => {
         next(error);
     }
 });
-// getallclfs
+// getallclfs?date=18.2.2023 (date optional)
 app.get('/api/getclfs', async (req, res, next) => {
     try {
-        const day = getDay();
+        const date = req.query.date ? req.query.date : getDay();
 
-        const fileName = `${day}_all_CLFs.json`;
-        const cacheKey = `${day}_all_CLFs`;
+        const fileName = `${date}_all_CLFs.json`;
+        const cacheKey = `${date}_all_CLFs`;
         if (!cache[cacheKey]
             || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
-            const filePath = path.join(DATA_DIR, 'clf', 'latest', fileName);
+            const filePath = path.join(DATA_DIR, 'clf', date, fileName);
             console.log(`try reading file ${filePath}`);
             if (!fs.existsSync(filePath)) {
                 console.log(`${filePath} does not exists`);
@@ -208,21 +208,21 @@ app.get('/api/getclfs', async (req, res, next) => {
     }
 });
 
-// getclfs?platform=compoundV3
+// getclfs?platform=compoundV3&date=18.2.2023 (date optional)
 app.get('/api/getclfs', async (req, res, next) => {
     try {
         const platform = req.query.platform;
+        const date = req.query.date ? req.query.date : getDay();
 
         if (!platform) {
             res.status(400).json({ error: 'platform required' });
             next();
         }
-        const day = getDay();
-        const fileName = `${day}_${platform}CLFs.json`;
-        const cacheKey = `${day}_${platform}_CLFs`;
+        const fileName = `${date}_${platform}CLFs.json`;
+        const cacheKey = `${date}_${platform}_CLFs`;
         if (!cache[cacheKey]
             || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
-            const filePath = path.join(DATA_DIR, 'clf', day, fileName);
+            const filePath = path.join(DATA_DIR, 'clf', date, fileName);
             console.log(`try reading file ${filePath}`);
             if (!fs.existsSync(filePath)) {
                 console.log(`${filePath} does not exists`);

@@ -90,7 +90,7 @@ function recordResults(results) {
     if (!fs.existsSync(`${DATA_DIR}/clf/${date}`)) {
         fs.mkdirSync(`${DATA_DIR}/clf/${date}`);
     }
-    const unifiedFullFilename = path.join(DATA_DIR, `clf/${date}/${date}_compoundV3CLFs.json`);
+    const unifiedFullFilename = path.join(DATA_DIR, `clf/${date}/${date}_compoundV3_CLFs.json`);
     const objectToWrite = JSON.stringify(results);
     try {
         fs.writeFileSync(unifiedFullFilename, objectToWrite, 'utf8');
