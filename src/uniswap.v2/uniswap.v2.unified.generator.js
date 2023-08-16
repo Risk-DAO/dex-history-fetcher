@@ -38,7 +38,7 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol) {
     const fromConf = getConfTokenBySymbol(fromSymbol);
     const toConf = getConfTokenBySymbol(toSymbol);
 
-    let lastSavedBlock = Number.MIN_VALUE;
+    let lastSavedBlock = sinceBlock-1;
     for(const [blockNumber, data] of Object.entries(univ2Data)) {
         // only save every 50 blocks
         if(lastSavedBlock + 50 > blockNumber) {

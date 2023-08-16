@@ -226,6 +226,84 @@ function getCurveDataSinceBlock(dataDir, poolName, sinceBlock) {
     };
 }
 
+function getCurveDataforBlockInterval(dataDir, poolName, startBlock, endBlock) {
+    const filePath = getCurveDataFile(dataDir, poolName);
+    if(!filePath) {
+        throw new Error(`Could not find pool data in ${dataDir}/curve/${poolName} for curve`);
+    }
+    
+    const dataContents = {
+        poolTokens: [], // ORDERED
+        reserveValues: {},
+    };
+
+    // load the file in RAM
+    const fileContent = fs.readFileSync(filePath, 'utf-8').split('\n');
+
+
+    // header looks like: 
+    // blocknumber,ampfactor,lp_supply_0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490,reserve_DAI_0x6B175474E89094C44Da98b954EedeAC495271d0F,reserve_USDC_0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,reserve_USDT_0xdAC17F958D2ee523a2206206994597C13D831ec7
+    const headersSplitted = fileContent[0].split(',');
+    for(let i = 3; i < headersSplitted.length; i++) {
+        // save the symbol value into pool tokens
+        dataContents.poolTokens.push(headersSplitted[i].split('_')[1]);
+    }
+    
+
+    let lastValue = undefined;
+    for(let i = 1; i < fileContent.length - 1; i++) {
+        const line = fileContent[i];
+        const splt = line.split(',');
+        const blockNum = Number(splt[0]);
+
+        if(blockNum > endBlock) {
+            break;
+        }
+
+        // if blockNum inferior to startBlock, ignore but save last value
+        if(blockNum < startBlock) {
+            lastValue = {
+                blockNumber: blockNum,
+                lineValue: line.toString(),
+            };
+        } else {
+            // here it means we went through the sinceBlock, save the last value before 
+            // reaching sinceBlock to have one previous data
+            if(lastValue && blockNum != startBlock) {
+                const beforeValueSplitted = lastValue.lineValue.split(',');
+                const lastValueBlock = lastValue.blockNumber;
+
+                dataContents.reserveValues[lastValueBlock] = {
+                    ampFactor: Number(beforeValueSplitted[1]),
+                    lpSupply: beforeValueSplitted[2]
+                };
+
+                for(let i = 3; i < beforeValueSplitted.length; i++) {
+                    const token = dataContents.poolTokens[i-3];
+                    dataContents.reserveValues[lastValueBlock][token] = beforeValueSplitted[i];
+                }
+
+                // set lastValue to null, meaning we already saved it
+                lastValue = null;
+            }
+
+            // save current value
+            dataContents.reserveValues[blockNum] = {
+                ampFactor: Number(splt[1]),
+                lpSupply: splt[2]
+            };
+
+            for(let i = 3; i < splt.length; i++) {
+                const token = dataContents.poolTokens[i-3];
+                dataContents.reserveValues[blockNum][token] = splt[i];
+            }
+        }
+
+    }
+
+    return dataContents;
+}
+
 function getCurveDataforBlockRange(dataDir, poolName, blockRange) {
     const filePath = getCurveDataFile(dataDir, poolName);
     if(!filePath) {
@@ -332,7 +410,7 @@ function computeLiquidityForSlippageCurvePool(fromSymbol, toSymbol, baseQty, tar
     let low = undefined;
     let high = undefined;
     let qtyFrom = baseQty * 2n;
-    const exitBoundsDiff = 0.01/100; // exit binary search when low and high bound have less than this amount difference
+    const exitBoundsDiff = 0.1/100; // exit binary search when low and high bound have less than this amount difference
     // eslint-disable-next-line no-constant-condition
     while(true) {
         const qtyTo = get_return(i, j, qtyFrom, reserves, amplificationFactor);
@@ -344,9 +422,9 @@ function computeLiquidityForSlippageCurvePool(fromSymbol, toSymbol, baseQty, tar
         // console.log(`DAI Qty: [${low ? normalize(BigNumber.from(low), 18) : '0'} <-> ${high ? normalize(BigNumber.from(high), 18) : '+∞'}]. Current price: 1 ${fromSymbol} = ${currentPrice} ${toSymbol}, targetPrice: ${targetPrice}. Try qty: ${normalizedFrom} ${fromSymbol} = ${normalizedTo} ${toSymbol}. variation: ${variation * 100}%`);
         if(low && high) {
             if(variation < exitBoundsDiff) {
-                return qtyFrom;
+                return (high + low) / 2n;
             }
-        } 
+        }
 
         if (currentPrice > targetPrice) {
             // current price too high, must increase qtyFrom
@@ -503,6 +581,42 @@ function getAvailableCurve(dataDir) {
 
 /**
  * 
+ * @param {string} fromSymbol 
+ * @param {string} toSymbol 
+ * @param {string[]} poolTokens 
+ * @param {number} ampFactor 
+ * @param {string} lpSupply 
+ * @param {string[]} reserves 
+ */
+function computePriceAndSlippageMapForReserveValue(fromSymbol, toSymbol, poolTokens, ampFactor, lpSupply, reserves) {
+    if(poolTokens.length != reserves.length) {
+        throw new Error('Tokens array must be same length as reserves array');
+    }
+
+    const tokenConfs = [];
+    for(const poolToken of poolTokens) {
+        tokenConfs.push(getConfTokenBySymbol(poolToken));
+    }
+
+    const reservesNorm18Dec = getReservesNormalizedTo18Decimals(tokenConfs, reserves);
+    
+    const indexFrom = poolTokens.indexOf(fromSymbol);
+    const indexTo = poolTokens.indexOf(toSymbol);
+    const returnVal = get_return(indexFrom, indexTo, BIGINT_1e18, reservesNorm18Dec, ampFactor);
+    const price = normalize(returnVal.toString(), 18);
+    const slippageMap = {};
+    for(let slippageBps = 50; slippageBps <= 2000; slippageBps += 50) {
+        const targetPrice = price - (price * slippageBps / 10000);
+        const liquidityAtSlippage = normalize(computeLiquidityForSlippageCurvePool(fromSymbol, toSymbol, BIGINT_1e18, targetPrice, reservesNorm18Dec, indexFrom, indexTo, ampFactor).toString(), 18);
+        
+        slippageMap[slippageBps] = liquidityAtSlippage;
+    }
+
+    return {price, slippageMap};
+}
+
+/**
+ * 
  * @param {tokenConf[]} tokens 
  * @param {string[]} reserves 
  * @returns 
@@ -557,7 +671,8 @@ function computeCurvePoolParkinsonVolatility(DATA_DIR, poolName, fromSymbol, toS
 
 
 module.exports = { getCurvePriceAndLiquidity, get_return, get_virtual_price, computeLiquidityForSlippageCurvePool, getAvailableCurve,
-    getCurveDataforBlockRange, getReservesNormalizedTo18Decimals, computeCurvePoolParkinsonVolatility };
+    getCurveDataforBlockRange, getReservesNormalizedTo18Decimals, computeCurvePoolParkinsonVolatility, getCurveDataforBlockInterval,
+    computePriceAndSlippageMapForReserveValue };
 
 // function test() {
 //     getCurvePriceAndLiquidity('./data', '3pool', 'DAI', 'USDC', 15487);
