@@ -37,13 +37,7 @@ function getDefaultSlippageMap() {
  * @return {number} parkinson's volatility
  */
 function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, daysToAvg) {
-    if(!platforms || platforms.length == 0) {
-        platforms = ALL_PLATFORMS;
-    }
-
-    if(platforms.some(_ => !ALL_PLATFORMS.includes(_))) {
-        throw new Error(`At least one platform request is not known: ${platforms.join(',')}`);
-    }
+    platforms = checkPlatforms(platforms);
 
     const label = `${fnName()}[${fromSymbol}/${toSymbol}] [${fromBlock}-${toBlock}] [${platforms.join(',')}]`;
 
@@ -99,21 +93,7 @@ function getUnifiedDataForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, 
     return data;
 }
 
-
-/**
- * Get the average liquidity in a block interval, for X platforms, with or without pivot route jumps
- * @param {string} fromSymbol 
- * @param {string} toSymbol 
- * @param {number} fromBlock 
- * @param {number} toBlock 
- * @param {string[] | undefined} platforms 
- * @param {bool} withJumps 
- */
-function getAverageLiquidityForIntervalNew(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps) {
-    if(!withJumps) {
-        return getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, false);
-    }
-
+function checkPlatforms(platforms) {
     if(!platforms || platforms.length == 0) {
         platforms = ALL_PLATFORMS;
     }
@@ -122,64 +102,29 @@ function getAverageLiquidityForIntervalNew(fromSymbol, toSymbol, fromBlock, toBl
         throw new Error(`At least one platform request is not known: ${platforms.join(',')}`);
     }
 
-    // with jump, will calculate the average without jumps for the route and the pivot route and then sum the average
-    // instead of computing the slippageMap for each blocks with pivot routes and then doing the average.
+    return platforms;
+}
 
-    let slippageMapToReturn = getDefaultSlippageMap();
+function getAveragePriceForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms) {
+    platforms = checkPlatforms(platforms);
+
+    const averages = [];
     for(const platform of platforms) {
-        const baseSlippageMapForInterval = getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, [platform], false);
-        slippageMapToReturn = sumSlippageMaps(slippageMapToReturn, baseSlippageMapForInterval);
-        for(const pivot of PIVOTS) {
-            if(fromSymbol == pivot) {
-                continue;
-            }
-            if(toSymbol == pivot) {
-                continue;
-            }
-
-            const segment1AverageSlippageMap = getAverageLiquidityForInterval(fromSymbol, pivot, fromBlock, toBlock, [platform], false);
-            const segment2AverageSlippageMap = getAverageLiquidityForInterval(pivot, toSymbol, fromBlock, toBlock, [platform], false);
-            const segment1AveragePrice = getAveragePriceForInterval(fromSymbol, pivot, fromBlock, toBlock, platform);
-            if(!segment1AveragePrice) {
-                continue;
-            }
-
-            const aggregSlippageMap = getDefaultSlippageMap();
-            for(const slippageBps of Object.keys(aggregSlippageMap)) {
-                const aggregVolume = computeAggregatedVolumeFromPivot(segment1AverageSlippageMap, segment1AveragePrice, segment2AverageSlippageMap, slippageBps);
-                aggregSlippageMap[slippageBps] += aggregVolume;
-            }
-            slippageMapToReturn = sumSlippageMaps(slippageMapToReturn, aggregSlippageMap);
+        const data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock);
+        if(!data) {
+            return undefined;
         }
-    }
-
-    return slippageMapToReturn;
-}
-
-function getAveragePriceForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform) {
-    const data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock);
-    if(!data) {
-        return undefined;
-    }
-    const priceArray = [];
-    for(const dataForBlock of Object.values(data)) {
-        priceArray.push(dataForBlock.price);
-    }
-
-    const avgPrice = arrayAverage(priceArray);
-    return avgPrice;
-}
-
-function sumSlippageMaps(...slippageArray) {
-    const summedSlippageMap = getDefaultSlippageMap();
-
-    for(const slippageToAdd of slippageArray) {
-        for(const slippageBps of Object.keys(summedSlippageMap)) {
-            summedSlippageMap[slippageBps] += slippageToAdd[slippageBps];
+        const priceArray = [];
+        for(const dataForBlock of Object.values(data)) {
+            priceArray.push(dataForBlock.price);
         }
+
+        const avgPrice = arrayAverage(priceArray);
+        averages.push(avgPrice);
     }
 
-    return summedSlippageMap;
+    const averageForAll = arrayAverage(averages);
+    return averageForAll;
 }
 
 function computeAverageSlippageMap(slippageMapForInterval, fromBlock, toBlock) {
@@ -235,13 +180,7 @@ function getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock
  * @param {bool} withJumps 
  */
 function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps) {
-    if(!platforms || platforms.length == 0) {
-        platforms = ALL_PLATFORMS;
-    }
-
-    if(platforms.some(_ => !ALL_PLATFORMS.includes(_))) {
-        throw new Error(`At least one platform request is not known: ${platforms.join(',')}`);
-    }
+    platforms = checkPlatforms(platforms);
 
     // with jumps mean that we will try to add pivot routes (with WBTC, WETH and USDC as pivot)
     if(withJumps) {
@@ -566,4 +505,4 @@ async function testLiquidity() {
 // testVolatility();
 // testLiquidity();
 
-module.exports = { getParkinsonVolatilityForInterval, getSlippageMapForInterval, getAverageLiquidityForInterval, getAverageLiquidityForIntervalNew };
+module.exports = { getParkinsonVolatilityForInterval, getSlippageMapForInterval, getAverageLiquidityForInterval, getAveragePriceForInterval };
