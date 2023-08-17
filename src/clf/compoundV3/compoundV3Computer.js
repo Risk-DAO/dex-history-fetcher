@@ -12,6 +12,7 @@ const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
 const { RecordMonitoring } = require('../../utils/monitoring');
 const { tokens } = require('../../global.config');
+const { object } = require('webidl-conversions');
 const DATA_DIR = process.cwd() + '/data';
 const spans = [7, 30, 180];
 
@@ -34,7 +35,8 @@ async function compoundV3Computer(fetchEveryMinutes) {
         }
 
         console.log(`${fnName()}: starting`);
-
+        const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
+        const currentBlock = await web3Provider.getBlockNumber() - 10;
         const results = {};
         /// for all pools in compound v3
         for (const pool of Object.values(compoundV3Pools)) {
@@ -60,6 +62,7 @@ async function compoundV3Computer(fetchEveryMinutes) {
 
 
 
+        console.log('firing record function');
         recordResults(toRecord);
 
         console.log('CompoundV3 CLF Computer: ending');
@@ -95,6 +98,7 @@ function recordResults(results) {
     const datedProtocolFilename = path.join(DATA_DIR, `clf/${date}/${date}_compoundV3_CLFs.json`);
     const latestFullFilename = path.join(DATA_DIR, 'clf/latest/compoundV3_CLFs.json');
     const objectToWrite = JSON.stringify(results);
+    console.log('recording results');
     try {
         fs.writeFileSync(datedProtocolFilename, objectToWrite, 'utf8');
         fs.writeFileSync(latestFullFilename, objectToWrite, 'utf8');
@@ -186,7 +190,7 @@ function computeAverageCLFForPool(poolData) {
     const weightMap = {};
     // get each collateral weight
     for (const [collateral, value] of Object.entries(poolData['data'])) {
-        if (v) {
+        if (value) {
             const weight = value['collateral']['usdSupply'] / totalCollateral;
             const clf = value['clfs']['7']['7'];
             weightMap[collateral] = weight * clf;
