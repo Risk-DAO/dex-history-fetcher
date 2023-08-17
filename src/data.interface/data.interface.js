@@ -7,6 +7,7 @@
 
 const { getParkinsonVolatilityForInterval, getAveragePriceForInterval } = require('./internal/data.interface.price');
 const { getAverageLiquidityForInterval, getSlippageMapForInterval } = require('./internal/data.interface.liquidity');
+const { logFnDuration, logFnDurationWithLabel } = require('../utils/utils');
 
 const ALL_PLATFORMS = ['uniswapv2', 'uniswapv3', 'curve'];
 
@@ -33,7 +34,10 @@ const ALL_PLATFORMS = ['uniswapv2', 'uniswapv3', 'curve'];
  */
 function getVolatility(fromSymbol, toSymbol, fromBlock, toBlock, platforms, daysToAvg) {
     platforms = checkPlatforms(platforms);
-    return getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, daysToAvg);
+    const start = Date.now();
+    const volatility = getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, daysToAvg);
+    logFnDurationWithLabel(start, `p: ${platforms}, blocks: ${(toBlock-fromBlock)}, daysToAvg: ${daysToAvg}`);
+    return volatility;
 }
 
 /**
@@ -49,7 +53,10 @@ function getVolatility(fromSymbol, toSymbol, fromBlock, toBlock, platforms, days
  */
 function getAveragePrice(fromSymbol, toSymbol, fromBlock, toBlock, platforms) {
     platforms = checkPlatforms(platforms);
-    return getAveragePriceForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms);
+    const start = Date.now();
+    const averagePrice = getAveragePriceForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms);
+    logFnDurationWithLabel(start, `p: ${platforms}, blocks: ${(toBlock-fromBlock)}`);
+    return averagePrice;
 }
 
 /**
@@ -65,7 +72,10 @@ function getAveragePrice(fromSymbol, toSymbol, fromBlock, toBlock, platforms) {
  */
 function getAverageLiquidity(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps = true) {
     platforms = checkPlatforms(platforms);
-    return getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps);
+    const start = Date.now();
+    const avgLiquidity = getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps);
+    logFnDurationWithLabel(start, `p: ${platforms}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}`);
+    return avgLiquidity;
 }
 
 /**
@@ -82,11 +92,11 @@ function getAverageLiquidity(fromSymbol, toSymbol, fromBlock, toBlock, platforms
  */
 function getLiquidity(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps = true, stepBlock = 50) {
     platforms = checkPlatforms(platforms);
-    return getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps, stepBlock);
+    const start = Date.now();
+    const liquidity = getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps, stepBlock);
+    logFnDurationWithLabel(start, `p: ${platforms}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}, step: ${stepBlock}`);
+    return liquidity;
 }
-
-module.exports = { getVolatility, getAveragePrice, getAverageLiquidity, getLiquidity};
-
 
 //    _    _  _______  _____  _        _____ 
 //   | |  | ||__   __||_   _|| |      / ____|
@@ -109,5 +119,4 @@ function checkPlatforms(platforms) {
     return platforms;
 }
 
-
-module.exports = { getParkinsonVolatilityForInterval, getSlippageMapForInterval, getAverageLiquidityForInterval, getAveragePriceForInterval };
+module.exports = { getVolatility, getAveragePrice, getAverageLiquidity, getLiquidity};
