@@ -6,6 +6,7 @@ const fs = require('fs');
 const { sleep, fnName, readLastLine, roundTo } = require('../utils/utils');
 const { getTokenSymbolByAddress, getConfTokenBySymbol, normalize } = require('../utils/token.utils');
 const { RecordMonitoring } = require('../utils/monitoring');
+const { generateUnifiedFileCurve } = require('./curve.unified.generator');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
@@ -54,6 +55,8 @@ async function CurveHistoryFetcher() {
             if(errors.length > 1) {
                 console.log('errors:', errors);
             }
+
+            await generateUnifiedFileCurve(currentBlock);
 
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({

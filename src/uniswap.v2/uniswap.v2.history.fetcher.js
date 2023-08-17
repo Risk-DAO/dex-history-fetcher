@@ -8,6 +8,7 @@ const { tokens } = require('../global.config');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const { sleep, fnName, roundTo, readLastLine, retry } = require('../utils/utils');
 const { RecordMonitoring } = require('../utils/monitoring');
+const { generateUnifiedFileUniv2 } = require('./uniswap.v2.unified.generator');
 
 const RPC_URL = process.env.RPC_URL;
 const DATA_DIR = process.cwd() + '/data';
@@ -45,6 +46,7 @@ async function UniswapV2HistoryFetcher() {
                 console.log(`${fnName()}: End fetching pair ` + pairKey);
             }
 
+            await generateUnifiedFileUniv2(currentBlock);
             console.log('UniswapV2HistoryFetcher: ending');
         
             const runEndDate = Math.round(Date.now()/1000);
