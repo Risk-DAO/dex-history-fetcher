@@ -82,6 +82,17 @@ function logFnDuration(dtStart, jobCount = undefined, jobName = 'job') {
         console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration, 6)} s`);
     }
 }
+
+/**
+ * Logs the duration of a function
+ * @param {number} dtStart unix timestamp ms
+ * @param {number} jobCount the number of job done, to be displayed as nbjob/sec if set
+ * @param {number} jobName the name for the jobs done
+ */
+function logFnDurationWithLabel(dtStart, label) {
+    const secDuration = (Date.now() - dtStart)/1000;
+    console.log(`${logFnDurationWithLabel.caller.name} | ${label} | duration: ${roundTo(secDuration, 2)} s`);
+}
 /**
  * 
  * @param {number} ms milliseconds to sleep 
@@ -130,4 +141,13 @@ async function retry(fn, params, retries = 0, maxRetries = 10) {
     }
 }
 
-module.exports = { retry, sleep, fnName, getDay, roundTo, logFnDuration, readLastLine };
+/**
+ * Compute array average
+ * @param {number[]} array 
+ * @returns 
+ */
+function arrayAverage(array) {
+    return array.reduce((a, b) => a + b, 0) / array.length;
+}
+
+module.exports = { retry, sleep, fnName, roundTo, getDay, logFnDuration, logFnDurationWithLabel, readLastLine, arrayAverage };

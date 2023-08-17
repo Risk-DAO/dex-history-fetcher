@@ -7,7 +7,7 @@
  * @param {number} startBlock 
  * @param {number} endBlock 
  * @param {number} daysToAvg 
- * @returns 
+ * @returns {number}
  */
 function computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, startBlock, endBlock, daysToAvg) {
     const blockNumbers = Object.keys(priceAtBlock);
@@ -52,7 +52,7 @@ function computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, startBlo
             }
         }
 
-        console.log(`For range [${blockStart} - ${blockEnd}]: low: ${lowPrice} <> high: ${highPrice}. Data #: ${blocksInRange.length}`);
+        // console.log(`For range [${blockStart} - ${blockEnd}]: low: ${lowPrice} <> high: ${highPrice}. Data #: ${blocksInRange.length}`);
         rangeValues.push({ low: lowPrice, high: highPrice });
 
     }
