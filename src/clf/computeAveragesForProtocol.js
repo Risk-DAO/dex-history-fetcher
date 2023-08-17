@@ -50,58 +50,65 @@ function unifyProtocolData(protocol) {
     return { protocolData, numberOfDaysAccumulated };
 }
 
-function computeAveragesForProtocol(protocolData, numberOfDaysAccumulated) {
+function computeAverages(protocolData, numberOfDaysAccumulated) {
     const toAverage = {};
-    for (const [market, marketData] of Object.entries(protocolData)) {
-        if (!toAverage[market]) {
-            toAverage[market] = {};
-        }
-        for (const [collateral, collateralValues] of Object.entries(marketData)) {
-            if (!toAverage[market][collateral]) {
-                toAverage[market][collateral] = {};
+    const averaged = {};
+    try {
+        for (const [market, marketData] of Object.entries(protocolData)) {
+            if (!toAverage[market]) {
+                toAverage[market] = {};
             }
-            for (const [days, volatilitySpan] of Object.entries(collateralValues)) {
-                for (const [volSpan, liquiditySpan] of Object.entries(volatilitySpan)) {
-                    if (!toAverage[market][collateral][volSpan]) {
-                        toAverage[market][collateral][volSpan] = {};
-                    }
-                    for (const [liqSpan, liquidityValue] of Object.entries(liquiditySpan)) {
-                        if (!toAverage[market][collateral][volSpan][liqSpan]) {
-                            toAverage[market][collateral][volSpan][liqSpan] = 0;
+            for (const [collateral, collateralValues] of Object.entries(marketData)) {
+                if (!toAverage[market][collateral]) {
+                    toAverage[market][collateral] = {};
+                }
+                let daysAveraged = 0;
+                for (const [days, volatilitySpan] of Object.entries(collateralValues)) {
+                    daysAveraged++;
+                    console.log(daysAveraged, daysAveraged);
+                    for (const [volSpan, liquiditySpan] of Object.entries(volatilitySpan)) {
+                        if (!toAverage[market][collateral][volSpan]) {
+                            toAverage[market][collateral][volSpan] = {};
                         }
-                        toAverage[market][collateral][volSpan][liqSpan].push(liquidityValue);
+                        for (const [liqSpan, liquidityValue] of Object.entries(liquiditySpan)) {
+                            if (daysAveraged === 7 || daysAveraged === 30 || daysAveraged === 180 || daysAveraged === numberOfDaysAccumulated) {
+                                if (!averaged[market]) {
+                                    averaged[market] = {};
+                                }
+                                if (!averaged[market][collateral]) {
+                                    averaged[market][collateral] = {};
+                                }
+                                if (!averaged[market][collateral][`${daysAveraged}D_averageSpan`]) {
+                                    averaged[market][collateral][`${daysAveraged}D_averageSpan`] = {};
+                                }
+                                if (!averaged[market][collateral][`${daysAveraged}D_averageSpan`][volSpan]) {
+                                    averaged[market][collateral][`${daysAveraged}D_averageSpan`][volSpan] = {};
+                                }
+                                if (!averaged[market][collateral][`${daysAveraged}D_averageSpan`][volSpan][liqSpan]) {
+                                    averaged[market][collateral][`${daysAveraged}D_averageSpan`][volSpan][liqSpan] = toAverage[market][collateral][volSpan][liqSpan] / daysAveraged;
+                                }
+                            }
+                            if (!toAverage[market][collateral][volSpan][liqSpan]) {
+                                toAverage[market][collateral][volSpan][liqSpan] = 0;
+                            }
+                            toAverage[market][collateral][volSpan][liqSpan] += liquidityValue;
+                        }
                     }
                 }
             }
         }
     }
-    const averaged = {};
-    let daysAveraged = 0;
-    while(daysAveraged < 180){
-        for (const [market, collaterals] of Object.entries(toAverage)) {
-            if (!averaged[market]) {
-                averaged[market] = {};
-            }
-            for (const [collateral, collateralValues] of Object.entries(collaterals)) {
-                if (!averaged[market][collateral]) {
-                    averaged[market][collateral] = {};
-                }
-                for (const [vol, liqArray] of Object.entries(collateralValues)) {
-                    console.log('vol', vol);
-                    console.log('liqArray', liqArray); 
-                    daysAveraged++;
-                }
-            }
-        }
+    catch (error) {
+        console.log(error);
     }
     return averaged;
 }
 
-function main(protocol) {
+function computeAveragesForProtocol(protocol) {
     const { protocolData, numberOfDaysAccumulated } = unifyProtocolData(protocol);
-    const averagesToWrite = computeAveragesForProtocol(protocolData, numberOfDaysAccumulated);
-    console.log(JSON.stringify(averagesToWrite));
+    const averagesToWrite = computeAverages(protocolData, numberOfDaysAccumulated);
+    return averagesToWrite;
 }
 
 
-main('compoundv3');
+module.exports = { computeAveragesForProtocol };
