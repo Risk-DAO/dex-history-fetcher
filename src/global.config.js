@@ -147,6 +147,10 @@ const tokens = {
         decimals: 18,
         address: '0x956F47F50A910163D8BF957Cf5846D573E7f87CA'
     },
+    cbETH: {
+        decimals: 18,
+        address: '0xBe9895146f7AF43049ca1c1AE358B0541Ea49704'
+    },
 };
 
 module.exports = { tokens };

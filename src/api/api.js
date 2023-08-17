@@ -5,7 +5,7 @@ const { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, getAvai
 var cors = require('cors');
 var path = require('path');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
-const { roundTo } = require('../utils/utils');
+const { roundTo, getDay } = require('../utils/utils');
 const app = express();
 app.use(cors());
 const port = process.env.API_PORT || 3000;
@@ -170,6 +170,81 @@ app.get('/api/getaverageprice', async (req, res, next) => {
                 res.status(400).json({ error: `Wrong platform: ${platform}` });
                 break;
         }
+    } catch (error) {
+        next(error);
+    }
+});
+// getallclfs?date=18.2.2023 (date optional)
+app.get('/api/getallclfs', async (req, res, next) => {
+    try {
+        const date = req.query.date ? req.query.date : getDay();
+        const folder = req.query.latest === undefined ? 'latest' : req.query.latest === false ? date : 'latest';
+
+        const fileName = req.query.latest ? 'all_CLFs.json' : `${date}_all_CLFs`;
+        const cacheKey = req.query.latest ? 'all_CLFs.json' : `${date}_all_CLFs`;
+        if (!cache[cacheKey]
+            || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
+            const filePath = path.join(DATA_DIR, 'clf', folder, fileName);
+            console.log(`try reading file ${filePath}`);
+            if (!fs.existsSync(filePath)) {
+                console.log(`${filePath} does not exists`);
+                res.status(404).json({ error: 'file does not exist' });
+                return;
+            }
+            else {
+                console.log(`${filePath} exists, saving data to cache`);
+                cache[cacheKey] = {
+                    data: JSON.parse(fs.readFileSync(filePath)),
+                    cachedDate: Date.now(),
+                };
+            }
+        } else {
+            const cacheRemaining = cacheDuration - (Date.now() - cache[cacheKey].cachedDate);
+            console.log(`returning key ${cacheKey} from cache. Cache remaining duration ${roundTo(cacheRemaining/1000, 2)} seconds`);
+        }
+
+        res.json(cache[cacheKey].data);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// getclfs?platform=compoundV3&date=18.2.2023 (date optional)
+app.get('/api/getclfs', async (req, res, next) => {
+    try {
+        const platform = req.query.platform;
+        const date = req.query.date ? req.query.date : getDay();
+        const folder = req.query.latest === undefined ? 'latest' : req.query.latest === false ? date : 'latest';
+
+
+        if (!platform) {
+            res.status(400).json({ error: 'platform required' });
+            next();
+        }
+        const fileName = req.query.latest ? `${platform}CLFs.json` : `${date}_${platform}CLFs.json`;
+        const cacheKey = req.query.latest ? `${platform}CLFs.json` : `${date}_${platform}CLFs.json`;
+        if (!cache[cacheKey]
+            || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
+            const filePath = path.join(DATA_DIR, 'clf', folder, fileName);
+            console.log(`try reading file ${filePath}`);
+            if (!fs.existsSync(filePath)) {
+                console.log(`${filePath} does not exists`);
+                res.status(404).json({ error: 'file does not exist' });
+                return;
+            }
+            else {
+                console.log(`${filePath} exists, saving data to cache`);
+                cache[cacheKey] = {
+                    data: JSON.parse(fs.readFileSync(filePath)),
+                    cachedDate: Date.now(),
+                };
+            }
+        } else {
+            const cacheRemaining = cacheDuration - (Date.now() - cache[cacheKey].cachedDate);
+            console.log(`returning key ${cacheKey} from cache. Cache remaining duration ${roundTo(cacheRemaining/1000, 2)} seconds`);
+        }
+
+        res.json(cache[cacheKey].data);
     } catch (error) {
         next(error);
     }
