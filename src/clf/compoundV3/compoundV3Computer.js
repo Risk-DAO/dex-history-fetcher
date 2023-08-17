@@ -101,6 +101,7 @@ function recordResults(results) {
     }
     catch (error) {
         console.log(error);
+        console.log('Compound Computer failed to write files');
     }
 }
 

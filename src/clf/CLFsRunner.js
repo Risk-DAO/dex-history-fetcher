@@ -3,7 +3,7 @@ const path = require('path');
 const { getDay, fnName, roundTo, sleep } = require('../utils/utils');
 const fs = require('fs');
 dotenv.config();
-const {compoundV3Computer} = require('./compoundV3/compoundV3Computer');
+const { compoundV3Computer } = require('./compoundV3/compoundV3Computer');
 const { computeAveragesForProtocol } = require('./computeAveragesForProtocol');
 const DATA_DIR = process.cwd() + '/data';
 
@@ -41,9 +41,11 @@ function unifyFiles() {
     try {
         const files = fs.readdirSync(folderPath);
         files.forEach(file => {
-            const filePath = path.join(folderPath, file);
-            const contents = fs.readFileSync(filePath, 'utf8');
-            toWrite.push(JSON.parse(contents));
+            if (!file.includes('average') && !file.includes('all_CLFs')) {
+                const filePath = path.join(folderPath, file);
+                const contents = fs.readFileSync(filePath, 'utf8');
+                toWrite.push(JSON.parse(contents));
+            }
         });
         return toWrite;
     }
@@ -61,7 +63,7 @@ function recordResults(results, name) {
     if (!fs.existsSync(`${DATA_DIR}/clf/latest`)) {
         fs.mkdirSync(`${DATA_DIR}/clf/latest`);
     }
-    const unifiedFullFilename = path.join(DATA_DIR,  `clf/${date}/${date}_${name}.json`);
+    const unifiedFullFilename = path.join(DATA_DIR, `clf/${date}/${date}_${name}.json`);
     const latestUnifiedFullFilename = path.join(DATA_DIR, `clf/latest/${name}.json`);
     const objectToWrite = JSON.stringify(results);
     try {
