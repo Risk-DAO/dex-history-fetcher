@@ -56,11 +56,11 @@ function recordResults(results) {
         fs.mkdirSync(`${DATA_DIR}/clf/latest`);
     }
     const unifiedFullFilename = path.join(DATA_DIR,  `clf/${date}/${date}_all_CLFs.json`);
-    const latestFullFilename = path.join(DATA_DIR, 'clf/latest/all_CLFs.json');
+    const latestUnifiedFullFilename = path.join(DATA_DIR, 'clf/latest/all_CLFs.json');
     const objectToWrite = JSON.stringify(results);
     try {
         fs.writeFileSync(unifiedFullFilename, objectToWrite, 'utf8');
-        fs.writeFileSync(latestFullFilename, objectToWrite, 'utf8');
+        fs.writeFileSync(latestUnifiedFullFilename, objectToWrite, 'utf8');
     }
     catch (error) {
         console.log(error);
