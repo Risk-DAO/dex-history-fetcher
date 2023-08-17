@@ -65,7 +65,6 @@ function computeAverages(protocolData, numberOfDaysAccumulated) {
                 let daysAveraged = 0;
                 for (const [days, volatilitySpan] of Object.entries(collateralValues)) {
                     daysAveraged++;
-                    console.log(daysAveraged, daysAveraged);
                     for (const [volSpan, liquiditySpan] of Object.entries(volatilitySpan)) {
                         if (!toAverage[market][collateral][volSpan]) {
                             toAverage[market][collateral][volSpan] = {};
