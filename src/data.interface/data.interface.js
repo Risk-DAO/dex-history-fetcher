@@ -7,7 +7,7 @@
 
 const { getParkinsonVolatilityForInterval, getAveragePriceForInterval } = require('./internal/data.interface.price');
 const { getAverageLiquidityForInterval, getSlippageMapForInterval } = require('./internal/data.interface.liquidity');
-const { logFnDuration, logFnDurationWithLabel } = require('../utils/utils');
+const { logFnDurationWithLabel } = require('../utils/utils');
 
 const ALL_PLATFORMS = ['uniswapv2', 'uniswapv3', 'curve'];
 
