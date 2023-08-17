@@ -16,10 +16,11 @@ const DATA_DIR = process.cwd() + '/data';
 const spans = [7, 30, 180];
 
 async function compoundV3Computer(fetchEveryMinutes) {
+    const MONITORING_NAME = 'CompoundV3 CLF Computer';
     const start = Date.now();
     try {
         await RecordMonitoring({
-            'name': 'CompoundV3 CLF Computer',
+            'name': MONITORING_NAME,
             'status': 'running',
             'lastStart': Math.round(start / 1000),
             'runEvery': fetchEveryMinutes * 60
@@ -33,8 +34,6 @@ async function compoundV3Computer(fetchEveryMinutes) {
         }
 
         console.log(`${fnName()}: starting`);
-        const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
-        const currentBlock = await web3Provider.getBlockNumber() - 10;
 
         const results = {};
         /// for all pools in compound v3
@@ -55,7 +54,7 @@ async function compoundV3Computer(fetchEveryMinutes) {
         }
         const toRecord = {
             protocol: 'compound v3',
-            weightedCLF: protocolWeightedCLF ? protocolWeightedCLF : undefined,
+            weightedCLF: protocolWeightedCLF,
             results
         };
 
@@ -67,7 +66,7 @@ async function compoundV3Computer(fetchEveryMinutes) {
 
         const runEndDate = Math.round(Date.now() / 1000);
         await RecordMonitoring({
-            'name': 'CompoundV3 CLF Computer',
+            'name': MONITORING_NAME,
             'status': 'success',
             'lastEnd': runEndDate,
             'lastDuration': runEndDate - Math.round(start / 1000),
@@ -77,7 +76,7 @@ async function compoundV3Computer(fetchEveryMinutes) {
         const errorMsg = `An exception occurred: ${error}`;
         console.log(errorMsg);
         await RecordMonitoring({
-            'name': 'CompoundV3 CLF Computer',
+            'name': MONITORING_NAME,
             'status': 'error',
             'error': errorMsg
         });
@@ -93,11 +92,11 @@ function recordResults(results) {
     if (!fs.existsSync(`${DATA_DIR}/clf/latest`)) {
         fs.mkdirSync(`${DATA_DIR}/clf/latest`);
     }
-    const unifiedFullFilename = path.join(DATA_DIR, `clf/${date}/${date}_compoundV3_CLFs.json`);
+    const datedProtocolFilename = path.join(DATA_DIR, `clf/${date}/${date}_compoundV3_CLFs.json`);
     const latestFullFilename = path.join(DATA_DIR, 'clf/latest/compoundV3_CLFs.json');
     const objectToWrite = JSON.stringify(results);
     try {
-        fs.writeFileSync(unifiedFullFilename, objectToWrite, 'utf8');
+        fs.writeFileSync(datedProtocolFilename, objectToWrite, 'utf8');
         fs.writeFileSync(latestFullFilename, objectToWrite, 'utf8');
     }
     catch (error) {
@@ -106,29 +105,26 @@ function recordResults(results) {
 }
 
 function computeProtocolWeightedCLF(protocolData) {
-    console.log('protocolData', protocolData);
     let protocolCollateral = 0;
     const weightMap = {};
-    for (const [k, v] of Object.entries(protocolData)) {
-        console.log(k, v);
-        if (v) {
-            protocolCollateral += v['totalCollateral'];
+    for (const [market, marketData] of Object.entries(protocolData)) {
+        if (marketData) {
+            protocolCollateral += marketData['totalCollateral'];
         }
     }
     // get each collateral weight
-    for (const [k, v] of Object.entries(protocolData)) {
-        console.log('second loop', k, v)
-        if (v) {
-            const weight = v['totalCollateral'] / protocolCollateral;
-            const clf = v['weightedCLF'];
-            weightMap[k] = weight * clf;
+    for (const [market, marketData] of Object.entries(protocolData)) {
+        if (marketData) {
+            const weight = marketData['totalCollateral'] / protocolCollateral;
+            const clf = marketData['weightedCLF'];
+            weightMap[market] = weight * clf;
         }
     }
     let weightedCLF = 0;
-    for (const [k, v] of Object.entries(weightMap)) {
-        weightedCLF += v;
+    for (const [clf, value] of Object.entries(weightMap)) {
+        weightedCLF += value;
     }
-    weightedCLF = (weightedCLF).toFixed(2)
+    weightedCLF = (weightedCLF).toFixed(2);
     return weightedCLF;
 }
 
@@ -162,16 +158,17 @@ async function computeCLFForPool(pool) {
 
 async function getCollateralAmount(collateral, cometContract) {
     const [totalSupplyAsset] = await cometContract.callStatic.totalsCollateral(collateral.address);
-    const decimals = tokens[collateral.symbol.toUpperCase()].decimals;
+    const decimals = getConfTokenBySymbol(collateral.symbol.toUpperCase()).decimals;
     const results = {};
     let price = undefined;
+    const coinGeckoResponse = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${collateral.coinGeckoID}&vs_currencies=usd`);
     try {
-        price = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${collateral.coinGeckoID}&vs_currencies=usd`);
+        price = coinGeckoResponse.data[collateral.coinGeckoID]['usd'];
     }
     catch (error) {
         console.log('error fetching price', error);
+        price = 0;
     }
-    price = price.data[collateral.coinGeckoID]['usd'];
     results['inKindSupply'] = normalize(totalSupplyAsset, decimals);
     results['usdSupply'] = results['inKindSupply'] * price;
     return results;
@@ -179,26 +176,26 @@ async function getCollateralAmount(collateral, cometContract) {
 
 function computeAverageCLFForPool(poolData) {
     //get pool total collateral in usd
-    let totalCollateral = 0
-    for (const [k, v] of Object.entries(poolData['data'])) {
-        if (v) {
-            totalCollateral += v['collateral']['usdSupply'];
+    let totalCollateral = 0;
+    for (const [collateral, value] of Object.entries(poolData['data'])) {
+        if (value) {
+            totalCollateral += value['collateral']['usdSupply'];
         }
     }
     const weightMap = {};
     // get each collateral weight
-    for (const [k, v] of Object.entries(poolData['data'])) {
+    for (const [collateral, value] of Object.entries(poolData['data'])) {
         if (v) {
-            const weight = v['collateral']['usdSupply'] / totalCollateral;
-            const clf = v['clfs']['7']['7'];
-            weightMap[k] = weight * clf;
+            const weight = value['collateral']['usdSupply'] / totalCollateral;
+            const clf = value['clfs']['7']['7'];
+            weightMap[collateral] = weight * clf;
         }
     }
     let weightedCLF = 0;
-    for (const [k, v] of Object.entries(weightMap)) {
-        weightedCLF += v;
+    for (const [collateral, weight] of Object.entries(weightMap)) {
+        weightedCLF += weight;
     }
-    weightedCLF = (weightedCLF * 100).toFixed(2)
+    weightedCLF = (weightedCLF * 100).toFixed(2);
     return { weightedCLF, totalCollateral };
 }
 
