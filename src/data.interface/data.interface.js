@@ -488,7 +488,7 @@ async function testLiquidity() {
     // console.log('-----------------------');
     // console.log(JSON.stringify(univ3slippageMapsCombined[startBlock]));
 
-    const result = getAverageLiquidityForIntervalNew(base, quote, startBlock, endBlock, ['uniswapv3'], false);
+    const result = getAverageLiquidityForInterval(base, quote, startBlock, endBlock, ['uniswapv3'], false);
     console.log(result);
     // const result = getAverageLiquidityForInterval(base, quote, startBlock, endBlock, ['uniswapv3'], false);
     // console.log(result[500]);
