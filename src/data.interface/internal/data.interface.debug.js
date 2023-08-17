@@ -1,8 +1,8 @@
 // this is just for debugging
 
 const { ethers } = require('ethers');
-const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
-const { getAverageLiquidityForInterval, getParkinsonVolatilityForInterval } = require('./data.interface');
+const { getBlocknumberForTimestamp } = require('../../utils/web3.utils');
+const { getAverageLiquidityForInterval, getParkinsonVolatilityForInterval } = require('../data.interface');
 
 async function testVolatility() {
     const daysToAvg = 180;
