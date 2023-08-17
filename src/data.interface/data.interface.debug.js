@@ -1,4 +1,4 @@
-// this is just for testing
+// this is just for debugging
 
 const { ethers } = require('ethers');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
