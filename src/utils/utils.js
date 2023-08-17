@@ -32,7 +32,7 @@ async function readLastLine(file) {
                     lastLine = chunk.slice(i + 1).toString('utf8') + lastLine;
 
                     // don't return last empty line
-                    if(lastLine.trim()) {
+                    if (lastLine.trim()) {
                         return lastLine.trim();
                     }
                 }
@@ -74,10 +74,10 @@ function fnName() {
  * @param {number} jobName the name for the jobs done
  */
 function logFnDuration(dtStart, jobCount = undefined, jobName = 'job') {
-    if(!process.env.DEBUG_DURATION) return;
-    const secDuration = (Date.now() - dtStart)/1000;
-    if(jobCount) {
-        console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration, 6)} s. ${jobCount/secDuration} ${jobName}/sec`);
+    if (!process.env.DEBUG_DURATION) return;
+    const secDuration = (Date.now() - dtStart) / 1000;
+    if (jobCount) {
+        console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration, 6)} s. ${jobCount / secDuration} ${jobName}/sec`);
     } else {
         console.log(`${logFnDuration.caller.name} duration: ${roundTo(secDuration, 6)} s`);
     }
@@ -104,6 +104,14 @@ async function sleep(ms) {
     });
 }
 
+const getDay = () => {
+    const dateObj = new Date();
+    const month = dateObj.getUTCMonth() + 1; //months from 1-12
+    const day = dateObj.getUTCDate();
+    const year = dateObj.getUTCFullYear();
+    return day + '.' + month + '.' + year;
+};
+
 /**
  * a small retry wrapper with an incremeting 5s sleep delay
  * @param {Function} fn 
@@ -115,7 +123,7 @@ async function sleep(ms) {
 async function retry(fn, params, retries = 0, maxRetries = 10) {
     try {
         const res = await fn(...params);
-        if(retries){
+        if (retries) {
             console.log(`retry success after ${retries} retries`);
         } else {
             // console.log('success on first try');
@@ -124,7 +132,7 @@ async function retry(fn, params, retries = 0, maxRetries = 10) {
     } catch (e) {
         console.error(e);
         retries++;
-        if(retries >= maxRetries) {
+        if (retries >= maxRetries) {
             throw e;
         }
         console.log(`retry #${retries}`);
@@ -142,4 +150,4 @@ function arrayAverage(array) {
     return array.reduce((a, b) => a + b, 0) / array.length;
 }
 
-module.exports = { retry, sleep, fnName, roundTo, logFnDuration, logFnDurationWithLabel, readLastLine, arrayAverage };
+module.exports = { retry, sleep, fnName, roundTo, getDay, logFnDuration, logFnDurationWithLabel, readLastLine, arrayAverage };
