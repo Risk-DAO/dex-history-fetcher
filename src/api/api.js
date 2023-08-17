@@ -180,8 +180,8 @@ app.get('/api/getallclfs', async (req, res, next) => {
         const date = req.query.date ? req.query.date : getDay();
         const folder = req.query.latest ? 'latest' : date;
 
-        const fileName = `${date}_all_CLFs.json`;
-        const cacheKey = `${date}_all_CLFs`;
+        const fileName = req.query.latest ? 'all_CLFs.json' : `${date}_all_CLFs`;
+        const cacheKey = req.query.latest ? 'all_CLFs.json' : `${date}_all_CLFs`;
         if (!cache[cacheKey]
             || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
             const filePath = path.join(DATA_DIR, 'clf', folder, fileName);
@@ -221,8 +221,8 @@ app.get('/api/getclfs', async (req, res, next) => {
             res.status(400).json({ error: 'platform required' });
             next();
         }
-        const fileName = `${date}_${platform}CLFs.json`;
-        const cacheKey = `${date}_${platform}_CLFs`;
+        const fileName = req.query.latest ? `${platform}CLFs.json` : `${date}_${platform}CLFs.json`;
+        const cacheKey = req.query.latest ? `${platform}CLFs.json` : `${date}_${platform}CLFs.json`;
         if (!cache[cacheKey]
             || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
             const filePath = path.join(DATA_DIR, 'clf', folder, fileName);
