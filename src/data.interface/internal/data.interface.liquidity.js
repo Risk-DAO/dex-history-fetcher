@@ -120,7 +120,10 @@ function getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBloc
 function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock=50) {
     const liquidityData = {};
     const data = getUnifiedDataForPlatform(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
-
+    if(!data) {
+        return undefined;
+    }
+    
     const pivotData = getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
 
     for(const [blockNumber, platformData] of Object.entries(data)) {
@@ -139,13 +142,13 @@ function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toB
                 continue;
             }
 
-            const segment1DataForBlock = getPivotDataForBlock(pivotData, platform, fromSymbol, pivot, blockNumber);
+            const segment1DataForBlock = getPivotDataForBlock(pivotData, fromSymbol, pivot, blockNumber);
                 
             if(!segment1DataForBlock) {
                 continue;
             }
 
-            const segment2DataForBlock = getPivotDataForBlock(pivotData, platform, pivot, toSymbol, blockNumber);
+            const segment2DataForBlock = getPivotDataForBlock(pivotData, pivot, toSymbol, blockNumber);
             if(!segment2DataForBlock) {
                 continue;
             }
@@ -166,24 +169,24 @@ function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toB
     return liquidityData;
 }
 
-function getPivotDataForBlock(pivotData, platform, base, quote, blockNumber) {
-    if(!pivotData[platform]) {
+function getPivotDataForBlock(pivotData, base, quote, blockNumber) {
+    if(!pivotData) {
         return undefined;
     }
 
-    if(!pivotData[platform][base]) {
+    if(!pivotData[base]) {
         return undefined;
     }
 
-    if(!pivotData[platform][base][quote]) {
+    if(!pivotData[base][quote]) {
         return undefined;
     }
 
-    if(!pivotData[platform][base][quote][blockNumber]) {
+    if(!pivotData[base][quote][blockNumber]) {
         return undefined;
     }
 
-    return pivotData[platform][base][quote][blockNumber];
+    return pivotData[base][quote][blockNumber];
 }
 
 function getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock=50) {
