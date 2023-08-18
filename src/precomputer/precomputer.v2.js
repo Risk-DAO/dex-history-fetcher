@@ -1,11 +1,6 @@
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { ethers } = require('ethers');
-const { precomputeUniswapV2Data } = require('./uniswap.v2.precomputer');
-const { sleep, fnName, roundTo } = require('../utils/utils');
-const { precomputeUniswapV3Data } = require('./uniswap.v3.precomputer');
-const { precomputeCurveData } = require('./curve.precomputer');
-const path = require('path');
-const fs = require('fs');
+const { sleep, fnName, roundTo, logFnDurationWithLabel } = require('../utils/utils');
 const { default: axios } = require('axios');
 const { RecordMonitoring } = require('../utils/monitoring');
 const { pairsToCompute } = require('./precomputer.config');
@@ -14,7 +9,6 @@ const { getLiquidity, getVolatility, getAverageLiquidity } = require('../data.in
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 const TARGET_DATA_POINTS = Number(process.env.TARGET_DATA_POINTS || 50);
-const DATA_DIR = process.cwd() + '/data';
 const BLOCKINFO_URL = process.env.BLOCKINFO_URL;
 
 
@@ -45,6 +39,7 @@ async function precomputeDataV2() {
             const currentBlock = await web3Provider.getBlockNumber() - 100;
 
             for(const span of SPANS) {
+                const start = Date.now();
                 console.log(`${fnName()}: Will precompute data for the last ${span} day(s)`);
                 const startDate = Math.round(Date.now()/1000) - span * 24 * 60 * 60;
                 // get the blocknumber for this date
@@ -54,9 +49,11 @@ async function precomputeDataV2() {
                 console.log(`${fnName()}: Will precompute data since block ${startBlock} to ${currentBlock} with step: ${blockStep} blocks`);
                 const allBlocksForSpan = new Set();
 
+                const precomputedForPlatform = {};
+                const averagesForPlatform = {};
                 for(const platform of PLATFORMS) {
-                    const precomputed = [];
-                    const averages = {};
+                    precomputedForPlatform[platform] = [];
+                    averagesForPlatform[platform] = {};
                     for(const base of Object.keys(pairsToCompute)) {
                         for(const quote of pairsToCompute[base]) {
                             console.log(`${fnName()} [${base}/${quote}] [${span}d] [step: ${blockStep}]: getting data from ${platform}`);
@@ -74,8 +71,8 @@ async function precomputeDataV2() {
                             const liquidityAverageAggreg = getAverageLiquidity(platform, base, quote, startBlock, currentBlock, true);
 
                             const precomputedObj = toPrecomputed(base, quote, blockStep, liquidityDataAggreg, volatility);
-                            precomputed.push(precomputedObj);
-                            addToAverages(averages, base, quote, blockStep, liquidityAverageAggreg, volatility);
+                            precomputedForPlatform[platform].push(precomputedObj);
+                            addToAverages(averagesForPlatform[platform], base, quote, blockStep, liquidityAverageAggreg, volatility);
                         }
                     }
                 }
@@ -87,6 +84,7 @@ async function precomputeDataV2() {
                     blockTimeStamps[blockNumber] = blockTimestampResp.data.timestamp;
                 }
                 
+                logFnDurationWithLabel(start, `Precomputer for span ${span}`);
             }
         } catch(error) {
             console.error(error);
