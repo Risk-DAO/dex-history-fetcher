@@ -23,58 +23,54 @@ const ALL_PLATFORMS = ['uniswapv2', 'uniswapv3', 'curve'];
 
 
 /**
- * Compute the volatility for an interval of blocks, for a list of platforms
+ * Compute the volatility for an interval of blocks
+ * @param {string} platforms platforms (univ2, univ3...), default to ALL_PLATFORMS
  * @param {string} fromSymbol base symbol (WETH, USDC...)
  * @param {string} toSymbol quote symbol (WETH, USDC...)
  * @param {number} fromBlock start block of the query (included)
  * @param {number} toBlock endblock of the query (included)
- * @param {string[] | undefined} platforms platforms (univ2, univ3...), default to ALL_PLATFORMS
  * @param {number} daysToAvg the number of days the interval spans, used to compute the parkinson's liquidity
  * @returns {number} parkinson's volatility
  */
-function getVolatility(fromSymbol, toSymbol, fromBlock, toBlock, platforms, daysToAvg) {
-    platforms = checkPlatforms(platforms);
+function getVolatility(platform, fromSymbol, toSymbol, fromBlock, toBlock, daysToAvg) {
+    checkPlatform(platform);
     const start = Date.now();
-    const volatility = getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, daysToAvg);
-    logFnDurationWithLabel(start, `p: ${platforms}, blocks: ${(toBlock-fromBlock)}, daysToAvg: ${daysToAvg}`);
+    const volatility = getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, daysToAvg);
+    logFnDurationWithLabel(start, `p: ${platform}, blocks: ${(toBlock-fromBlock)}, daysToAvg: ${daysToAvg}`);
     return volatility;
 }
 
 /**
- * Compute the average price from each platform then re-average for all platforms
- * Example: compute average price of WETH/USDC for univ3 and univ2 separately 
- * then compute (average_univ3 + average_univ2) / 2
+ * Compute the average price for a platform
+ * @param {string} platforms platform (univ2, univ3...), default to ALL_PLATFORMS
  * @param {string} fromSymbol base symbol (WETH, USDC...)
  * @param {string} toSymbol quote symbol (WETH, USDC...)
  * @param {number} fromBlock start block of the query (included)
  * @param {number} toBlock endblock of the query (included)
- * @param {string[] | undefined} platforms platforms (univ2, univ3...), default to ALL_PLATFORMS
  * @returns {number} the average price
  */
-function getAveragePrice(fromSymbol, toSymbol, fromBlock, toBlock, platforms) {
-    platforms = checkPlatforms(platforms);
+function getAveragePrice(platform, fromSymbol, toSymbol, fromBlock, toBlock) {
+    checkPlatform(platform);
     const start = Date.now();
-    const averagePrice = getAveragePriceForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms);
-    logFnDurationWithLabel(start, `p: ${platforms}, blocks: ${(toBlock-fromBlock)}`);
+    const averagePrice = getAveragePriceForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform);
+    logFnDurationWithLabel(start, `p: ${platform}, blocks: ${(toBlock-fromBlock)}`);
     return averagePrice;
 }
 
 /**
- * Get the average liquidity in a block interval, for X platforms, with or without pivot route jumps
- * 
+ * Get the average liquidity in a block interval, for a platform, with or without pivot route jumps
+ * @param {string} platform platform (univ2, univ3...)
  * @param {string} fromSymbol base symbol (WETH, USDC...)
  * @param {string} toSymbol quote symbol (WETH, USDC...)
  * @param {number} fromBlock start block of the query (included)
  * @param {number} toBlock endblock of the query (included)
- * @param {string[] | undefined} platforms platforms (univ2, univ3...), default to ALL_PLATFORMS
  * @param {bool} withJumps default true. pivot route jump: from UNI to MKR, we will add "additional routes" using UNI->USDC->MKR + UNI->WETH->MKR + UNI->WBTC+MKR
- * @returns {{[slippageBps: number]: number}}
  */
-function getAverageLiquidity(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps = true) {
-    platforms = checkPlatforms(platforms);
+function getAverageLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true) {
+    checkPlatform(platform);
     const start = Date.now();
-    const avgLiquidity = getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps);
-    logFnDurationWithLabel(start, `p: ${platforms}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}`);
+    const avgLiquidity = getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps);
+    logFnDurationWithLabel(start, `p: ${platform}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}`);
     return avgLiquidity;
 }
 
@@ -88,13 +84,12 @@ function getAverageLiquidity(fromSymbol, toSymbol, fromBlock, toBlock, platforms
  * @param {string[] | undefined} platforms platforms (univ2, univ3...), default to ALL_PLATFORMS
  * @param {bool} withJumps default true. pivot route jump: from UNI to MKR, we will add "additional routes" using UNI->USDC->MKR + UNI->WETH->MKR + UNI->WBTC+MKR
  * @param {number} stepBlock default to 50. The amount of block between each data point
- * @returns {{[blockNumber: number]: {[slippageBps: number]: number}}}
  */
-function getLiquidity(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps = true, stepBlock = 50) {
-    platforms = checkPlatforms(platforms);
+function getLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true, stepBlock = 50) {
+    checkPlatform(platform);
     const start = Date.now();
-    const liquidity = getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJumps, stepBlock);
-    logFnDurationWithLabel(start, `p: ${platforms}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}, step: ${stepBlock}`);
+    const liquidity = getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps, stepBlock);
+    logFnDurationWithLabel(start, `p: ${platform}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}, step: ${stepBlock}`);
     return liquidity;
 }
 
@@ -107,16 +102,14 @@ function getLiquidity(fromSymbol, toSymbol, fromBlock, toBlock, platforms, withJ
 //                                           
 //                                           
 
-function checkPlatforms(platforms) {
-    if(!platforms || platforms.length == 0) {
-        platforms = ALL_PLATFORMS;
+/**
+ * Check that the platform request is valid
+ * @param {string} platform the platform requested (uniswapv2, v3, curve...)
+ */
+function checkPlatform(platform) {
+    if(!ALL_PLATFORMS.includes(platform)) {
+        throw new Error(`Platform unknown: ${platform}, use one of ${ALL_PLATFORMS}`);
     }
-
-    if(platforms.some(_ => !ALL_PLATFORMS.includes(_))) {
-        throw new Error(`At least one platform request is not known: ${platforms.join(',')}`);
-    }
-
-    return platforms;
 }
 
 module.exports = { getVolatility, getAveragePrice, getAverageLiquidity, getLiquidity};

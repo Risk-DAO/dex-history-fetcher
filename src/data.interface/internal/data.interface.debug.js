@@ -19,20 +19,19 @@ async function testVolatility() {
     console.log({allVol}, {univ2Vol}, {univ3Vol}, {curve});
 }
 async function testLiquidity() {
-    const daysToAvg = 365;
+    const daysToAvg = 30;
     const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
     const endBlock = await web3Provider.getBlockNumber();
     const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (daysToAvg * 24 * 60 * 60));
-    const base = 'DAI';
+    const base = 'WETH';
     const quote = 'USDC';
 
     const stepBlock = Math.round((endBlock-startBlock) / 50);
-    const platforms = undefined;
-    // const platforms = ['uniswapv2', 'uniswapv3'];
-    // const platforms = ['uniswapv3'];
 
     // const liquidity = getLiquidity(base, quote, startBlock, endBlock, platforms, true, stepBlock);
-    const avgLiquidity = getAverageLiquidity(base, quote, startBlock, endBlock, platforms, true);
+    const avgLiquidityUniv2 = getAverageLiquidity('uniswapv2', base, quote, startBlock, endBlock, true);
+    const avgLiquidityUniv3 = getAverageLiquidity('uniswapv3', base, quote, startBlock, endBlock, true);
+    console.log(avgLiquidityUniv2);
 }
 
 // testVolatility();
