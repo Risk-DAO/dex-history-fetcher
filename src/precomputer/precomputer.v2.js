@@ -5,11 +5,14 @@ const { default: axios } = require('axios');
 const { RecordMonitoring } = require('../utils/monitoring');
 const { pairsToCompute } = require('./precomputer.config');
 const { getLiquidity, getVolatility, getAverageLiquidity } = require('../data.interface/data.interface');
+const path = require('path');
+const { writeFileSync } = require('fs');
 
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 const TARGET_DATA_POINTS = Number(process.env.TARGET_DATA_POINTS || 50);
 const BLOCKINFO_URL = process.env.BLOCKINFO_URL;
+const DATA_DIR = process.cwd() + '/data';
 
 
 const PLATFORMS = ['uniswapv2', 'curve', 'uniswapv3'];
@@ -84,6 +87,18 @@ async function precomputeDataV2() {
                     blockTimeStamps[blockNumber] = blockTimestampResp.data.timestamp;
                 }
                 
+                for(const platform of PLATFORMS) {
+                    const averageFullFilename = path.join(DATA_DIR, 'precomputed', platform, `new-averages-${span}d.json`);
+                    writeFileSync(averageFullFilename, JSON.stringify(averagesForPlatform[platform], null, 4));
+                    const concatFullFilename = path.join(DATA_DIR, 'precomputed', platform, `new-concat-${span}d.json`);
+                    const concatObj = {
+                        lastUpdate: Date.now(),
+                        concatData: precomputedForPlatform[platform],
+                        blockTimestamps: blockTimeStamps
+                    };
+                    writeFileSync(concatFullFilename, JSON.stringify(concatObj, null, 4));
+
+                }
                 logFnDurationWithLabel(start, `Precomputer for span ${span}`);
             }
         } catch(error) {
@@ -134,8 +149,8 @@ function toPrecomputed(base, quote, blockStep, liquidityDataAggreg, volatility) 
 
         const volumeForSlippageObj = {
             price: liquidityData.price,
-            blockNumber: blockNumber,
-            realBlockNumber: blockNumber,
+            blockNumber: Number(blockNumber),
+            realBlockNumber: Number(blockNumber),
             realBlockNumberDistance: 0,
             aggregated: {}
         };
