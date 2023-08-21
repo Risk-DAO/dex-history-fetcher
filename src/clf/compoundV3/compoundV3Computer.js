@@ -1,7 +1,7 @@
 const { ethers } = require('ethers');
 const dotenv = require('dotenv');
 const path = require('path');
-const { fnName, retry, getDay, roundTo, sleep } = require('../../utils/utils');
+const { fnName, retry, getDay } = require('../../utils/utils');
 const fs = require('fs');
 const { default: axios } = require('axios');
 dotenv.config();
@@ -11,9 +11,7 @@ const { computeAggregatedVolumeFromPivot } = require('../../utils/aggregator');
 const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
 const { RecordMonitoring } = require('../../utils/monitoring');
-const { tokens } = require('../../global.config');
-const { object } = require('webidl-conversions');
-const DATA_DIR = process.cwd() + '/data';
+const { DATA_DIR } = require('../../utils/constants');
 const spans = [7, 30, 180];
 
 async function compoundV3Computer(fetchEveryMinutes) {
@@ -30,8 +28,9 @@ async function compoundV3Computer(fetchEveryMinutes) {
             throw new Error('Could not find RPC_URL env variable');
         }
 
-        if (!fs.existsSync(`${DATA_DIR}/clf/`)) {
-            fs.mkdirSync(`${DATA_DIR}/clf/`);
+        
+        if(!fs.existsSync(path.join(DATA_DIR, 'clf'))) {
+            fs.mkdirSync(path.join(DATA_DIR, 'clf'));
         }
 
         console.log(`${fnName()}: starting`);

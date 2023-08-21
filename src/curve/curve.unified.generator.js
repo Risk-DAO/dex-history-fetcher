@@ -1,11 +1,9 @@
 const path = require('path');
 const fs = require('fs');
-const { fnName, readLastLine, sleep } = require('../utils/utils');
-const { getConfTokenBySymbol, normalize } = require('../utils/token.utils');
+const { fnName, readLastLine } = require('../utils/utils');
 const { getAvailableCurve, getCurveDataforBlockInterval, computePriceAndSlippageMapForReserveValue } = require('./curve.utils');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
-
-const DATA_DIR = process.cwd() + '/data';
+const { DATA_DIR } = require('../utils/constants');
 
 // this can be very long if done from the begining. 
 async function generateUnifiedFileCurve(endBlock) {

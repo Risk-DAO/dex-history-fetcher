@@ -12,13 +12,14 @@ const { getPriceNormalized, getSlippages } = require('./uniswap.v3.utils');
 const { default: BigNumber } = require('bignumber.js');
 const { RecordMonitoring } = require('../utils/monitoring');
 const { generateUnifiedFileUniv3 } = require('./uniswap.v3.unified.generator');
+const { DATA_DIR } = require('../utils/constants');
+const path = require('path');
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
 // save liquidity data every 'CONSTANT_BLOCK_INTERVAL' blocks
 const CONSTANT_BLOCK_INTERVAL = 50;
 
 const RPC_URL = process.env.RPC_URL;
-const DATA_DIR = process.cwd() + '/data';
 
 UniswapV3HistoryFetcher();
 
@@ -42,8 +43,8 @@ async function UniswapV3HistoryFetcher() {
                 throw new Error('Could not find RPC_URL env variable');
             }
 
-            if(!fs.existsSync(`${DATA_DIR}/uniswapv3`)) {
-                fs.mkdirSync(`${DATA_DIR}/uniswapv3`);
+            if(!fs.existsSync(path.join(DATA_DIR, 'uniswapv3'))) {
+                fs.mkdirSync(path.join(DATA_DIR, 'uniswapv3'));
             }
 
             console.log(`${fnName()}: starting`);

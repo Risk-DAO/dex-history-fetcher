@@ -3,8 +3,7 @@ const fs = require('fs');
 const { fnName, readLastLine } = require('../utils/utils');
 const { getAvailableUniswapV2, getUniV2DataforBlockInterval, computeLiquidityUniV2Pool, computeUniswapV2Price } = require('./uniswap.v2.utils');
 const { getConfTokenBySymbol, normalize } = require('../utils/token.utils');
-
-const DATA_DIR = process.cwd() + '/data';
+const { DATA_DIR } = require('../utils/constants');
 
 
 async function generateUnifiedFileUniv2(endBlock) {

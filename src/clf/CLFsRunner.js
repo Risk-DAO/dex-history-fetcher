@@ -5,8 +5,7 @@ const fs = require('fs');
 dotenv.config();
 const { compoundV3Computer } = require('./compoundV3/compoundV3Computer');
 const { computeAveragesForProtocol } = require('./computeAveragesForProtocol');
-const DATA_DIR = process.cwd() + '/data';
-
+const { DATA_DIR } = require('../utils/constants');
 
 async function main() {
     const start = Date.now();
@@ -36,7 +35,7 @@ async function main() {
 
 function unifyFiles() {
     const date = getDay();
-    const folderPath = DATA_DIR + '/clf/' + date;
+    const folderPath = path.join(DATA_DIR, 'clf', date);
     const toWrite = [];
     try {
         const files = fs.readdirSync(folderPath);

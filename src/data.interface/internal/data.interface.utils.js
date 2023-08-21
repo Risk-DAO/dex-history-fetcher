@@ -1,28 +1,23 @@
 
 const path = require('path');
 const fs = require('fs');
-const DATA_DIR = process.cwd() + '/data';
+const { DATA_DIR } = require('../../utils/constants');
 
 /**
- * Get unified data for each target platforms
- * @param {string[]} platforms 
+ * Get unified data for a target platform
+ * @param {string} platform
  * @param {string} fromSymbol 
  * @param {string} toSymbol 
  * @param {number} fromBlock 
  * @param {number} toBlock 
  * @returns {{[platform: string]: {[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
  */
-function getUnifiedDataForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock=50) {
-    const data = {};
-    for (const platform of platforms) {
-        const unifiedData = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
-        if (!unifiedData) {
-            console.log(`getUnifiedDataForPlatforms for ${fromSymbol}/${toSymbol}: could not find data on platform ${platform}`);
-        } else {
-            data[platform] = unifiedData;
-        }
+function getUnifiedDataForPlatform(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock=50) {
+    const unifiedData = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
+    if (!unifiedData) {
+        console.log(`getUnifiedDataForPlatforms for ${fromSymbol}/${toSymbol}: could not find data on platform ${platform}`);
     }
-    return data;
+    return unifiedData;
 }
 
 /**
@@ -143,4 +138,4 @@ function extractDataFromUnifiedLine(line) {
     };
 }
 
-module.exports = { getUnifiedDataForInterval, getUnifiedDataForPlatforms };
+module.exports = { getUnifiedDataForInterval, getUnifiedDataForPlatform };
