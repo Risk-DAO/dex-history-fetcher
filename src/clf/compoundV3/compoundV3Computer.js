@@ -111,7 +111,7 @@ function recordResults(results) {
 function computeProtocolWeightedCLF(protocolData) {
     let protocolCollateral = 0;
     const weightMap = {};
-    for (const [market, marketData] of Object.entries(protocolData)) {
+    for (const marketData of Object.values(protocolData)) {
         if (marketData) {
             protocolCollateral += marketData['totalCollateral'];
         }
@@ -125,7 +125,7 @@ function computeProtocolWeightedCLF(protocolData) {
         }
     }
     let weightedCLF = 0;
-    for (const [clf, value] of Object.entries(weightMap)) {
+    for (const value of Object.values(weightMap)) {
         weightedCLF += value;
     }
     weightedCLF = (weightedCLF).toFixed(2);
@@ -181,7 +181,7 @@ async function getCollateralAmount(collateral, cometContract) {
 function computeAverageCLFForPool(poolData) {
     //get pool total collateral in usd
     let totalCollateral = 0;
-    for (const [collateral, value] of Object.entries(poolData['data'])) {
+    for (const value of Object.values(poolData['data'])) {
         if (value) {
             totalCollateral += value['collateral']['usdSupply'];
         }
@@ -196,7 +196,7 @@ function computeAverageCLFForPool(poolData) {
         }
     }
     let weightedCLF = 0;
-    for (const [collateral, weight] of Object.entries(weightMap)) {
+    for (const weight of Object.values(weightMap)) {
         weightedCLF += weight;
     }
     weightedCLF = (weightedCLF * 100).toFixed(2);
@@ -253,7 +253,7 @@ function findCLFFromParameters(volatility, liquidity, liquidationBonus, ltv, bor
     const lnLtvPlusBeta = Math.log(ltvPlusBeta);
     const c = -1 * lnLtvPlusBeta * sqrtBySigma;
     return c;
-};
+}
 
 async function getAssetParameters(cometContract, compoundV3Asset) {
     const results = await cometContract.getAssetInfo(compoundV3Asset.index);
