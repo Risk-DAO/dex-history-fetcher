@@ -6,10 +6,10 @@ var cors = require('cors');
 var path = require('path');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { roundTo, getDay } = require('../utils/utils');
+const { DATA_DIR } = require('../utils/constants');
 const app = express();
 app.use(cors());
 const port = process.env.API_PORT || 3000;
-const DATA_DIR = process.cwd() + '/data';
 
 const cache = {};
 const cacheDuration = 30 * 60 * 1000; // 30 min cache duration

@@ -7,17 +7,12 @@ const { pairsToCompute } = require('./precomputer.config');
 const { getLiquidity, getVolatility, getAverageLiquidity } = require('../data.interface/data.interface');
 const path = require('path');
 const { writeFileSync } = require('fs');
+const { SPANS, PLATFORMS, DATA_DIR, TARGET_SLIPPAGES } = require('../utils/constants');
 
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 const TARGET_DATA_POINTS = Number(process.env.TARGET_DATA_POINTS || 50);
 const BLOCKINFO_URL = process.env.BLOCKINFO_URL;
-const DATA_DIR = process.cwd() + '/data';
-
-
-const PLATFORMS = ['uniswapv2', 'curve', 'uniswapv3'];
-const TARGET_SLIPPAGES = [1, 5, 10, 15, 20];
-const SPANS = [1, 7, 30, 180, 365];
 const RUN_EVERY_MINUTES = 3 * 60; // in minutes
 const MONITORING_NAME = 'Precomputer V2';
 

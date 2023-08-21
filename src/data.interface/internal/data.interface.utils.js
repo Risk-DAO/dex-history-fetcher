@@ -1,7 +1,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const DATA_DIR = process.cwd() + '/data';
+const { DATA_DIR } = require('../../utils/constants');
 
 /**
  * Get unified data for each target platforms

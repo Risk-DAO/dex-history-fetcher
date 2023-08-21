@@ -2,9 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const { fnName, readLastLine } = require('../utils/utils');
 const { getAvailableUniswapV3, getUniV3DataforBlockInterval } = require('./uniswap.v3.utils');
-
-const DATA_DIR = process.cwd() + '/data';
-
+const { DATA_DIR } = require('../utils/constants');
 
 async function generateUnifiedFileUniv3(endBlock) {
     const available = getAvailableUniswapV3(DATA_DIR);

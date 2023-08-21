@@ -3,13 +3,14 @@ const dotenv = require('dotenv');
 const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const curveConfig = require('./curve.config');
 const fs = require('fs');
+const path = require('path');
 const { sleep, fnName, readLastLine, roundTo } = require('../utils/utils');
 const { getTokenSymbolByAddress, getConfTokenBySymbol, normalize } = require('../utils/token.utils');
 const { RecordMonitoring } = require('../utils/monitoring');
 const { generateUnifiedFileCurve } = require('./curve.unified.generator');
+const { DATA_DIR } = require('../utils/constants');
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
-const DATA_DIR = process.cwd() + '/data';
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 
 /**
@@ -28,8 +29,8 @@ async function CurveHistoryFetcher() {
             });
             const errors = [];
 
-            if(!fs.existsSync(`${DATA_DIR}/curve`)) {
-                fs.mkdirSync(`${DATA_DIR}/curve`);
+            if(!fs.existsSync(path.join(DATA_DIR, 'curve'))) {
+                fs.mkdirSync(path.join(DATA_DIR, 'curve'));
             }
 
             const lastResults = {};
@@ -50,7 +51,8 @@ async function CurveHistoryFetcher() {
                 }
             }
 
-            fs.writeFileSync(`${DATA_DIR}/curve/curve_pools_summary.json`, JSON.stringify(lastResults, null, 2));
+            const poolSummaryFullname = path.join(DATA_DIR, 'curve', 'curve_pools_summary.json');
+            fs.writeFileSync(poolSummaryFullname, JSON.stringify(lastResults, null, 2));
 
             if(errors.length > 1) {
                 console.log('errors:', errors);
@@ -99,7 +101,7 @@ async function FetchHistory(pool, currentBlock) {
 
     /// function variables
     let poolAddress = pool.poolAddress;
-    const historyFileName = `${DATA_DIR}/curve/${pool.poolName}_${pool.lpTokenName}_curve.csv`;
+    const historyFileName = path.join(DATA_DIR, 'curve', `${pool.poolName}_${pool.lpTokenName}_curve.csv`);
     let tokenAddresses = undefined;
     let poolSymbols = [];
     // Fetching tokens in pool

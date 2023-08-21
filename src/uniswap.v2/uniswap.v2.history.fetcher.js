@@ -9,9 +9,10 @@ const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
 const { sleep, fnName, roundTo, readLastLine, retry } = require('../utils/utils');
 const { RecordMonitoring } = require('../utils/monitoring');
 const { generateUnifiedFileUniv2 } = require('./uniswap.v2.unified.generator');
+const { DATA_DIR } = require('../utils/constants');
+const path = require('path');
 
 const RPC_URL = process.env.RPC_URL;
-const DATA_DIR = process.cwd() + '/data';
 const MINIMUM_TO_APPEND = process.env.MINIMUM_TO_APPEND || 5000;
 
 /**
@@ -33,8 +34,8 @@ async function UniswapV2HistoryFetcher() {
                 throw new Error('Could not find RPC_URL env variable');
             }
         
-            if(!fs.existsSync(`${DATA_DIR}/uniswapv2`)) {
-                fs.mkdirSync(`${DATA_DIR}/uniswapv2`);
+            if(!fs.existsSync(path.join(DATA_DIR, 'uniswapv2'))) {
+                fs.mkdirSync(path.join(DATA_DIR, 'uniswapv2'));
             }
 
             console.log(`${fnName()}: starting`);
