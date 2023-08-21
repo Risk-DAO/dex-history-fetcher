@@ -15,7 +15,7 @@ const PIVOTS = ['USDC', 'WETH', 'WBTC'];
 function getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps) {
     const liquidityDataForInterval = getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps);
 
-    if(Object.keys(liquidityDataForInterval).length == 0) {
+    if(!liquidityDataForInterval || Object.keys(liquidityDataForInterval).length == 0) {
         return {avgPrice: 0, avgSlippageMap: getDefaultSlippageMap()};
     }
 
