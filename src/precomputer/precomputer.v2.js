@@ -24,13 +24,12 @@ const MONITORING_NAME = 'Precomputer V2';
 async function precomputeDataV2() {
     // eslint-disable-next-line no-constant-condition
     while(true) {
-        const start = Date.now();
+        const runStartDate = Date.now();
         try {
-            const runStartDate = Math.round(Date.now()/1000);
             await RecordMonitoring({
                 'name': MONITORING_NAME,
                 'status': 'running',
-                'lastStart': runStartDate,
+                'lastStart': Math.round(runStartDate/1000),
                 'runEvery': RUN_EVERY_MINUTES * 60
             });
 
@@ -105,15 +104,15 @@ async function precomputeDataV2() {
             });
         }
 
-        const runEndDate = Date.now();
+        const runEndDate = Math.round(Date.now() / 1000);
         await RecordMonitoring({
             'name': MONITORING_NAME,
             'status': 'success',
             'lastEnd': runEndDate,
-            'lastDuration': runEndDate - Math.round(start / 1000)
+            'lastDuration': runEndDate - Math.round(runStartDate / 1000)
         });
 
-        const sleepTime = RUN_EVERY_MINUTES * 60 * 1000 - (Date.now() - start);
+        const sleepTime = RUN_EVERY_MINUTES * 60 * 1000 - (Date.now() - runStartDate);
         if(sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
             await sleep(sleepTime);
