@@ -4,7 +4,7 @@ const fs = require('fs');
 const { DATA_DIR } = require('../../utils/constants');
 
 /**
- * Get unified data for each target platforms
+ * Get unified data for a target platform
  * @param {string} platform
  * @param {string} fromSymbol 
  * @param {string} toSymbol 

@@ -8,8 +8,7 @@
 const { getParkinsonVolatilityForInterval, getAveragePriceForInterval } = require('./internal/data.interface.price');
 const { getAverageLiquidityForInterval, getSlippageMapForInterval } = require('./internal/data.interface.liquidity');
 const { logFnDurationWithLabel } = require('../utils/utils');
-
-const ALL_PLATFORMS = ['uniswapv2', 'uniswapv3', 'curve'];
+const { PLATFORMS } = require('../utils/constants');
 
 
 //    _____  _   _  _______  ______  _____   ______        _____  ______     ______  _    _  _   _   _____  _______  _____  ____   _   _   _____ 
@@ -24,7 +23,7 @@ const ALL_PLATFORMS = ['uniswapv2', 'uniswapv3', 'curve'];
 
 /**
  * Compute the volatility for an interval of blocks
- * @param {string} platforms platforms (univ2, univ3...), default to ALL_PLATFORMS
+ * @param {string} platforms platforms (univ2, univ3...), default to PLATFORMS
  * @param {string} fromSymbol base symbol (WETH, USDC...)
  * @param {string} toSymbol quote symbol (WETH, USDC...)
  * @param {number} fromBlock start block of the query (included)
@@ -42,7 +41,7 @@ function getVolatility(platform, fromSymbol, toSymbol, fromBlock, toBlock, daysT
 
 /**
  * Compute the average price for a platform
- * @param {string} platforms platform (univ2, univ3...), default to ALL_PLATFORMS
+ * @param {string} platforms platform (univ2, univ3...), default to PLATFORMS
  * @param {string} fromSymbol base symbol (WETH, USDC...)
  * @param {string} toSymbol quote symbol (WETH, USDC...)
  * @param {number} fromBlock start block of the query (included)
@@ -81,7 +80,7 @@ function getAverageLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock,
  * @param {string} toSymbol quote symbol (WETH, USDC...)
  * @param {number} fromBlock start block of the query (included)
  * @param {number} toBlock endblock of the query (included)
- * @param {string[] | undefined} platforms platforms (univ2, univ3...), default to ALL_PLATFORMS
+ * @param {string[] | undefined} platforms platforms (univ2, univ3...), default to PLATFORMS
  * @param {bool} withJumps default true. pivot route jump: from UNI to MKR, we will add "additional routes" using UNI->USDC->MKR + UNI->WETH->MKR + UNI->WBTC+MKR
  * @param {number} stepBlock default to 50. The amount of block between each data point
  */
@@ -107,8 +106,8 @@ function getLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock, withJu
  * @param {string} platform the platform requested (uniswapv2, v3, curve...)
  */
 function checkPlatform(platform) {
-    if(!ALL_PLATFORMS.includes(platform)) {
-        throw new Error(`Platform unknown: ${platform}, use one of ${ALL_PLATFORMS}`);
+    if(!PLATFORMS.includes(platform)) {
+        throw new Error(`Platform unknown: ${platform}, use one of ${PLATFORMS}`);
     }
 }
 
