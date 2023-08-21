@@ -3,22 +3,23 @@ const path = require('path');
 const { getDay, fnName, roundTo, sleep } = require('../utils/utils');
 const fs = require('fs');
 dotenv.config();
-const { compoundV3Computer } = require('./compoundV3/compoundV3Computer');
 const { computeAveragesForProtocol } = require('./computeAveragesForProtocol');
 const { DATA_DIR } = require('../utils/constants');
+const { CLFsConfig } = require('./CLFs.config');
 
 async function main() {
     const start = Date.now();
     const fetchEveryMinutes = 1440;
-    const PROTOCOL = 'compoundv3';
     // eslint-disable-next-line no-constant-condition
     while (true) {
         console.log('launching CLFs Runner');
-        await compoundV3Computer(fetchEveryMinutes);
-        console.log(`computing averages data for ${PROTOCOL}`);
-        const averagesData = computeAveragesForProtocol(PROTOCOL);
-        console.log('writing average data file');
-        recordResults(averagesData, 'average_CLFs');
+        for (const protocol of CLFsConfig) {
+            await protocol.toLaunch(fetchEveryMinutes);
+            console.log(`computing averages data for ${protocol.name}`);
+            const averagesData = computeAveragesForProtocol(protocol.name);
+            console.log('writing average data file');
+            recordResults(averagesData, `${protocol.name}_average_CLFs`);
+        }
         console.log('unifying all the protocols files');
         const toWrite = unifyFiles();
         console.log('writing global file');
