@@ -57,15 +57,14 @@ async function precomputeDataV2() {
                             console.log(`${fnName()} [${base}/${quote}] [${span}d] [step: ${blockStep}]: getting data from ${platform}`);
 
                             // for each span for each platform for each pairs, we'll get the volatility, the liquidity and the average liquidity
-                            const volatility = getVolatility(platform, base, quote, startBlock, currentBlock, span);
                             const liquidityDataAggreg = getLiquidity(platform, base, quote, startBlock, currentBlock, true, blockStep);
                             if(!liquidityDataAggreg || Object.keys(liquidityDataAggreg).length == 0) {
                                 // no data for pair
                                 continue;
                             }
-
                             Object.keys(liquidityDataAggreg).forEach(_ => allBlocksForSpan.add(Number(_)));
 
+                            const volatility = getVolatility(platform, base, quote, startBlock, currentBlock, span);
                             const liquidityAverageAggreg = getAverageLiquidity(platform, base, quote, startBlock, currentBlock, true);
 
                             const precomputedObj = toPrecomputed(base, quote, blockStep, liquidityDataAggreg, volatility);
@@ -84,15 +83,14 @@ async function precomputeDataV2() {
                 
                 for(const platform of PLATFORMS) {
                     const averageFullFilename = path.join(DATA_DIR, 'precomputed', platform, `averages-${span}d.json`);
-                    writeFileSync(averageFullFilename, JSON.stringify(averagesForPlatform[platform], null, 4));
+                    writeFileSync(averageFullFilename, JSON.stringify(averagesForPlatform[platform]));
                     const concatFullFilename = path.join(DATA_DIR, 'precomputed', platform, `concat-${span}d.json`);
                     const concatObj = {
                         lastUpdate: Date.now(),
                         concatData: precomputedForPlatform[platform],
                         blockTimestamps: blockTimeStamps
                     };
-                    writeFileSync(concatFullFilename, JSON.stringify(concatObj, null, 4));
-
+                    writeFileSync(concatFullFilename, JSON.stringify(concatObj));
                 }
                 logFnDurationWithLabel(start, `Precomputer for span ${span}`);
             }
