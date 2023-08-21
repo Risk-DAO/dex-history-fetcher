@@ -11,7 +11,7 @@ const { computeAggregatedVolumeFromPivot } = require('../../utils/aggregator');
 const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
 const { RecordMonitoring } = require('../../utils/monitoring');
-const { DATA_DIR } = require('../../utils/constants');
+const { DATA_DIR, PLATFORMS } = require('../../utils/constants');
 const { getVolatility, getLiquidity, getAverageLiquidity } = require('../../data.interface/data.interface');
 const spans = [7, 30, 180];
 
@@ -221,17 +221,33 @@ async function computeMarketCLF(web3Provider, cometContract, compoundV3Asset, to
         const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (span * 24 * 60 * 60));
         console.log(`${fnName()}: Will avg liquidity since block ${startBlock}`);
 
-        const volatility = getVolatility('uniswapv3', from, to, startBlock, endBlock, span);
-        const liquidity = getAverageLiquidity('uniswapv3', from, to, startBlock, endBlock);
-        if(liquidity.avgPrice == 0) {
+        let avgVolatilityAcrossPlatforms = 0;
+        let sumLiquidityAcrossPlatforms = 0;
+        let cptVolatility = 0;
+
+        for(const platform of PLATFORMS) {
+            const plaformVolatility = getVolatility(platform, from, to, startBlock, endBlock, span);
+            // count platform volatility only if not 0, otherwise we would divide too much
+            // example the curve volatility of WETH/USDC is 0 because we don't have data for WETH/USDC on curve
+            if(plaformVolatility != 0) {
+                cptVolatility++;
+            }
+
+            avgVolatilityAcrossPlatforms += plaformVolatility;
+
+            const platformLiquidity = getAverageLiquidity(platform, from, to, startBlock, endBlock);
+            sumLiquidityAcrossPlatforms += platformLiquidity.avgSlippageMap[assetParameters.liquidationBonusBPS];
+        }
+
+        avgVolatilityAcrossPlatforms = cptVolatility == 0 ? 0 : avgVolatilityAcrossPlatforms / cptVolatility;
+
+        if(sumLiquidityAcrossPlatforms == 0) {
             throw new Error(`No data for ${from}/${to} for span ${span}`);
         }
 
-        const computedLiquidity = liquidity.avgSlippageMap[assetParameters.liquidationBonusBPS];
-
         parameters[span] = {
-            volatility: volatility,
-            liquidity: computedLiquidity
+            volatility: avgVolatilityAcrossPlatforms,
+            liquidity: sumLiquidityAcrossPlatforms
         };
     }
     console.log('parameters', parameters);
