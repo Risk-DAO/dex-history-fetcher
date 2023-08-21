@@ -83,9 +83,9 @@ async function precomputeDataV2() {
                 }
                 
                 for(const platform of PLATFORMS) {
-                    const averageFullFilename = path.join(DATA_DIR, 'precomputed', platform, `new-averages-${span}d.json`);
+                    const averageFullFilename = path.join(DATA_DIR, 'precomputed', platform, `averages-${span}d.json`);
                     writeFileSync(averageFullFilename, JSON.stringify(averagesForPlatform[platform], null, 4));
-                    const concatFullFilename = path.join(DATA_DIR, 'precomputed', platform, `new-concat-${span}d.json`);
+                    const concatFullFilename = path.join(DATA_DIR, 'precomputed', platform, `concat-${span}d.json`);
                     const concatObj = {
                         lastUpdate: Date.now(),
                         concatData: precomputedForPlatform[platform],
