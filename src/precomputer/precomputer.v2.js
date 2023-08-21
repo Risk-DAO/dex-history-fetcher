@@ -65,7 +65,7 @@ async function precomputeDataV2() {
                             Object.keys(liquidityDataAggreg).forEach(_ => allBlocksForSpan.add(Number(_)));
 
                             const volatility = getVolatility(platform, base, quote, startBlock, currentBlock, span);
-                            const liquidityAverageAggreg = computeAverageData(liquidityDataAggreg, startBlock, currentBlock);
+                            const liquidityAverageAggreg = computeAverageData(liquidityDataAggreg);
 
                             const precomputedObj = toPrecomputed(base, quote, blockStep, liquidityDataAggreg, volatility);
                             precomputedForPlatform[platform].push(precomputedObj);
@@ -198,35 +198,27 @@ function addToAverages(averages, base, quote, blockStep, liquidityAverageAggreg,
 /**
  * Compute average slippage map and price
  * @param {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}} liquidityDataForInterval 
- * @param {number} fromBlock 
- * @param {number} toBlock 
  * @returns {{avgPrice: number, avgSlippageMap: {[slippageBps: number]: number}}
  */
-function computeAverageData(liquidityDataForInterval, fromBlock, toBlock) {
-    let dataToUse = liquidityDataForInterval[fromBlock];
+function computeAverageData(liquidityDataForInterval) {
     const avgSlippageMap = {};
     for(let i = 50; i <= 2000; i+=50) {
         avgSlippageMap[i] = 0;
     }
 
     let avgPrice = 0;
-    let cptValues = 0;
-    for (let targetBlock = fromBlock; targetBlock <= toBlock; targetBlock++) {
-        cptValues++;
-        if (liquidityDataForInterval[targetBlock]) {
-            dataToUse = liquidityDataForInterval[targetBlock];
-        }
-
-        avgPrice += dataToUse.price;
+    const cptValue = Object.keys(liquidityDataForInterval).length;
+    for(const data of Object.values(liquidityDataForInterval)) {
+        avgPrice += data.price;
         for (const slippageBps of Object.keys(avgSlippageMap)) {
-            avgSlippageMap[slippageBps] += dataToUse.slippageMap[slippageBps];
+            avgSlippageMap[slippageBps] += data.slippageMap[slippageBps];
         }
     }
-
-    avgPrice = avgPrice / cptValues;
+    
+    avgPrice = avgPrice / cptValue;
 
     for (const slippageBps of Object.keys(avgSlippageMap)) {
-        avgSlippageMap[slippageBps] = avgSlippageMap[slippageBps] / cptValues;
+        avgSlippageMap[slippageBps] = avgSlippageMap[slippageBps] / cptValue;
     }
 
     return {avgPrice: avgPrice, avgSlippageMap: avgSlippageMap};
