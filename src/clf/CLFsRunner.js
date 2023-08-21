@@ -64,7 +64,7 @@ function recordResults(results, name) {
     }
     const unifiedFullFilename = path.join(DATA_DIR, `clf/${date}/${date}_${name}.json`);
     const latestUnifiedFullFilename = path.join(DATA_DIR, `clf/latest/${name}.json`);
-    const objectToWrite = JSON.stringify(results);
+    const objectToWrite = JSON.stringify(results, null, 2);
     try {
         fs.writeFileSync(unifiedFullFilename, objectToWrite, 'utf8');
         fs.writeFileSync(latestUnifiedFullFilename, objectToWrite, 'utf8');
