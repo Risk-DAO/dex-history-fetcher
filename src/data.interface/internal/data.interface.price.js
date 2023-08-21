@@ -44,7 +44,7 @@ function getAveragePriceForInterval(fromSymbol, toSymbol, fromBlock, toBlock, pl
 function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, daysToAvg) {
     const label = `${fnName()}[${fromSymbol}/${toSymbol}] [${fromBlock}-${toBlock}] [${platform}]`;
 
-    console.log(`${label}: getting data for all platforms, will average volatility`);
+    console.log(`${label}: getting data and compute volatility`);
 
     const data = getUnifiedDataForPlatform(platform, fromSymbol, toSymbol, fromBlock, toBlock);
 
