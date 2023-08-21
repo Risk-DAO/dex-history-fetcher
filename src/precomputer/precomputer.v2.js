@@ -13,7 +13,7 @@ const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 const TARGET_DATA_POINTS = Number(process.env.TARGET_DATA_POINTS || 50);
 const BLOCKINFO_URL = process.env.BLOCKINFO_URL;
-const RUN_EVERY_MINUTES = 3 * 60; // in minutes
+const RUN_EVERY_MINUTES = process.env.RUN_EVERY || 3 * 60; // in minutes
 const MONITORING_NAME = 'Precomputer V2';
 
 /**
@@ -65,7 +65,7 @@ async function precomputeDataV2() {
                             Object.keys(liquidityDataAggreg).forEach(_ => allBlocksForSpan.add(Number(_)));
 
                             const volatility = getVolatility(platform, base, quote, startBlock, currentBlock, span);
-                            const liquidityAverageAggreg = getAverageLiquidity(platform, base, quote, startBlock, currentBlock, true);
+                            const liquidityAverageAggreg = computeAverageData(liquidityDataAggreg, startBlock, currentBlock);
 
                             const precomputedObj = toPrecomputed(base, quote, blockStep, liquidityDataAggreg, volatility);
                             precomputedForPlatform[platform].push(precomputedObj);
@@ -104,6 +104,14 @@ async function precomputeDataV2() {
                 'error': errorMsg
             });
         }
+
+        const runEndDate = Date.now();
+        await RecordMonitoring({
+            'name': MONITORING_NAME,
+            'status': 'success',
+            'lastEnd': runEndDate,
+            'lastDuration': runEndDate - Math.round(start / 1000)
+        });
 
         const sleepTime = RUN_EVERY_MINUTES * 60 * 1000 - (Date.now() - start);
         if(sleepTime > 0) {
@@ -184,6 +192,44 @@ function addToAverages(averages, base, quote, blockStep, liquidityAverageAggreg,
         averages[base][quote].avgLiquidity[slippagePct] = liquidityAverageAggreg.avgSlippageMap[slippagePct*100];
         averages[base][quote].avgLiquidityAggreg[slippagePct] = liquidityAverageAggreg.avgSlippageMap[slippagePct*100];
     }
+}
+
+
+/**
+ * Compute average slippage map and price
+ * @param {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}} liquidityDataForInterval 
+ * @param {number} fromBlock 
+ * @param {number} toBlock 
+ * @returns {{avgPrice: number, avgSlippageMap: {[slippageBps: number]: number}}
+ */
+function computeAverageData(liquidityDataForInterval, fromBlock, toBlock) {
+    let dataToUse = liquidityDataForInterval[fromBlock];
+    const avgSlippageMap = {};
+    for(let i = 50; i <= 2000; i+=50) {
+        avgSlippageMap[i] = 0;
+    }
+
+    let avgPrice = 0;
+    let cptValues = 0;
+    for (let targetBlock = fromBlock; targetBlock <= toBlock; targetBlock++) {
+        cptValues++;
+        if (liquidityDataForInterval[targetBlock]) {
+            dataToUse = liquidityDataForInterval[targetBlock];
+        }
+
+        avgPrice += dataToUse.price;
+        for (const slippageBps of Object.keys(avgSlippageMap)) {
+            avgSlippageMap[slippageBps] += dataToUse.slippageMap[slippageBps];
+        }
+    }
+
+    avgPrice = avgPrice / cptValues;
+
+    for (const slippageBps of Object.keys(avgSlippageMap)) {
+        avgSlippageMap[slippageBps] = avgSlippageMap[slippageBps] / cptValues;
+    }
+
+    return {avgPrice: avgPrice, avgSlippageMap: avgSlippageMap};
 }
 
 precomputeDataV2();
