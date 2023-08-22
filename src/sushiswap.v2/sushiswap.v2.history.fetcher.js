@@ -10,6 +10,7 @@ const { RecordMonitoring } = require('../utils/monitoring');
 const { DATA_DIR } = require('../utils/constants');
 const path = require('path');
 const { getConfTokenBySymbol } = require('../utils/token.utils');
+const { generateUnifiedFileSushiswapV2 } = require('./sushiswap.v2.unified.generator');
 
 const RPC_URL = process.env.RPC_URL;
 const MINIMUM_TO_APPEND = process.env.MINIMUM_TO_APPEND || 5000;
@@ -48,7 +49,7 @@ async function SushiswapV2HistoryFetcher() {
                 console.log(`${fnName()}: End fetching pair `, pairToFetch);
             }
 
-            // await generateUnifiedFileSushiv2(currentBlock);
+            await generateUnifiedFileSushiswapV2(currentBlock);
             console.log(`${fnName()}: ending`);
         
             const runEndDate = Math.round(Date.now()/1000);
