@@ -1,4 +1,3 @@
-const { getDay } = require('../utils/utils');
 const DATA_DIR = process.cwd() + '/data';
 const path = require('path');
 const fs = require('fs');

@@ -6,13 +6,11 @@ const fs = require('fs');
 const { default: axios } = require('axios');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../../utils/web3.utils');
-const { computeUniv3ParkinsonVolatility, getAverageLiquidityForBlockInterval } = require('../../uniswap.v3/uniswap.v3.utils');
-const { computeAggregatedVolumeFromPivot } = require('../../utils/aggregator');
 const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
 const { RecordMonitoring } = require('../../utils/monitoring');
 const { DATA_DIR, PLATFORMS } = require('../../utils/constants');
-const { getVolatility, getLiquidity, getAverageLiquidity } = require('../../data.interface/data.interface');
+const { getVolatility, getAverageLiquidity } = require('../../data.interface/data.interface');
 const spans = [7, 30, 180];
 
 async function compoundV3Computer(fetchEveryMinutes) {
