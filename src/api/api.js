@@ -1,10 +1,9 @@
 const express = require('express');
 const fs = require('fs');
-const { getCurvePriceAndLiquidity, getAvailableCurve } = require('../curve/curve.utils');
-const { getUniswapPriceAndLiquidity, getUniswapAveragePriceAndLiquidity, getAvailableUniswapV2 } = require('../uniswap.v2/uniswap.v2.utils');
+const { getAvailableCurve } = require('../curve/curve.utils');
+const { getAvailableUniswapV2 } = require('../uniswap.v2/uniswap.v2.utils');
 var cors = require('cors');
 var path = require('path');
-const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { roundTo, getDay } = require('../utils/utils');
 const { DATA_DIR } = require('../utils/constants');
 const app = express();
@@ -104,76 +103,7 @@ app.get('/api/available', (req, res) => {
     res.json(available);
 });
 
-// getprice?platform=uniswapv2&from=ETH&to=USDC&timestamp=1658171864&poolName=3pool
-app.get('/api/getprice', async (req, res, next) => {
-    try {
-        // console.log('received getprice request', req);
-        const platform = req.query.platform;
-        const from = req.query.from;
-        const to = req.query.to;
-        const timestamp = Number(req.query.timestamp);
 
-        if (!timestamp) {
-            res.status(400).json({ error: 'timestamp required' });
-            next();
-        }
-
-        // get nearest blocknum from defillama
-        const blockNumber = await getBlocknumberForTimestamp(timestamp);
-
-        switch (platform.toLowerCase()) {
-            case 'uniswapv2':
-                res.json(await getUniswapPriceAndLiquidity(DATA_DIR, from, to, blockNumber));
-                break;
-            case 'curve':
-            {
-                const poolName = req.query.poolName;
-                if (!poolName) {
-                    res.status(400).json({ error: 'poolName required for curve' });
-                    next();
-                }
-                res.json(await getCurvePriceAndLiquidity(DATA_DIR, poolName, from, to, blockNumber));
-                break;
-            }
-            default:
-                res.status(400).json({ error: `Wrong platform: ${platform}` });
-                break;
-        }
-    } catch (error) {
-        next(error);
-    }
-});
-
-// getprice?platform=uniswapv2&from=ETH&to=USDC&fromTimestamp=10008555&toTimestamp=11000000
-app.get('/api/getaverageprice', async (req, res, next) => {
-    try {
-        // console.log('received getaverageprice request', req);
-        const platform = req.query.platform;
-        const from = req.query.from;
-        const to = req.query.to;
-        const fromTimestamp = Number(req.query.fromTimestamp);
-        const toTimestamp = Number(req.query.toTimestamp);
-
-        // get nearest blocknum from defillama
-        const fromBlock = await getBlocknumberForTimestamp(fromTimestamp);
-        const toBlock = await getBlocknumberForTimestamp(toTimestamp);
-
-        if (toBlock < fromBlock) {
-            res.status(400).json({ error: 'toBlock must be greater than fromBlock' });
-            next();
-        }
-        switch (platform.toLowerCase()) {
-            case 'uniswapv2':
-                res.json(await getUniswapAveragePriceAndLiquidity(DATA_DIR, from, to, fromBlock, toBlock));
-                break;
-            default:
-                res.status(400).json({ error: `Wrong platform: ${platform}` });
-                break;
-        }
-    } catch (error) {
-        next(error);
-    }
-});
 // getallclfs?date=18.2.2023 (date optional)
 app.get('/api/getallclfs', async (req, res, next) => {
     try {
