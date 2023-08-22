@@ -33,6 +33,7 @@ function getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, to
     // try to find the data
     const filename = `${fromSymbol}-${toSymbol}-unified-data.csv`;
     const fullFilename = path.join(DATA_DIR, 'precomputed', platform, filename);
+
     // console.log(`${fnName()}: searching file ${fullFilename}`);
     if(!fs.existsSync(fullFilename)) {
         console.log(`Could not find file ${fullFilename}`);
@@ -138,4 +139,4 @@ function extractDataFromUnifiedLine(line) {
     };
 }
 
-module.exports = { getUnifiedDataForInterval, getUnifiedDataForPlatform };
+module.exports = { getUnifiedDataForInterval, getUnifiedDataForPlatform, getBlankUnifiedData };
