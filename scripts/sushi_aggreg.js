@@ -1,7 +1,7 @@
 const { getAverageLiquidity } = require('../src/data.interface/data.interface');
 
 async function test() {
-    const avgLiquidityUni = getAverageLiquidity('sushiswapv2', 'COMP', 'UNI', 17000000, 18000000);
+    const avgLiquidityUni = getAverageLiquidity('sushiswapv2', 'MANA', 'USDC', 17000000, 18000000);
     console.log(avgLiquidityUni);
     const avgLiquidity = getAverageLiquidity('sushiswapv2', 'COMP', 'USDC', 17000000, 18000000);
     console.log(avgLiquidity);

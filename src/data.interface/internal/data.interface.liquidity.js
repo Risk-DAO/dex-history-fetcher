@@ -120,16 +120,22 @@ function getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBloc
 function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock=50) {
     const liquidityData = {};
     let data = getUnifiedDataForPlatform(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
+    const pivotData = getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
     if(!data) {
-        // if no data found for fromSymbol/toSymbol, consider blank but we will still try to
-        // add "jump routes" to this no "liquidity" base.
+        // if no data and no pivot data, can return undefined: we don't have any liquidity even
+        // from jump routes
+        if(Object.keys(pivotData).length == 0) {
+            return undefined;
+        }
+        // if no data found for fromSymbol/toSymbol but some pivot data are available, consider base data blank 
+        // but we will still try to add "jump routes" to this empty base.
         // Good example is sushiswap COMP/USDC which is an empty pool but we have COMP/WETH and WETH/USDC
         // available. So even if COMP/USDC is empty, we will still use the liquidity from COMP/WETH and WETH/USDC 
         // to get some liquidity for COMP/USDC
-        data = getBlankUnifiedData(fromBlock, toBlock, stepBlock);
+        else {
+            data = getBlankUnifiedData(fromBlock, toBlock, stepBlock);
+        }
     }
-    
-    const pivotData = getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
 
     for(const [blockNumber, platformData] of Object.entries(data)) {
         liquidityData[blockNumber] = {
