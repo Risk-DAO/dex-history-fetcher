@@ -1,13 +1,6 @@
 
 const fs = require('fs');
-const readline = require('readline');
-const { normalize } = require('../utils/token.utils');
-const { tokens } = require('../global.config');
-const { BigNumber } = require('ethers');
 const path = require('path');
-const { fnName } = require('../utils/utils');
-const { computeParkinsonVolatility } = require('../utils/volatility');
-
 
 function getSushiV2DataFile(dataDir, fromSymbol, toSymbol) {
     let filePath = path.join(dataDir, 'sushiswapv2', `${fromSymbol}-${toSymbol}_sushiswapv2.csv`);
