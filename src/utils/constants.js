@@ -1,3 +1,6 @@
+
+const BigNumber = require('bignumber.js');
+
 /**
  * Where all the files are saved
  */
@@ -19,4 +22,23 @@ const TARGET_SLIPPAGES = [1, 5, 10, 15, 20];
  */
 const SPANS = [1, 7, 30, 180, 365];
 
-module.exports = { DATA_DIR, PLATFORMS, TARGET_SLIPPAGES, SPANS};
+const BN_1e18 = new BigNumber(10).pow(18);
+
+/**
+ * data source -> uint map
+ * from contract:
+ * enum LiquiditySource {
+        All,
+        UniV2,
+        UniV3,
+        Curve
+    }
+ */
+const smartLTVSourceMap = {
+    'all': 0,
+    'uniswapv2': 1,
+    'uniswapv3': 2,
+    'curve': 3
+};
+
+module.exports = { DATA_DIR, PLATFORMS, TARGET_SLIPPAGES, SPANS, BN_1e18, smartLTVSourceMap};
