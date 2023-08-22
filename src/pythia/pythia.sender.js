@@ -8,11 +8,12 @@ dotenv.config();
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { RecordMonitoring } = require('../utils/monitoring');
 const { getAverageLiquidity, getVolatility } = require('../data.interface/data.interface');
-const { BN_1e18, PLATFORMS, TARGET_SLIPPAGES, smartLTVSourceMap } = require('../utils/constants');
+const { BN_1e18, TARGET_SLIPPAGES, smartLTVSourceMap } = require('../utils/constants');
 
 const SPANS = [7, 30, 180, 365]; // we dont use constants.js span because we don't generate 1d data
 const MONITORING_NAME = 'Pythia Sender';
 const RUN_EVERY_MINUTES = process.env.RUN_EVERY || 6 * 60; // in minutes
+const PLATFORMS_TO_USE = ['uniswapv2', 'uniswapv3', 'curve'];
 
 async function SendToPythia() {
     if(!process.env.ETH_PRIVATE_KEY) {
@@ -130,7 +131,7 @@ function generateVolatilityData(baseSymbol, span, startBlock, endBlock) {
 
     let volatility = 0;
     let volatilityCpt = 0;
-    for(const platform of PLATFORMS) {
+    for(const platform of PLATFORMS_TO_USE) {
         const vol = getVolatility(platform, baseSymbol, 'USDC', startBlock, endBlock, span);
         if(vol != 0) {
             volatilityCpt++;
@@ -167,7 +168,7 @@ function generateLiquidityData(span, baseSymbol, startBlock, endBlock) {
     const usdcConf = getConfTokenBySymbol('USDC');
     const avgValuesForPlatform = {};
     const results = [];
-    for(const platform of PLATFORMS) {
+    for(const platform of PLATFORMS_TO_USE) {
         const liquidityAverage = getAverageLiquidity(platform, baseSymbol, 'USDC', startBlock, endBlock);
 
         // if some data found, generate per-platform data in the valid format
