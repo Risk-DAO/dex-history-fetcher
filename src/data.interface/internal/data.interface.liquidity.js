@@ -1,5 +1,5 @@
 const { computeAggregatedVolumeFromPivot } = require('../../utils/aggregator');
-const { getUnifiedDataForInterval, getUnifiedDataForPlatform } = require('./data.interface.utils');
+const { getUnifiedDataForInterval, getUnifiedDataForPlatform, getBlankUnifiedData } = require('./data.interface.utils');
 
 const PIVOTS = ['USDC', 'WETH', 'WBTC'];
 
@@ -119,12 +119,23 @@ function getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBloc
  */
 function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock=50) {
     const liquidityData = {};
-    const data = getUnifiedDataForPlatform(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
-    if(!data) {
-        return undefined;
-    }
-    
+    let data = getUnifiedDataForPlatform(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
     const pivotData = getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
+    if(!data) {
+        // if no data and no pivot data, can return undefined: we don't have any liquidity even
+        // from jump routes
+        if(Object.keys(pivotData).length == 0) {
+            return undefined;
+        }
+        // if no data found for fromSymbol/toSymbol but some pivot data are available, consider base data blank 
+        // but we will still try to add "jump routes" to this empty base.
+        // Good example is sushiswap COMP/USDC which is an empty pool but we have COMP/WETH and WETH/USDC
+        // available. So even if COMP/USDC is empty, we will still use the liquidity from COMP/WETH and WETH/USDC 
+        // to get some liquidity for COMP/USDC
+        else {
+            data = getBlankUnifiedData(fromBlock, toBlock, stepBlock);
+        }
+    }
 
     for(const [blockNumber, platformData] of Object.entries(data)) {
         liquidityData[blockNumber] = {
@@ -132,7 +143,8 @@ function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toB
             slippageMap: getDefaultSlippageMap(),
         };
 
-        const aggregatedSlippageMap = structuredClone(platformData.slippageMap);
+        const aggregatedSlippageMap = platformData.slippageMap ? structuredClone(platformData.slippageMap) : getDefaultSlippageMap();
+
         // try to add pivot routes
         for(const pivot of PIVOTS) {
             if(fromSymbol == pivot) {
@@ -151,6 +163,11 @@ function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toB
             const segment2DataForBlock = getPivotDataForBlock(pivotData, pivot, toSymbol, blockNumber);
             if(!segment2DataForBlock) {
                 continue;
+            }
+
+            if(!liquidityData[blockNumber].price) {
+                const computedPrice = segment1DataForBlock.price * segment2DataForBlock.price;
+                liquidityData[blockNumber].price = computedPrice;
             }
 
 
