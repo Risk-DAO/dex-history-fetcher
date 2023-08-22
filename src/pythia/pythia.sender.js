@@ -3,22 +3,17 @@ const BigNumber = require('bignumber.js');
 const pythiaConfig = require('./pythia.config');
 const dotenv = require('dotenv');
 const { fnName, roundTo, sleep, retry } = require('../utils/utils');
-const { getConfTokenBySymbol, normalize } = require('../utils/token.utils');
+const { getConfTokenBySymbol } = require('../utils/token.utils');
 dotenv.config();
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { RecordMonitoring } = require('../utils/monitoring');
-const { getAverageLiquidityForBlockInterval, computeUniv3ParkinsonVolatility } = require('../uniswap.v3/uniswap.v3.utils');
-const { computeAggregatedVolumeFromPivot } = require('../utils/aggregator');
+const { getAverageLiquidity, getVolatility } = require('../data.interface/data.interface');
+const { BN_1e18, PLATFORMS, TARGET_SLIPPAGES, smartLTVSourceMap } = require('../utils/constants');
 
-const CONSTANT_1e18 = new BigNumber(10).pow(18);
-const DATA_DIR = process.cwd() + '/data';
-const TARGETS_SLIPPAGE_BPS = [100, 500, 1000, 1500, 2000];
-const daysRange = [7, 30, 180, 365];
-// const TARGETS_SLIPPAGE_BPS = [500];
-// const daysRange = [30];
+const SPANS = [7, 30, 180, 365]; // we dont use constants.js span because we don't generate 1d data
 const MONITORING_NAME = 'Pythia Sender';
-let slippageCache = {};
-const RUN_EVERY = 3 * 60 * 60;
+const RUN_EVERY_MINUTES = process.env.RUN_EVERY || 6 * 60; // in minutes
+
 async function SendToPythia() {
     if(!process.env.ETH_PRIVATE_KEY) {
         console.log('Could not find ETH_PRIVATE_KEY env variable');
@@ -41,18 +36,57 @@ async function SendToPythia() {
                 'name': MONITORING_NAME,
                 'status': 'running',
                 'lastStart': Math.round(start/1000),
-                'runEvery': RUN_EVERY
+                'runEvery': RUN_EVERY_MINUTES * 60
             });
 
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
-            const endBlock = await retry((() => web3Provider.getBlockNumber()), []);
-            for(const daysToAvg of daysRange) {
+            const endBlock = await retry((() => web3Provider.getBlockNumber()), []) - 10;
+            const pythiaProvider = new ethers.providers.StaticJsonRpcProvider(process.env.PYTHIA_RPC_URL);
+            const signer = new ethers.Wallet(process.env.ETH_PRIVATE_KEY, pythiaProvider);
+            const pythiaContract = new Contract(pythiaConfig.pythiaAddress, pythiaConfig.pythiaAbi, signer);
+            for(const span of SPANS) {
+                
+                const dataToSend = [];
                 // find block for 'daysToAvg' days ago
-                const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (daysToAvg * 24 * 60 * 60));
-                console.log(`${fnName()}: Will avg liquidity since block ${startBlock}`);
+                const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (span * 24 * 60 * 60));
+                console.log(`${fnName()}: Will send to pythia since block ${startBlock}`);
 
-                await SendVolatilityData(daysToAvg, startBlock, endBlock);
-                await SendLiquidityData(daysToAvg, startBlock, endBlock);
+                
+                for(const base of pythiaConfig.tokensToPush) {
+                    const volatilityData = generateVolatilityData(base, span, startBlock, endBlock);
+                    console.log(volatilityData);
+                    dataToSend.push(volatilityData);
+                    
+                    const liquidityDataForPlatform = generateLiquidityData(span, base, startBlock, endBlock);
+                    dataToSend.push(...liquidityDataForPlatform);
+                }
+
+                console.log(`will send ${dataToSend.length} data to pythia for span ${span}d`);
+                const gas = dataToSend.length * 30000;
+                const allAssets = [];
+                const allKeys = [];
+                const allValues = [];
+                const allUpdateTimes = [];
+                for(const toSend of dataToSend) {
+                    allAssets.push(toSend.asset);
+                    allKeys.push(toSend.key);
+                    allValues.push(toSend.value);
+                    allUpdateTimes.push(toSend.updateTimeSeconds);
+                }
+
+                const txResponse = await retry(pythiaContract.multiSet, [allAssets, allKeys, allValues, allUpdateTimes, { gasLimit: gas }]);
+
+                let txFinished = false;
+                while (!txFinished) {
+                    const txReceipt = await pythiaProvider.getTransactionReceipt(txResponse.hash);
+                    if (txReceipt && txReceipt.blockNumber) {
+                        console.log(`transaction has been mined in block ${txReceipt.blockNumber}`);
+                        txFinished = true;
+                    } else {
+                        console.log(`waiting for transaction ${txResponse.hash} to be mined`);
+                        await sleep(5000);
+                    }
+                }
             }
 
             const runEndDate = Math.round(Date.now() / 1000);
@@ -73,7 +107,7 @@ async function SendToPythia() {
             });
         }
 
-        const sleepTime = RUN_EVERY * 1000 - (Date.now() - start);
+        const sleepTime = RUN_EVERY_MINUTES * 60 * 1000 - (Date.now() - start);
         if(sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
             await sleep(sleepTime);
@@ -81,211 +115,115 @@ async function SendToPythia() {
     }
 }
 
+/**
+ * Generate volatility data with 18 decimals for an asset
+ * Averaging volatility across all platforms
+ * @param {string} baseSymbol 
+ * @param {number} span 
+ * @param {number} startBlock 
+ * @param {number} endBlock 
+ * @returns {{asset: string, key: string, value: string, updateTimeSeconds: number}}
+ */
+function generateVolatilityData(baseSymbol, span, startBlock, endBlock) {
+    const tokenConf = getConfTokenBySymbol(baseSymbol);
+    const usdcConf = getConfTokenBySymbol('USDC');
 
-
-async function SendLiquidityData(daysToAvg, startBlock, endBlock) {
-    console.log(`Starting liquidity pythia sender, will average data since ${daysToAvg} days ago`);
-
-    // reset cache
-    slippageCache = {};
-    const pythiaProvider = new ethers.providers.StaticJsonRpcProvider(process.env.PYTHIA_RPC_URL);
-    const signer = new ethers.Wallet(process.env.ETH_PRIVATE_KEY, pythiaProvider);
-    const pythiaContract = new Contract(pythiaConfig.pythiaAddress, pythiaConfig.pythiaAbi, signer);
-
-    const allAssets = [];
-    const allKeys = [];
-    const allValues = [];
-    const allUpdateTimes = [];
-
-
-    for (const tokenSymbol of pythiaConfig.tokensToPush) {
-        // get config 
-        const tokenConf = getConfTokenBySymbol(tokenSymbol);
-        console.log(`${fnName()}[${tokenSymbol}]: start working on token ${tokenConf.symbol} with address ${tokenConf.address}`);
-
-        const dataToSend = await getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock, signer);
-
-        // get the key from the key encoder contract
-        console.log(`${fnName()}[${tokenSymbol}]: data to send:`, dataToSend);
-        allAssets.push(...dataToSend.map(_ => _.asset));
-        allKeys.push(...dataToSend.map(_ => _.key));
-        allValues.push(...dataToSend.map(_ => _.value));
-        allUpdateTimes.push(...dataToSend.map(_ => _.updateTime));
-    }
-
-    const gas = allAssets.length * 30000;
-    const txResponse = await retry(pythiaContract.multiSet, [allAssets, allKeys, allValues, allUpdateTimes, { gasLimit: gas }]);
-
-    let txFinished = false;
-    while (!txFinished) {
-        const txReceipt = await pythiaProvider.getTransactionReceipt(txResponse.hash);
-        if (txReceipt && txReceipt.blockNumber) {
-            console.log(`transaction has been mined in block ${txReceipt.blockNumber}`);
-            txFinished = true;
-        } else {
-            console.log(`waiting for transaction ${txResponse.hash} to be mined`);
-            await sleep(5000);
+    let volatility = 0;
+    let volatilityCpt = 0;
+    for(const platform of PLATFORMS) {
+        const vol = getVolatility(platform, baseSymbol, 'USDC', startBlock, endBlock, span);
+        if(vol != 0) {
+            volatilityCpt++;
+            volatility += vol;
         }
     }
+
+    volatility = volatilityCpt == 0 ? 0 : volatility  / volatilityCpt;
     
-    // reset cache
-    slippageCache = {};
-}
+    const volatility18Decimals = new BigNumber(volatility).times(BN_1e18).toFixed(0);
+    const key = encodeVolatilityKey(tokenConf.address, usdcConf.address, 0, span);
 
-
-async function SendVolatilityData(daysToAvg, startBlock, endBlock) {
-    console.log(`Starting volatility pythia sender, will compute parkinson's volatility since ${daysToAvg} day ago`);
-    const pythiaProvider = new ethers.providers.StaticJsonRpcProvider(process.env.PYTHIA_RPC_URL);
-    const signer = new ethers.Wallet(process.env.ETH_PRIVATE_KEY, pythiaProvider);
-    const pythiaContract = new Contract(pythiaConfig.pythiaAddress, pythiaConfig.pythiaAbi, signer);
-    const keyEncoderContract = new Contract(pythiaConfig.keyEncoderAddress, pythiaConfig.keyEncoderAbi, signer);
-
-    const allAssets = [];
-    const allKeys = [];
-    const allValues = [];
-    const allUpdateTimes = [];
-
-    const USDCConf = getConfTokenBySymbol('USDC');
-
-    for (const tokenSymbol of pythiaConfig.tokensToPush) {
-        // get config 
-        const tokenConf = getConfTokenBySymbol(tokenSymbol);
-        console.log(`${fnName()}[${tokenSymbol}]: start working on token ${tokenConf.symbol} with address ${tokenConf.address}`);
-
-        console.log(`calling keyEncoderContract.encodeVolatilityKey(${tokenConf.address}, ${USDCConf.address}, ${0}, ${daysToAvg})`);
-        const key = await retry(keyEncoderContract.encodeVolatilityKey, [tokenConf.address, USDCConf.address, 0, daysToAvg]);
-        const dataToSend = getUniv3ParkinsonVolatility(tokenConf, daysToAvg, startBlock, endBlock);
-
-        // get the key from the key encoder contract
-        console.log(`${fnName()}[${tokenSymbol}]: data to send:`, dataToSend);
-        allAssets.push(dataToSend.asset);
-        allKeys.push(key);
-        allValues.push(dataToSend.value);
-        allUpdateTimes.push(dataToSend.updateTime);
-    }
-
-    const gas = pythiaConfig.tokensToPush.length * 30000;
-    const txResponse = await retry(pythiaContract.multiSet, [allAssets, allKeys, allValues, allUpdateTimes, { gasLimit: gas }]);
-
-    let txFinished = false;
-    while (!txFinished) {
-        const txReceipt = await pythiaProvider.getTransactionReceipt(txResponse.hash);
-        if (txReceipt && txReceipt.blockNumber) {
-            console.log(`transaction has been mined in block ${txReceipt.blockNumber}`);
-            txFinished = true;
-        } else {
-            console.log(`waiting for transaction ${txResponse.hash} to be mined`);
-            await sleep(5000);
-        }
-    }
+    return {
+        asset: tokenConf.address,
+        key: key,
+        value: volatility18Decimals,
+        updateTimeSeconds: Math.round(Date.now()/1000)
+    };
 }
 
 /**
- * @param {{symbol: string; decimals: number; address: string;}} tokenConf 
- * @param {number} daysToAvg 
+ * This function will generate, for baseSymbol/USDC, the average liquidity available for each platforms (dexes) 
+ * and then the sum across all dexes. So for a single token (baseSymbol), we will generate: ([platform count] + 1) * [slippage count]
+ * Example for [univ2, univ3, curve] and slippages [1, 5, 10, 15, 20] we will generate 4 * 5 values = 20 values to be sent to pythia
+ * @param {number} span 
+ * @param {string} baseSymbol 
  * @param {number} startBlock 
  * @param {number} endBlock 
  * @returns 
  */
-async function getUniv3Average(tokenConf, daysToAvg, startBlock, endBlock, signer) {
-    
-    const USDCConf = getConfTokenBySymbol('USDC');
-    const keyEncoderContract = new Contract(pythiaConfig.keyEncoderAddress, pythiaConfig.keyEncoderAbi, signer);
+function generateLiquidityData(span, baseSymbol, startBlock, endBlock) {
 
-    console.log(`${fnName()}[${tokenConf.symbol}]: start finding data for ${TARGETS_SLIPPAGE_BPS.join(', ')} bps slippage since block ${startBlock}`);
-    const avgResult = getCachedAverageLiquidityForBlockInterval(DATA_DIR, tokenConf.symbol, 'USDC', startBlock, endBlock);
-
+    const tokenConf = getConfTokenBySymbol(baseSymbol);
+    const usdcConf = getConfTokenBySymbol('USDC');
+    const avgValuesForPlatform = {};
     const results = [];
+    for(const platform of PLATFORMS) {
+        const liquidityAverage = getAverageLiquidity(platform, baseSymbol, 'USDC', startBlock, endBlock);
 
-    for(const TARGET_SLIPPAGE_BPS of TARGETS_SLIPPAGE_BPS) {
-        let avgLiquidityForTargetSlippage = avgResult.slippageMapAvg[TARGET_SLIPPAGE_BPS];
-        console.log(`${fnName()}[${tokenConf.symbol}]: Computed average liquidity for ${TARGET_SLIPPAGE_BPS}bps slippage: ${avgLiquidityForTargetSlippage}`);
-        console.log(`calling keyEncoderContract.encodeLiquidityKey(${tokenConf.address}, ${USDCConf.address}, ${0}, ${(TARGET_SLIPPAGE_BPS / 100)}, ${daysToAvg})`);
-        const key = await retry(keyEncoderContract.encodeLiquidityKey, [tokenConf.address, USDCConf.address, 0, (TARGET_SLIPPAGE_BPS / 100), daysToAvg]);
-
-        // add volumes from WBTC and WETH pivots
-        for(const pivot of ['WBTC', 'WETH']) {
-            if(tokenConf.symbol == pivot) {
-                continue;
+        // if some data found, generate per-platform data in the valid format
+        if(liquidityAverage.avgPrice != 0) {
+            avgValuesForPlatform[platform] = liquidityAverage.avgSlippageMap;
+            for(const slippagePct of TARGET_SLIPPAGES) {
+                const slippageBps = slippagePct * 100;
+                const sourceId = smartLTVSourceMap[platform];
+                const key = encodeLiquidityKey(tokenConf.address, usdcConf.address, sourceId, slippagePct, span);
+                const avgVolumeForSlippage = liquidityAverage.avgSlippageMap[slippageBps];
+                const avgVolumeForSlippageValidDecimals = new BigNumber(avgVolumeForSlippage).times(BigNumber(10).pow(tokenConf.decimals)).toFixed(0);
+                results.push({
+                    asset: tokenConf.address,
+                    key: key,
+                    value: avgVolumeForSlippageValidDecimals,
+                    updateTimeSeconds: Math.round(Date.now()/1000)
+                });
             }
-
-            const segment1AvgResult = getCachedAverageLiquidityForBlockInterval(DATA_DIR, tokenConf.symbol, pivot,  startBlock, endBlock);
-            if(!segment1AvgResult) {
-                console.log(`Could not find data for ${tokenConf.symbol}->${pivot}`);
-                continue;
-            }
-            const segment2AvgResult = getCachedAverageLiquidityForBlockInterval(DATA_DIR, pivot, 'USDC',  startBlock, endBlock);
-            if(!segment2AvgResult) {
-                console.log(`Could not find data for ${pivot}->USDC`);
-                continue;
-            }
-    
-            const aggregVolume = computeAggregatedVolumeFromPivot(segment1AvgResult.slippageMapAvg, segment1AvgResult.averagePrice, segment2AvgResult.slippageMapAvg, TARGET_SLIPPAGE_BPS);
-            console.log(`adding aggreg volume ${aggregVolume} from route ${tokenConf.symbol}->${pivot}->USDC for slippage ${TARGET_SLIPPAGE_BPS} bps`);
-            avgLiquidityForTargetSlippage += aggregVolume;
-            console.log(`new aggreg volume for ${tokenConf.symbol}->USDC: ${avgLiquidityForTargetSlippage} for slippage ${TARGET_SLIPPAGE_BPS} bps`);
-            
         }
-        
+    }
 
-        // change the computed avg value to a BigNumber with 18 decimals
-        const liquidityInWei = new BigNumber(avgLiquidityForTargetSlippage).times(BigNumber(10).pow(tokenConf.decimals)).toFixed(0);
-        console.log(`${fnName()}[${tokenConf.symbol}]: liquidityInWei: ${liquidityInWei} for slippage ${TARGET_SLIPPAGE_BPS} bps`);
+    // generate "all" data by summing all slippages data we have from all the platforms
+    const sumSlippageMap = {};
+    for(let i = 50; i <= 2000; i+=50) {
+        sumSlippageMap[i] = 0;
+    }
+    for(const slippageMapForPlatform of Object.values(avgValuesForPlatform)) {
+
+        for(const slippageBps of Object.keys(sumSlippageMap)) {
+            sumSlippageMap[slippageBps] += slippageMapForPlatform[slippageBps];
+        }
+    }
+
+    for(const slippagePct of TARGET_SLIPPAGES) {
+        const slippageBps = slippagePct * 100;
+        const sourceId = smartLTVSourceMap.all;
+        const key = encodeLiquidityKey(tokenConf.address, usdcConf.address, sourceId, slippagePct, span);
+        const avgVolumeForSlippage = sumSlippageMap[slippageBps];
+        const avgVolumeForSlippageValidDecimals = new BigNumber(avgVolumeForSlippage).times(BigNumber(10).pow(tokenConf.decimals)).toFixed(0);
         results.push({
-            key: key,
             asset: tokenConf.address,
-            value: ethers.BigNumber.from(liquidityInWei),
-            updateTime: Math.round(Date.now()/1000), // timestamp in sec
+            key: key,
+            value: avgVolumeForSlippageValidDecimals,
+            updateTimeSeconds: Math.round(Date.now()/1000)
         });
     }
-
-    // return all the computed value
-    for(let i = 0; i < TARGETS_SLIPPAGE_BPS.length; i++) {
-        const TARGET_SLIPPAGE_BPS = TARGETS_SLIPPAGE_BPS[i];
-        console.log(`${tokenConf.symbol}/USDC liquidity for ${TARGET_SLIPPAGE_BPS/100}% slippage: ${normalize(results[i].value, tokenConf.decimals)} ${tokenConf.symbol}`);
-    }
-
+    
     return results;
 }
 
-function getUniv3ParkinsonVolatility(tokenConf, daysToAvg, startBlock, endBlock) {
-    const volatilityParkinson = computeUniv3ParkinsonVolatility(DATA_DIR, tokenConf.symbol, 'USDC', startBlock, endBlock, daysToAvg);
-    console.log(volatilityParkinson);
-    // transform to 1e18
-    const volatilityParkinsonWei = new BigNumber(volatilityParkinson).times(CONSTANT_1e18).toFixed(0);
-    console.log(volatilityParkinsonWei);
-
-    return {
-        asset: tokenConf.address,
-        value: volatilityParkinsonWei,
-        updateTime: Math.round(Date.now()/1000), // timestamp in sec
-    };
+function encodeVolatilityKey(collateralAsset, debtAsset, mode, period) {
+    return ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['string', 'address', 'uint8', 'uint256'], ['volatility', debtAsset, mode, period]));
 }
 
-function getCachedAverageLiquidityForBlockInterval(DATA_DIR, base, quote,  startBlock, endBlock) {
-
-    if(!slippageCache[base]) {
-        slippageCache[base] = {};
-    }
-
-    if(!slippageCache[base][quote]){
-        console.log(`loading ${base}->${quote} from files`);
-        slippageCache[base][quote] = getAverageLiquidityForBlockInterval(DATA_DIR, base, quote,  startBlock, endBlock);
-    } else {
-        console.log(`using cache for ${base}->${quote}`);
-    }
-
-    return slippageCache[base][quote];
+function encodeLiquidityKey(collateralAsset, debtAsset, source, slippage, period) {
+    return ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['string', 'address', 'uint8', 'uint256', 'uint256'], ['liquidity', debtAsset, source, slippage, period]));
 }
 
-async function PythiaSender() {
-    // number of days to avg is passed in the args
-    // const daysToAvg = Number(process.argv[2]);
-    // if(!daysToAvg) {
-    //     throw new Error('Need to have a valid number as first command argument for daysToAvg');
-    // }
-
-    await SendToPythia();
-}
-
-PythiaSender();
+SendToPythia();
