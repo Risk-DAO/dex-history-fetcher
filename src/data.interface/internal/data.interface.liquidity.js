@@ -159,7 +159,7 @@ function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toB
                 continue;
             }
 
-            if(!platformData.price) {
+            if(!liquidityData[blockNumber].price) {
                 const computedPrice = segment1DataForBlock.price * segment2DataForBlock.price;
                 liquidityData[blockNumber].price = computedPrice;
             }
