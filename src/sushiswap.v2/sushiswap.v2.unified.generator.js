@@ -66,6 +66,6 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol) {
     }
 }
 
-generateUnifiedFileSushiswapV2(18000000);
+// generateUnifiedFileSushiswapV2(18000000);
 
 module.exports = { generateUnifiedFileSushiswapV2 };
