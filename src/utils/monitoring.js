@@ -21,12 +21,10 @@ async function RecordMonitoring(monitoringData) {
     try {
         monitoringData['type'] = 'Dex History';
         monitoringData['lastUpdate'] = Math.round(Date.now() / 1000);
-        await axios.post(uri, monitoringData)
-            .then((resp) => console.log(resp.data))
-            .catch((error) => console.log(error));
-    }
-    finally {
-        console.log('alerts pushed');
+        const resp = await axios.post(uri, monitoringData);
+        console.log(resp.data);
+    } catch (error) {
+        console.log('error when pushing monitoring', error);
     }
 }
 
