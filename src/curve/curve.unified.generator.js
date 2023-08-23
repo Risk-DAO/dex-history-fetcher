@@ -73,7 +73,6 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol, pools) {
             toSymbol,
             poolData[mainPool].poolTokens,
             mainDataForBlock.ampFactor,
-            mainDataForBlock.lpSupply,
             mainReserves);
 
         // compute slippage map for other pools
@@ -100,7 +99,6 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol, pools) {
                 toSymbol,
                 poolData[poolName].poolTokens,
                 poolDataForBlock.ampFactor,
-                poolDataForBlock.lpSupply,
                 reserves);
 
             // add the slippageMap to the mainPool one
