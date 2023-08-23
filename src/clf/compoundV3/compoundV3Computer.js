@@ -27,8 +27,8 @@ async function compoundV3Computer(fetchEveryMinutes) {
             throw new Error('Could not find RPC_URL env variable');
         }
 
-        
-        if(!fs.existsSync(path.join(DATA_DIR, 'clf'))) {
+
+        if (!fs.existsSync(path.join(DATA_DIR, 'clf'))) {
             fs.mkdirSync(path.join(DATA_DIR, 'clf'));
         }
 
@@ -190,7 +190,7 @@ function computeAverageCLFForPool(poolData) {
     for (const [collateral, value] of Object.entries(poolData['data'])) {
         if (value) {
             const weight = value['collateral']['usdSupply'] / totalCollateral;
-            const clf = value['clfs']['7']['7'];
+            const clf = value['clfs']['7']['7'] ? value['clfs']['7']['7'] : value['clfs']['30']['7'];
             weightMap[collateral] = weight * clf;
         }
     }
@@ -223,11 +223,11 @@ async function computeMarketCLF(web3Provider, cometContract, compoundV3Asset, to
         let sumLiquidityAcrossPlatforms = 0;
         let cptVolatility = 0;
 
-        for(const platform of PLATFORMS) {
+        for (const platform of PLATFORMS) {
             const plaformVolatility = getVolatility(platform, from, to, startBlock, endBlock, span);
             // count platform volatility only if not 0, otherwise we would divide too much
             // example the curve volatility of WETH/USDC is 0 because we don't have data for WETH/USDC on curve
-            if(plaformVolatility != 0) {
+            if (plaformVolatility != 0) {
                 cptVolatility++;
             }
 
@@ -239,7 +239,7 @@ async function computeMarketCLF(web3Provider, cometContract, compoundV3Asset, to
 
         avgVolatilityAcrossPlatforms = cptVolatility == 0 ? 0 : avgVolatilityAcrossPlatforms / cptVolatility;
 
-        if(sumLiquidityAcrossPlatforms == 0) {
+        if (sumLiquidityAcrossPlatforms == 0) {
             throw new Error(`No data for ${from}/${to} for span ${span}`);
         }
 
@@ -256,8 +256,9 @@ async function computeMarketCLF(web3Provider, cometContract, compoundV3Asset, to
         results[volatilitySpan] = {};
         for (let j = 0; j < spans.length; j++) {
             const liquiditySpan = spans[j];
-
-            results[volatilitySpan][liquiditySpan] = findCLFFromParameters(parameters[volatilitySpan].volatility, parameters[liquiditySpan].liquidity, assetParameters.liquidationBonusBPS / 10000, assetParameters.LTV, assetParameters.supplyCap);
+            if (parameters[volatilitySpan].volatility !== 0) {
+                results[volatilitySpan][liquiditySpan] = findCLFFromParameters(parameters[volatilitySpan].volatility, parameters[liquiditySpan].liquidity, assetParameters.liquidationBonusBPS / 10000, assetParameters.LTV, assetParameters.supplyCap);
+            }
         }
     }
     console.log('results', results);
