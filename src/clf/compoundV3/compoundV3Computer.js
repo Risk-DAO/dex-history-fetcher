@@ -93,8 +93,8 @@ function recordResults(results) {
     if (!fs.existsSync(`${DATA_DIR}/clf/latest`)) {
         fs.mkdirSync(`${DATA_DIR}/clf/latest`);
     }
-    const datedProtocolFilename = path.join(DATA_DIR, `clf/${date}/${date}_compoundV3_CLFs.json`);
-    const latestFullFilename = path.join(DATA_DIR, 'clf/latest/compoundV3_CLFs.json');
+    const datedProtocolFilename = path.join(DATA_DIR, `clf/${date}/${date}_compoundv3_CLFs.json`);
+    const latestFullFilename = path.join(DATA_DIR, 'clf/latest/compoundv3_CLFs.json');
     const objectToWrite = JSON.stringify(results);
     console.log('recording results');
     try {
