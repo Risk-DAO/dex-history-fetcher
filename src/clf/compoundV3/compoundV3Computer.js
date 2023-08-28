@@ -1,7 +1,7 @@
 const { ethers } = require('ethers');
 const dotenv = require('dotenv');
 const path = require('path');
-const { fnName, getDay } = require('../../utils/utils');
+const { fnName, getDay, roundTo } = require('../../utils/utils');
 const fs = require('fs');
 const { default: axios } = require('axios');
 dotenv.config();
@@ -43,18 +43,20 @@ async function compoundV3Computer(fetchEveryMinutes) {
         const dateNow = Date.now();
         const currentBlock = await web3Provider.getBlockNumber() - 10;
         const results = {};
+        const averagePerAsset = {};
         /// for all pools in compound v3
         for (const pool of Object.values(compoundV3Pools)) {
             results[pool.baseAsset] = await computeCLFForPool(pool.cometAddress, pool.baseAsset, Object.values(pool.collateralTokens), web3Provider, dateNow, currentBlock);
-            const poolData = computeAverageCLFForPool(results[pool.baseAsset]);
-            results[pool.baseAsset]['weightedCLF'] = poolData['weightedCLF'];
-            results[pool.baseAsset]['totalCollateral'] = poolData['totalCollateral'];
+            const averagePoolData = computeAverageCLFForPool(results[pool.baseAsset]);
+            results[pool.baseAsset]['weightedCLF'] = averagePoolData['weightedCLF'];
+            results[pool.baseAsset]['totalCollateral'] = averagePoolData['totalCollateral'];
+            averagePerAsset[pool.baseAsset] = averagePoolData;
             console.log(`results[${pool.baseAsset}]`, results[pool.baseAsset]);
         }
 
         let protocolWeightedCLF = undefined;
         try {
-            protocolWeightedCLF = computeProtocolWeightedCLF(results);
+            protocolWeightedCLF = computeProtocolWeightedCLF(averagePerAsset);
         }
         catch (error) {
             console.log(error);
@@ -93,11 +95,11 @@ async function compoundV3Computer(fetchEveryMinutes) {
  * Compute CLF value for a pool
  * @param {string} cometAddress 
  * @param {string} baseAsset 
- * @param {{index: number, symbol: string, address: string, coingeckoId: string}[]} collaterals 
- * @param {*} web3Provider 
- * @param {*} dateNow 
- * @param {*} endBlock 
- * @returns 
+ * @param {{index: number, symbol: string, address: string, coinGeckoID: string}[]} collaterals 
+ * @param {ethers.providers.StaticJsonRpcProvider} web3Provider 
+ * @param {number} dateNow 
+ * @param {number} endBlock 
+ * @returns {Promise<{[collateralSymbol: string]: {collateral: {inKindSupply: number, usdSupply: number}, clfs: {7: {volatility: number, liquidity: number}, 30: {volatility: number, liquidity: number}, 180: {volatility: number, liquidity: number}}}>}
  */
 async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provider, dateNow, endBlock) {
     const resultsData = {};
@@ -121,9 +123,15 @@ async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provi
     return resultsData;
 }
 
+/**
+ * Get collateral amount from on-chaind data
+ * @param {{index: number, symbol: string, address: string, coinGeckoID: string}} collateral 
+ * @param {ethers.Contract} cometContract 
+ * @returns 
+ */
 async function getCollateralAmount(collateral, cometContract) {
     const [totalSupplyAsset] = await cometContract.callStatic.totalsCollateral(collateral.address);
-    const decimals = getConfTokenBySymbol(collateral.symbol.toUpperCase()).decimals;
+    const decimals = getConfTokenBySymbol(collateral.symbol).decimals;
     const results = {};
     let price = undefined;
     const coinGeckoResponse = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${collateral.coinGeckoID}&vs_currencies=usd`);
@@ -139,9 +147,18 @@ async function getCollateralAmount(collateral, cometContract) {
     return results;
 }
 
-async function computeMarketCLF(cometContract, compoundV3Asset, to, dateNow, endBlock) {
-    const from = compoundV3Asset.symbol;
-    const assetParameters = await getAssetParameters(cometContract, compoundV3Asset);
+/**
+ * 
+ * @param {ethers.Contract} cometContract 
+ * @param {{index: number, symbol: string, address: string, coinGeckoID: string}} collateral 
+ * @param {string} baseAsset 
+ * @param {number} dateNow 
+ * @param {number} endBlock 
+ * @returns {Promise<{7: {volatility: number, liquidity: number}, 30: {volatility: number, liquidity: number}, 180: {volatility: number, liquidity: number}}>}
+ */
+async function computeMarketCLF(cometContract, collateral, baseAsset, dateNow, endBlock) {
+    const from = collateral.symbol;
+    const assetParameters = await getAssetParameters(cometContract, collateral);
     console.log('assetParameters', assetParameters);
 
     const parameters = {};
@@ -157,7 +174,7 @@ async function computeMarketCLF(cometContract, compoundV3Asset, to, dateNow, end
         let cptVolatility = 0;
 
         for (const platform of PLATFORMS) {
-            const plaformVolatility = getVolatility(platform, from, to, startBlock, endBlock, span);
+            const plaformVolatility = getVolatility(platform, from, baseAsset, startBlock, endBlock, span);
             // count platform volatility only if not 0, otherwise we would divide too much
             // example the curve volatility of WETH/USDC is 0 because we don't have data for WETH/USDC on curve
             if (plaformVolatility != 0) {
@@ -166,14 +183,14 @@ async function computeMarketCLF(cometContract, compoundV3Asset, to, dateNow, end
 
             avgVolatilityAcrossPlatforms += plaformVolatility;
 
-            const platformLiquidity = getAverageLiquidity(platform, from, to, startBlock, endBlock);
+            const platformLiquidity = getAverageLiquidity(platform, from, baseAsset, startBlock, endBlock);
             sumLiquidityAcrossPlatforms += platformLiquidity.avgSlippageMap[assetParameters.liquidationBonusBPS];
         }
 
         avgVolatilityAcrossPlatforms = cptVolatility == 0 ? 0 : avgVolatilityAcrossPlatforms / cptVolatility;
 
         if (sumLiquidityAcrossPlatforms == 0) {
-            throw new Error(`No data for ${from}/${to} for span ${span}`);
+            throw new Error(`No data for ${from}/${baseAsset} for span ${span}`);
         }
 
         parameters[span] = {
@@ -204,16 +221,31 @@ async function computeMarketCLF(cometContract, compoundV3Asset, to, dateNow, end
     return results;
 }
 
-async function getAssetParameters(cometContract, compoundV3Asset) {
-    const results = await cometContract.getAssetInfo(compoundV3Asset.index);
+/**
+ * 
+ * @param {ethers.Contract} cometContract 
+ * @param {{index: number, symbol: string, address: string, coinGeckoID: string}} collateral 
+ * @returns 
+ */
+async function getAssetParameters(cometContract, collateral) {
+    const results = await cometContract.getAssetInfo(collateral.index);
     const liquidationBonusBPS = Math.round((1 - normalize(results.liquidationFactor, 18)) * 10000);
     const LTV = normalize(results.liquidateCollateralFactor, 18) * 100;
-    const tokenConf = getConfTokenBySymbol(compoundV3Asset.symbol);
+    const tokenConf = getConfTokenBySymbol(collateral.symbol);
     const supplyCap = normalize(results.supplyCap, tokenConf.decimals);
     return { liquidationBonusBPS, supplyCap, LTV };
 
 }
 
+/**
+ * 
+ * @param {number} volatility 
+ * @param {number} liquidity 
+ * @param {number} liquidationBonus 
+ * @param {number} ltv 
+ * @param {number} borrowCap 
+ * @returns 
+ */
 function findCLFFromParameters(volatility, liquidity, liquidationBonus, ltv, borrowCap) {
     ltv = Number(ltv) / 100;
     const sqrtResult = Math.sqrt(liquidity / borrowCap);
@@ -224,19 +256,24 @@ function findCLFFromParameters(volatility, liquidity, liquidationBonus, ltv, bor
     return c;
 }
 
+/**
+ * 
+ * @param {{[collateralSymbol: string]: {collateral: {inKindSupply: number, usdSupply: number}, clfs: {7: {volatility: number, liquidity: number}, 30: {volatility: number, liquidity: number}, 180: {volatility: number, liquidity: number}}}}} poolData 
+ * @returns 
+ */
 function computeAverageCLFForPool(poolData) {
     //get pool total collateral in usd
     let totalCollateral = 0;
     for (const value of Object.values(poolData)) {
         if (value) {
-            totalCollateral += value['collateral']['usdSupply'];
+            totalCollateral += value.collateral.usdSupply;
         }
     }
     const weightMap = {};
     // get each collateral weight
     for (const [collateral, value] of Object.entries(poolData)) {
         if (value) {
-            const weight = value['collateral']['usdSupply'] / totalCollateral;
+            const weight = value.collateral.usdSupply / totalCollateral;
             const clf = value['clfs']['7']['7'] ? value['clfs']['7']['7'] : value['clfs']['30']['7'];
             weightMap[collateral] = weight * clf;
         }
@@ -245,10 +282,15 @@ function computeAverageCLFForPool(poolData) {
     for (const weight of Object.values(weightMap)) {
         weightedCLF += weight;
     }
-    weightedCLF = (weightedCLF * 100).toFixed(2);
+    weightedCLF = roundTo(weightedCLF * 100, 2);
     return { weightedCLF, totalCollateral };
 }
 
+/**
+ * 
+ * @param {{[baseAsset: string]: {totalCollateral: number, weightedCLF: number}}} protocolData 
+ * @returns 
+ */
 function computeProtocolWeightedCLF(protocolData) {
     let protocolCollateral = 0;
     const weightMap = {};
@@ -269,7 +311,7 @@ function computeProtocolWeightedCLF(protocolData) {
     for (const value of Object.values(weightMap)) {
         weightedCLF += value;
     }
-    weightedCLF = (weightedCLF).toFixed(2);
+    weightedCLF = roundTo(weightedCLF, 2);
     return weightedCLF;
 }
 
