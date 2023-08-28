@@ -6,7 +6,6 @@ const uniswapV3PairAbi = [{"inputs":[],"stateMutability":"nonpayable","type":"co
 
 const uniswapFactoryV3Address = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 
-// conf risk oracle only
 const pairsToFetch = [
   {
     "token0": "DAI",
@@ -357,7 +356,37 @@ const pairsToFetch = [
     "token0": "WBTC",
     "token1": "USDT",
     "fees": 500
-  }
+  },
+  {
+    "token0": "LINK",
+    "token1": "WETH",
+    "fees": 3000
+  },
+  {
+    "token0": "LINK",
+    "token1": "USDC",
+    "fees": 3000
+  },
+  {
+    "token0": "cbETH",
+    "token1": "WETH",
+    "fees": 500
+  },
+  {
+    "token0": "wstETH",
+    "token1": "WETH",
+    "fees": 100
+  },
+  {
+    "token0": "WBTC",
+    "token1": "wstETH",
+    "fees": 500
+  },
+  {
+    "token0": "wstETH",
+    "token1": "USDC",
+    "fees": 3000
+  },
 ]
 // // conf compound assets & risk oracle 
 // const pairsToFetch = [
