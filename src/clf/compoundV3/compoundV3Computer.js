@@ -12,9 +12,6 @@ const { RecordMonitoring } = require('../../utils/monitoring');
 const { DATA_DIR, PLATFORMS } = require('../../utils/constants');
 const { getVolatility, getAverageLiquidity } = require('../../data.interface/data.interface');
 const spans = [7, 30, 180];
-
-compoundV3Computer(60*60);
-
 /**
  * Compute the CLFs values for compound v3
  * @param {number} fetchEveryMinutes 
