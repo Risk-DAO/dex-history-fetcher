@@ -24,6 +24,17 @@ function getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock
     return avgData;
 }
 
+/**
+ * Get the liquidity summed for all platforms
+ * @param {string[]} platforms 
+ * @param {string} fromSymbol 
+ * @param {string} toSymbol 
+ * @param {number} fromBlock 
+ * @param {number} toBlock 
+ * @param {bool} withJumps 
+ * @param {stepBlock} stepBlock 
+ * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
+ */
 function getLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true, stepBlock = 50) {
     const liquidities = [];
     for(const platform of platforms) {
@@ -67,7 +78,7 @@ function getLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, to
  * @param {number} toBlock 
  * @param {string} platform
  * @param {bool} withJumps 
- * @param {stepBlock} withJumps 
+ * @param {stepBlock} stepBlock 
  * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
  */
 function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps, stepBlock=50) {
