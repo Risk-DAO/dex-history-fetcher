@@ -6,7 +6,7 @@
 //////////// THE FETCHERS //////////////
 
 const { getParkinsonVolatilityForInterval, getAveragePriceForInterval } = require('./internal/data.interface.price');
-const { getAverageLiquidityForInterval, getSlippageMapForInterval } = require('./internal/data.interface.liquidity');
+const { getAverageLiquidityForInterval, getSlippageMapForInterval, getLiquidityForPlatforms } = require('./internal/data.interface.liquidity');
 const { logFnDurationWithLabel } = require('../utils/utils');
 const { PLATFORMS } = require('../utils/constants');
 
@@ -92,6 +92,24 @@ function getLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock, withJu
     return liquidity;
 }
 
+/**
+ * Get the sum of liquidity and avg price for all platforms
+ * @param {*} fromSymbol 
+ * @param {string} toSymbol quote symbol (WETH, USDC...)
+ * @param {number} fromBlock start block of the query (included)
+ * @param {number} toBlock endblock of the query (included)
+ * @param {string[] | undefined} platforms platforms (univ2, univ3...), default to PLATFORMS
+ * @param {bool} withJumps default true. pivot route jump: from UNI to MKR, we will add "additional routes" using UNI->USDC->MKR + UNI->WETH->MKR + UNI->WBTC+MKR
+ * @param {number} stepBlock default to 50. The amount of block between each data point
+ */
+function getLiquidityAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true, stepBlock = 50) {
+    const start = Date.now();
+    const liquidity = getLiquidityForPlatforms(PLATFORMS, fromSymbol, toSymbol, fromBlock, toBlock, withJumps, stepBlock);
+    logFnDurationWithLabel(start, `p: ${PLATFORMS}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}, step: ${stepBlock}`);
+    return liquidity;
+
+}
+
 //    _    _  _______  _____  _        _____ 
 //   | |  | ||__   __||_   _|| |      / ____|
 //   | |  | |   | |     | |  | |     | (___  
@@ -111,4 +129,4 @@ function checkPlatform(platform) {
     }
 }
 
-module.exports = { getVolatility, getAveragePrice, getAverageLiquidity, getLiquidity};
+module.exports = { getVolatility, getAveragePrice, getAverageLiquidity, getLiquidity, getLiquidityAllPlatforms};

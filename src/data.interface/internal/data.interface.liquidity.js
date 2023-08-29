@@ -24,6 +24,41 @@ function getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock
     return avgData;
 }
 
+function getLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true, stepBlock = 50) {
+    const liquidities = [];
+    for(const platform of platforms) {
+        const liquidity = getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps, stepBlock);
+        if(liquidity) {
+            liquidities.push(liquidity);
+        }
+    }
+
+    const aggregData = {};
+    for(const blockNumber of Object.keys(liquidities[0])) {
+        aggregData[blockNumber] = {
+            price: 0,
+            slippageMap: getDefaultSlippageMap(),
+        };
+
+        let nonZeroPrices = 0;
+        for(const liquidityData of liquidities) {
+            const liquidityForBlock = liquidityData[blockNumber];
+            if(liquidityForBlock.price != 0) {
+                nonZeroPrices++;
+                aggregData[blockNumber].price += liquidityForBlock.price;
+            }
+
+            for(const slippageBps of Object.keys(aggregData[blockNumber].slippageMap)) {
+                aggregData[blockNumber].slippageMap[slippageBps] += liquidityForBlock.slippageMap[slippageBps];
+            }
+        }
+
+        aggregData[blockNumber].price = nonZeroPrices == 0 ? 0 : aggregData[blockNumber].price / nonZeroPrices;
+    }
+
+    return aggregData;
+}
+
 /**
  * Get the slippage map for a pair
  * @param {string} fromSymbol 
@@ -243,4 +278,4 @@ function getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock,
     return pivotData;
 }
 
-module.exports = { getAverageLiquidityForInterval, getSlippageMapForInterval };
+module.exports = { getAverageLiquidityForInterval, getSlippageMapForInterval, getLiquidityForPlatforms};
