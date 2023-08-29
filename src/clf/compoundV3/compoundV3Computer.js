@@ -12,6 +12,7 @@ const { RecordMonitoring } = require('../../utils/monitoring');
 const { DATA_DIR, PLATFORMS } = require('../../utils/constants');
 const { getVolatility, getAverageLiquidity } = require('../../data.interface/data.interface');
 const spans = [7, 30, 180];
+
 /**
  * Compute the CLFs values for compound v3
  * @param {number} fetchEveryMinutes 
@@ -45,8 +46,8 @@ async function compoundV3Computer(fetchEveryMinutes) {
         for (const pool of Object.values(compoundV3Pools)) {
             results[pool.baseAsset] = await computeCLFForPool(pool.cometAddress, pool.baseAsset, Object.values(pool.collateralTokens), web3Provider, dateNow, currentBlock);
             const averagePoolData = computeAverageCLFForPool(results[pool.baseAsset]);
-            results[pool.baseAsset]['weightedCLF'] = averagePoolData['weightedCLF'];
-            results[pool.baseAsset]['totalCollateral'] = averagePoolData['totalCollateral'];
+            results[pool.baseAsset]['weightedCLF'] = averagePoolData.weightedCLF;
+            results[pool.baseAsset]['totalCollateral'] = averagePoolData.totalCollateral;
             averagePerAsset[pool.baseAsset] = averagePoolData;
             console.log(`results[${pool.baseAsset}]`, results[pool.baseAsset]);
         }
@@ -96,10 +97,12 @@ async function compoundV3Computer(fetchEveryMinutes) {
  * @param {ethers.providers.StaticJsonRpcProvider} web3Provider 
  * @param {number} dateNow 
  * @param {number} endBlock 
- * @returns {Promise<{[collateralSymbol: string]: {collateral: {inKindSupply: number, usdSupply: number}, clfs: {7: {volatility: number, liquidity: number}, 30: {volatility: number, liquidity: number}, 180: {volatility: number, liquidity: number}}}>}
+ * @returns {Promise<{collateralsData: {[collateralSymbol: string]: {collateral: {inKindSupply: number, usdSupply: number}, clfs: {7: {volatility: number, liquidity: number}, 30: {volatility: number, liquidity: number}, 180: {volatility: number, liquidity: number}}}}>}
  */
 async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provider, dateNow, endBlock) {
-    const resultsData = {};
+    const resultsData = {
+        collateralsData: {}
+    };
 
     console.log(`Started work on Compound v3 --- ${baseAsset} --- pool`);
     const cometContract = new ethers.Contract(cometAddress, cometABI, web3Provider);
@@ -107,9 +110,9 @@ async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provi
     for (const collateral of collaterals) {
         try {
             console.log(`Computing CLFs for ${collateral.symbol}`);
-            resultsData[collateral.symbol] = {};
-            resultsData[collateral.symbol]['collateral'] = await getCollateralAmount(collateral, cometContract);
-            resultsData[collateral.symbol]['clfs'] = await computeMarketCLF(cometContract, collateral, baseAsset, dateNow, endBlock);
+            resultsData.collateralsData[collateral.symbol] = {};
+            resultsData.collateralsData[collateral.symbol]['collateral'] = await getCollateralAmount(collateral, cometContract);
+            resultsData.collateralsData[collateral.symbol]['clfs'] = await computeMarketCLF(cometContract, collateral, baseAsset, dateNow, endBlock);
             console.log('resultsData', resultsData);
         }
         catch (error) {
@@ -255,20 +258,20 @@ function findCLFFromParameters(volatility, liquidity, liquidationBonus, ltv, bor
 
 /**
  * 
- * @param {{[collateralSymbol: string]: {collateral: {inKindSupply: number, usdSupply: number}, clfs: {7: {volatility: number, liquidity: number}, 30: {volatility: number, liquidity: number}, 180: {volatility: number, liquidity: number}}}}} poolData 
+ * @param {{collateralsData: {[collateralSymbol: string]: {collateral: {inKindSupply: number, usdSupply: number}, clfs: {7: {volatility: number, liquidity: number}, 30: {volatility: number, liquidity: number}, 180: {volatility: number, liquidity: number}}}}} poolData 
  * @returns 
  */
 function computeAverageCLFForPool(poolData) {
     //get pool total collateral in usd
     let totalCollateral = 0;
-    for (const value of Object.values(poolData)) {
+    for (const value of Object.values(poolData.collateralsData)) {
         if (value) {
             totalCollateral += value.collateral.usdSupply;
         }
     }
     const weightMap = {};
     // get each collateral weight
-    for (const [collateral, value] of Object.entries(poolData)) {
+    for (const [collateral, value] of Object.entries(poolData.collateralsData)) {
         if (value) {
             const weight = value.collateral.usdSupply / totalCollateral;
             const clf = value['clfs']['7']['7'] ? value['clfs']['7']['7'] : value['clfs']['30']['7'];
