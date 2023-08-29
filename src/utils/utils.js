@@ -137,9 +137,44 @@ async function retry(fn, params, retries = 0, maxRetries = 10) {
         }
         console.log(`retry #${retries}`);
         await sleep(5000 * retries);
-        return retry(fn, params, retries);
+        return retry(fn, params, retries, maxRetries);
     }
 }
+
+
+/**
+ * a small retry wrapper with an incremeting 5s sleep delay
+ * @param {Function} fn 
+ * @param {*[]} params 
+ * @param {number} retries 
+ * @param {number} maxRetries 
+ * @returns 
+ */
+function retrySync(fn, params, retries = 0, maxRetries = 10) {
+    try {
+        const res = fn(...params);
+        if (retries) {
+            console.log(`retry success after ${retries} retries`);
+        } else {
+            // console.log('success on first try');
+        }
+        return res;
+    } catch (e) {
+        console.error(e);
+        retries++;
+        if (retries >= maxRetries) {
+            throw e;
+        }
+        console.log(`retry #${retries}`);
+        sleepSync(5000 * retries);
+        return retrySync(fn, params, retries, maxRetries);
+    }
+}
+
+const sleepSync = (ms) => {
+    const end = new Date().getTime() + ms;
+    while (new Date().getTime() < end) { /* do nothing */ }
+};
 
 /**
  * Compute array average
@@ -150,4 +185,4 @@ function arrayAverage(array) {
     return array.reduce((a, b) => a + b, 0) / array.length;
 }
 
-module.exports = { retry, sleep, fnName, roundTo, getDay, logFnDuration, logFnDurationWithLabel, readLastLine, arrayAverage };
+module.exports = { retry, sleep, fnName, roundTo, getDay, logFnDuration, logFnDurationWithLabel, readLastLine, arrayAverage, retrySync };

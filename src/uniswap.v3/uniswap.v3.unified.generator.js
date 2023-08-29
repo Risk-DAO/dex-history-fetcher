@@ -3,6 +3,8 @@ const fs = require('fs');
 const { fnName, readLastLine } = require('../utils/utils');
 const { getAvailableUniswapV3, getUniV3DataforBlockInterval } = require('./uniswap.v3.utils');
 const { DATA_DIR } = require('../utils/constants');
+const { truncateUnifiedFiles } = require('../data.interface/unified.truncator');
+const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 
 async function generateUnifiedFileUniv3(endBlock) {
     const available = getAvailableUniswapV3(DATA_DIR);
@@ -12,6 +14,9 @@ async function generateUnifiedFileUniv3(endBlock) {
             await createUnifiedFileForPair(endBlock, base, quote);
         }
     }
+
+    const blockLastYear = await getBlocknumberForTimestamp(Math.round(Date.now()/1000) - 365 * 24 * 60 * 60);
+    truncateUnifiedFiles('uniswapv3', blockLastYear);
 }
 
 async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol) {
