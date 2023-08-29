@@ -10,7 +10,7 @@ const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
 const { RecordMonitoring } = require('../../utils/monitoring');
 const { DATA_DIR, PLATFORMS } = require('../../utils/constants');
-const { getVolatility, getAverageLiquidity } = require('../../data.interface/data.interface');
+const { getVolatility, getAverageLiquidity, getLiquidityAllPlatforms } = require('../../data.interface/data.interface');
 const spans = [7, 30, 180];
 
 /**
@@ -38,13 +38,25 @@ async function compoundV3Computer(fetchEveryMinutes) {
 
         console.log(`${fnName()}: starting`);
         const web3Provider = new ethers.providers.StaticJsonRpcProvider(process.env.RPC_URL);
-        const dateNow = Date.now();
+        // precompute the fromBlocks for all spans
+        // fromBlocks will look like that for spans 7, 30, 180: 
+        // {
+        //     7: 15784154, --> block 7 days ago
+        //     30: 14878410, --> block 30 days ago
+        //     180: 112548787 --> block 180 days ago
+        // }
+        const fromBlocks = {};
+        for(const span of spans) {
+            const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (span * 24 * 60 * 60));
+            fromBlocks[span] = startBlock;
+        }
+
         const currentBlock = await web3Provider.getBlockNumber() - 10;
         const results = {};
         const averagePerAsset = {};
         /// for all pools in compound v3
         for (const pool of Object.values(compoundV3Pools)) {
-            results[pool.baseAsset] = await computeCLFForPool(pool.cometAddress, pool.baseAsset, Object.values(pool.collateralTokens), web3Provider, dateNow, currentBlock);
+            results[pool.baseAsset] = await computeCLFForPool(pool.cometAddress, pool.baseAsset, Object.values(pool.collateralTokens), web3Provider, fromBlocks, currentBlock);
             const averagePoolData = computeAverageCLFForPool(results[pool.baseAsset]);
             results[pool.baseAsset]['weightedCLF'] = averagePoolData.weightedCLF;
             results[pool.baseAsset]['totalCollateral'] = averagePoolData.totalCollateral;
@@ -95,11 +107,11 @@ async function compoundV3Computer(fetchEveryMinutes) {
  * @param {string} baseAsset 
  * @param {{index: number, symbol: string, address: string, coinGeckoID: string}[]} collaterals 
  * @param {ethers.providers.StaticJsonRpcProvider} web3Provider 
- * @param {number} dateNow 
+ * @param {{[span: number]: number}} fromBlocks 
  * @param {number} endBlock 
  * @returns {Promise<{collateralsData: {[collateralSymbol: string]: {collateral: {inKindSupply: number, usdSupply: number}, clfs: {7: {volatility: number, liquidity: number}, 30: {volatility: number, liquidity: number}, 180: {volatility: number, liquidity: number}}}}>}
  */
-async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provider, dateNow, endBlock) {
+async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provider, fromBlocks, endBlock) {
     const resultsData = {
         collateralsData: {}
     };
@@ -110,9 +122,12 @@ async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provi
     for (const collateral of collaterals) {
         try {
             console.log(`Computing CLFs for ${collateral.symbol}`);
+            const assetParameters = await getAssetParameters(cometContract, collateral);
+            console.log('assetParameters', assetParameters);
             resultsData.collateralsData[collateral.symbol] = {};
-            resultsData.collateralsData[collateral.symbol]['collateral'] = await getCollateralAmount(collateral, cometContract);
-            resultsData.collateralsData[collateral.symbol]['clfs'] = await computeMarketCLF(cometContract, collateral, baseAsset, dateNow, endBlock);
+            resultsData.collateralsData[collateral.symbol].collateral = await getCollateralAmount(collateral, cometContract);
+            resultsData.collateralsData[collateral.symbol].clfs = await computeMarketCLF(assetParameters, collateral, baseAsset, fromBlocks, endBlock);
+            resultsData.collateralsData[collateral.symbol].liquidityHistory = computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAsset, assetParameters);
             console.log('resultsData', resultsData);
         }
         catch (error) {
@@ -121,6 +136,32 @@ async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provi
         }
     }
     return resultsData;
+}
+
+/**
+ * 
+ * @param {{index: number, symbol: string, address: string, coinGeckoID: string}} collateral 
+ * @param {{[span: number]: number}} fromBlocks 
+ * @param {number} endBlock 
+ * @param {string} baseAsset 
+ * @param {{liquidationBonusBPS: number, supplyCap: number, LTV: number}} assetParameters 
+ * @returns 
+ */
+function computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAsset, assetParameters) {
+    const liquidityHistory = {};
+    for (const span of spans) {
+        liquidityHistory[span] = {};
+        const startBlock = fromBlocks[span];
+        const stepBlock = Math.round((endBlock - startBlock) / 50);
+        const liquidityDataForAllPlatforms = getLiquidityAllPlatforms(collateral.symbol, baseAsset, startBlock, endBlock, true, stepBlock);
+        for (const blockNumber of Object.keys(liquidityDataForAllPlatforms)) {
+            const liquidityInCollateral = liquidityDataForAllPlatforms[blockNumber].slippageMap[assetParameters.liquidationBonusBPS];
+            const liquidityNormalizedInBaseAsset = liquidityInCollateral * liquidityDataForAllPlatforms[blockNumber].price;
+            liquidityHistory[span][blockNumber] = liquidityNormalizedInBaseAsset;
+        }
+    }
+
+    return liquidityHistory;
 }
 
 /**
@@ -149,24 +190,22 @@ async function getCollateralAmount(collateral, cometContract) {
 
 /**
  * 
- * @param {ethers.Contract} cometContract 
+ * @param {{liquidationBonusBPS: number, supplyCap: number, LTV: number}} assetParameters 
  * @param {{index: number, symbol: string, address: string, coinGeckoID: string}} collateral 
  * @param {string} baseAsset 
- * @param {number} dateNow 
+ * @param {{[span: number]: number}]} fromBlocks 
  * @param {number} endBlock 
  * @returns {Promise<{7: {volatility: number, liquidity: number}, 30: {volatility: number, liquidity: number}, 180: {volatility: number, liquidity: number}}>}
  */
-async function computeMarketCLF(cometContract, collateral, baseAsset, dateNow, endBlock) {
+async function computeMarketCLF(assetParameters, collateral , baseAsset, fromBlocks, endBlock) {
     const from = collateral.symbol;
-    const assetParameters = await getAssetParameters(cometContract, collateral);
-    console.log('assetParameters', assetParameters);
 
     const parameters = {};
 
     ///Get liquidities and volatilities for all spans
     for (const span of spans) {
         // find block for 'daysToAvg' days ago
-        const startBlock = await getBlocknumberForTimestamp(Math.round(dateNow / 1000) - (span * 24 * 60 * 60));
+        const startBlock = fromBlocks[span];
         console.log(`${fnName()}: Will avg liquidity since block ${startBlock}`);
 
         let avgVolatilityAcrossPlatforms = 0;
@@ -338,4 +377,3 @@ function recordResults(results) {
 }
 
 module.exports = { compoundV3Computer };
-
