@@ -33,6 +33,7 @@ function getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock
  * @param {string} platform
  * @param {bool} withJumps 
  * @param {stepBlock} withJumps 
+ * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
  */
 function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps, stepBlock=50) {
     // with jumps mean that we will try to add pivot routes (with WBTC, WETH and USDC as pivot)

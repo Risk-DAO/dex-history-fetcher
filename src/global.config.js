@@ -151,6 +151,10 @@ const tokens = {
         decimals: 18,
         address: '0xBe9895146f7AF43049ca1c1AE358B0541Ea49704'
     },
+    wstETH: {
+        decimals: 18,
+        address: '0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0'
+    },
 };
 
 module.exports = { tokens };
