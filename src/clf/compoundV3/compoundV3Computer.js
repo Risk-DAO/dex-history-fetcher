@@ -12,6 +12,7 @@ const { RecordMonitoring } = require('../../utils/monitoring');
 const { DATA_DIR, PLATFORMS } = require('../../utils/constants');
 const { getVolatility, getAverageLiquidity, getLiquidityAllPlatforms } = require('../../data.interface/data.interface');
 const spans = [7, 30, 180];
+const BLOCKINFO_URL = process.env.BLOCKINFO_URL;
 
 /**
  * Compute the CLFs values for compound v3
@@ -127,7 +128,7 @@ async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provi
             resultsData.collateralsData[collateral.symbol] = {};
             resultsData.collateralsData[collateral.symbol].collateral = await getCollateralAmount(collateral, cometContract);
             resultsData.collateralsData[collateral.symbol].clfs = await computeMarketCLF(assetParameters, collateral, baseAsset, fromBlocks, endBlock);
-            resultsData.collateralsData[collateral.symbol].liquidityHistory = computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAsset, assetParameters);
+            resultsData.collateralsData[collateral.symbol].liquidityHistory = await computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAsset, assetParameters);
             console.log('resultsData', resultsData);
         }
         catch (error) {
@@ -147,7 +148,7 @@ async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provi
  * @param {{liquidationBonusBPS: number, supplyCap: number, LTV: number}} assetParameters 
  * @returns 
  */
-function computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAsset, assetParameters) {
+async function computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAsset, assetParameters) {
     const liquidityHistory = {};
     for (const span of spans) {
         liquidityHistory[span] = {};
@@ -157,7 +158,9 @@ function computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAsset, as
         for (const blockNumber of Object.keys(liquidityDataForAllPlatforms)) {
             const liquidityInCollateral = liquidityDataForAllPlatforms[blockNumber].slippageMap[assetParameters.liquidationBonusBPS];
             const liquidityNormalizedInBaseAsset = liquidityInCollateral * liquidityDataForAllPlatforms[blockNumber].price;
-            liquidityHistory[span][blockNumber] = liquidityNormalizedInBaseAsset;
+            const timeStampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockNumber}`);
+            const timestamp = timeStampResp.data.timestamp;
+            liquidityHistory[span][timestamp] = liquidityNormalizedInBaseAsset;
         }
     }
 
