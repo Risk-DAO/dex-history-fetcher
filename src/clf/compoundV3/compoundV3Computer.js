@@ -313,7 +313,7 @@ function computeAverageCLFForPool(poolData) {
     for (const [collateral, value] of Object.entries(poolData.collateralsData)) {
         if (value) {
             const weight = value.collateral.usdSupply / totalCollateral;
-            const clf = value['clfs']['7']['7'] ? value['clfs']['7']['7'] : value['clfs']['30']['7'];
+            const clf = value['clfs']['7']['7'] ? value['clfs']['7']['7'] : value['clfs']['30']['7'] ? value['clfs']['30']['7'] : value['clfs']['180']['7'];
             weightMap[collateral] = weight * clf;
         }
     }
