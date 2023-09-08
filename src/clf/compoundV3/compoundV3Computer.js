@@ -12,7 +12,6 @@ const { RecordMonitoring } = require('../../utils/monitoring');
 const { DATA_DIR, PLATFORMS } = require('../../utils/constants');
 const { getVolatility, getAverageLiquidity, getLiquidityAllPlatforms } = require('../../data.interface/data.interface');
 const spans = [7, 30, 180];
-const BLOCKINFO_URL = process.env.BLOCKINFO_URL;
 
 /**
  * Compute the CLFs values for compound v3
@@ -158,7 +157,7 @@ async function computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAss
         for (const blockNumber of Object.keys(liquidityDataForAllPlatforms)) {
             const liquidityInCollateral = liquidityDataForAllPlatforms[blockNumber].slippageMap[assetParameters.liquidationBonusBPS];
             const liquidityNormalizedInBaseAsset = liquidityInCollateral * liquidityDataForAllPlatforms[blockNumber].price;
-            const timeStampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockNumber}`);
+            const timeStampResp = await axios.get(`https://web3.api.la-tribu.xyz/api/getblocktimestamp?blocknumber=${blockNumber}`);
             const timestamp = timeStampResp.data.timestamp;
             liquidityHistory[span][timestamp] = liquidityNormalizedInBaseAsset;
         }
