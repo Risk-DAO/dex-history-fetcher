@@ -3,7 +3,6 @@ const BigNumber = require('bignumber.js');
 const { fnName } = require('../utils/utils');
 const fs = require('fs');
 const path = require('path');
-const { normalize } = require('../utils/token.utils');
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
 const CONSTANT_TARGET_SLIPPAGE = 20;
@@ -43,222 +42,159 @@ function getNextLowerTick(currentTick, tickSpacing) {
     return (Math.floor(currentTick / tickSpacing)) * tickSpacing;
 }
 
-function getSlippages(currentLiquidity, currentTick, tickSpacing, sqrtPriceX96, liquidity, token0Decimals, token1Decimals) {
-    const token0Slippage = get_dx_slippage(currentLiquidity, currentTick, tickSpacing, sqrtPriceX96, liquidity, token0Decimals);
-    const token1Slippage =  get_dy_slippage(currentLiquidity, currentTick, tickSpacing, sqrtPriceX96, liquidity, token1Decimals);
+function getSlippages(currentTick, tickSpacing, sqrtPriceX96, liquidity, token0Decimals, token1Decimals) {
+    const token0Slippage = GetXAmountForSlippages(currentTick, tickSpacing, liquidity, token0Decimals, sqrtPriceX96);
+    const token1Slippage =  GetYAmountForSlippages(currentTick, tickSpacing, liquidity, token1Decimals, sqrtPriceX96);
 
     return {token0Slippage, token1Slippage};
 }
 
 
+
 /**
- * For a pool with pair {token0}-{token1}, returns the slippage map for amounts of token0 you can obtain
- * @param {number} currentTick the current price tick
- * @param {number} tickSpacing tick spacing
- * @param {string} sqrtPriceX96 string representation of sqrtPriceX96
- * @param {{[tick: number]: number}} liquidity liquidities, expressed as ticks
- * @param {number} tokenDecimals decimals number of token0
- * @returns {BigNumber} amount receivable
+ * Returns the amount available for X (token0) in a slippageMap from 50 bps to 2000 bps slippage
+ * When possible, the notation are the same as https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
+ * @param {number} currentTick 
+ * @param {number} tickSpacing 
+ * @param {{[tick: number]: number}} liquidities 
+ * @param {number} tokenDecimals 
+ * @param {string} sqrtPriceX96 
+ * @returns {[slippageBps: number]: number}
  */
-function get_dx_slippage(currentLiquidity, currentTick, tickSpacing, sqrtPriceX96, liquidity, tokenDecimals) {
-    const base = new BigNumber(1.0001);
-    const decimalFactor = new BigNumber(10).pow(tokenDecimals);
-    let dx = new BigNumber(0);
-    BigNumber.config({ POW_PRECISION: 10 });
+function GetXAmountForSlippages(currentTick, tickSpacing, liquidities, tokenDecimals, sqrtPriceX96) {
+    const result = {};
     const _96bits = new BigNumber(2).pow(new BigNumber(96));
-    let currSqrtPrice = new BigNumber(sqrtPriceX96).div(_96bits); 
-    let currTick = currentTick; // getNextLowerTick(Number(currentTick), tickSpacing);
-    
-    // 100 ticks = 1% slippage according to whitepaper
-    //  'This has the desirable property of each tick being a .01% (1 basis point) price movement away from each of its neighboring ticks.'
-    // get current tick price
-    const currentPrice = getTickPrice(currTick);
-    const targetPrice = currentPrice * 1.2;
-    const tickForPrice = getTickForPrice(targetPrice);
-    const testTargetPrice = getTickPrice(Math.round(tickForPrice));
-    let targetTick = currTick + CONSTANT_TARGET_SLIPPAGE * 100;
-    
-    // 'relevantTicks' will store ticks and the corresponding slippage in bps
-    // [tick: number]: number
-    // {
-    //     "205970": 100,
-    //     "205920": 150,
-    //     "205870": 200,
-    // }
+    const sqrtP = new BigNumber(sqrtPriceX96).div(_96bits); 
+    const P = sqrtP.times(sqrtP).toNumber();
+    const decimalFactor = new BigNumber(10).pow(tokenDecimals);
+
+    let workingTick = getNextLowerTick(currentTick, tickSpacing);
+    let totalX = 0;
+
+    // store tick [tickNumber]: slippageBps
     const relevantTicks = {};
-    const slippageIncr = tickSpacing > 50 ? tickSpacing : 50;
-    let slippageBps = slippageIncr;
-    while(slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100) {
-        let currentSlippageTick = currTick + slippageBps;
-        if(!relevantTicks[currentSlippageTick]) {
-            // only add if the value does not exists yet
-            relevantTicks[currentSlippageTick] = slippageBps;
+    for(let slippageBps = 50; slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100; slippageBps += 50) {
+        const targetPrice = P * (10000 + slippageBps)/10000;
+        const targetPriceTick = getTickForPrice(targetPrice);
+        const spacingTargetPriceTick = getNextLowerTick(targetPriceTick, tickSpacing);
+        if(!relevantTicks[spacingTargetPriceTick] && spacingTargetPriceTick > workingTick ) {
+            relevantTicks[spacingTargetPriceTick] = slippageBps;
         }
-        // console.log(`${fnName()}: ${currentSlippageTick} slippage = ${relevantTicks[currentSlippageTick]}`);
-        slippageBps += slippageIncr;
     }
 
-    // 'slippageData' will store for each amount of slippage, the amount of y tradable
-    const slippageData = {};
+    const maxTarget = Math.max(...Object.keys(relevantTicks).map(_ => Number(_)));
+    while(workingTick <= maxTarget) {
+        const L = new BigNumber(liquidities[workingTick]).times(CONSTANT_1e18);
 
-    // console.log(liquidity);
-    // when selling y, the price goes down
-    while(currTick <= targetTick) {
-        const nextTick = getNextLowerTick(currTick + Number(tickSpacing), tickSpacing);
-        //console.log({base},{nextTick})
-        const nextSqrtPrice = (base.pow(nextTick)).sqrt();
-        
+        if(!L.isNaN()) {
+            // pa = lower bound price range
+            const lowerBoundTick = getNextLowerTick(workingTick, tickSpacing);
+            const pa = getTickPrice(lowerBoundTick);
+            const sqrtPa = Math.sqrt(pa);
+            // pb = upper bound price range
+            const upperBoundTick = lowerBoundTick + tickSpacing;
+            const pb = getTickPrice(upperBoundTick);
+            const sqrtPb = Math.sqrt(pb);
+            let xLiquidityInTick = 0;
 
-        let realLiquidityAtTick = new BigNumber(0);
-        // specific case on the first tick: use lastLiquidity and price
-        if(currTick == currentTick) {
-            // liquidityAtTick = liquidityAtTick * 0.6;
-            const L = new BigNumber(currentLiquidity);
-            realLiquidityAtTick = L.div(currSqrtPrice).minus(L.div(nextSqrtPrice)); //  L.times(nextSqrtPrice.minus(currSqrtPrice))
-            
-            // const bottomTick = getNextLowerTick(currTick, tickSpacing);
-            // const upperTick = bottomTick + Number(tickSpacing);
-            // const priceAtTick = getTickPrice(currTick);
-            // const pa = getTickPrice(bottomTick);
-            // const pb = getTickPrice(upperTick);
-            // realLiquidityAtTick = L.times(Math.sqrt(pb) - Math.sqrt(priceAtTick)).div(Math.sqrt(priceAtTick) * Math.sqrt(pb));
-            // const oldRealLiquidityAtTick = L.div(currSqrtPrice).minus(L.div(nextSqrtPrice));
-            // const checkOldFormulaValidData = L.div(Math.sqrt(priceAtTick)).minus(L.div(Math.sqrt(pb)));
-
-            // console.log('L', L.toString());
-            // console.log('currSqrtPrice', currSqrtPrice.toString());
-            // console.log('nextSqrtPrice', nextSqrtPrice.toString());
-            // console.log('sqrt(p)', Math.sqrt(priceAtTick));
-            // console.log('sqrt(pb)', Math.sqrt(pb));
-
-            // console.log(realLiquidityAtTick.toString());
-            // console.log(oldRealLiquidityAtTick.toString());
-            // console.log(checkOldFormulaValidData.toString());
-        } else {
-            
-
-            let liquidityAtTick = liquidity[currTick];
-            if(!liquidityAtTick) {
-                liquidityAtTick = 0;
+            // Assuming P ≤ pa, the position is fully in X, so y = 0
+            if(P <= pa) {
+                const x = L.times(sqrtPb - sqrtPa).div(sqrtPa * sqrtPb);
+                xLiquidityInTick = x.div(decimalFactor).toNumber();
+            } 
+            // Assuming P ≥ pb, the position is fully in Y , so x = 0:
+            else if(P >= pb) {
+                // We want X so don't care for this case
+            } 
+            // If the current price is in the range: pa < P < pb. mix of x and y
+            else {
+                const x = L.times(sqrtPb - sqrtP).div(sqrtP * sqrtPb);
+                xLiquidityInTick = x.div(decimalFactor).toNumber();
             }
-            const L = new BigNumber(liquidityAtTick).times(CONSTANT_1e18);
-            realLiquidityAtTick = L.div(currSqrtPrice).minus(L.div(nextSqrtPrice)); //  L.times(nextSqrtPrice.minus(currSqrtPrice))
+
+            totalX += xLiquidityInTick;
+            if(relevantTicks[workingTick]) {
+                result[relevantTicks[workingTick]] = totalX;
+            }
         }
-
-        dx = dx.plus(realLiquidityAtTick);
-        console.log(`tick ${currTick} [${currTick - currentTick}]: realLiquidityAtTick ${realLiquidityAtTick.div(decimalFactor).toNumber()}, new dxValue ${dx.div(decimalFactor).toNumber()}`);
-
         
-        // store dx value if currTick is in relevant ticks
-        if(relevantTicks[currTick]) {
-            slippageData[relevantTicks[currTick]] = dx.div(decimalFactor).toNumber() || 0;
-            console.log(`added slippageData ${relevantTicks[currTick]}: ${slippageData[relevantTicks[currTick]]}`);
-        }
-
-        // move to next tick
-        currSqrtPrice = nextSqrtPrice;
-        currTick = nextTick;
+        workingTick += tickSpacing;
     }
 
-    return slippageData;
+    return result;
 }
 
 /**
- * For a pool with pair {token0}-{token1}, returns the slippage map for amounts of token1 tradable for x% slippage
- * @param {number} currentTick the current price tick
- * @param {number} tickSpacing tick spacing
- * @param {string} sqrtPriceX96 string representation of sqrtPriceX96
- * @param {{[tick: number]: number}} liquidity liquidities, expressed as ticks
- * @param {number} tokenDecimals decimals number of token1
- * @returns {BigNumber} amount receivable
+ * Returns the amount available for X (token0) in a slippageMap from 50 bps to 2000 bps slippage
+ * When possible, the notation are the same as https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
+ * @param {number} currentTick 
+ * @param {number} tickSpacing 
+ * @param {{[tick: number]: number}} liquidities 
+ * @param {number} tokenDecimals 
+ * @param {string} sqrtPriceX96 
+ * @returns {[slippageBps: number]: number}
  */
-function get_dy_slippage(currentLiquidity, currentTick, tickSpacing, sqrtPriceX96, liquidity, tokenDecimals) {
-    const base = new BigNumber(1.0001);
-    const decimalFactor = new BigNumber(10).pow(tokenDecimals);
-    let dy = new BigNumber(0);
-    BigNumber.config({ POW_PRECISION: 10 });
+function GetYAmountForSlippages(currentTick, tickSpacing, liquidities, tokenDecimals, sqrtPriceX96) {
+    const result = {};
     const _96bits = new BigNumber(2).pow(new BigNumber(96));
-    let currSqrtPrice = new BigNumber(sqrtPriceX96).div(_96bits); 
-    let currTick = currentTick; //getNextLowerTick(Number(currentTick), tickSpacing);
-    // 100 ticks = 1% slippage according to whitepaper
-    //  'This has the desirable property of each tick being a .01% (1 basis point) price movement away from each of its neighboring ticks.'
-    let targetTick = currTick - CONSTANT_TARGET_SLIPPAGE * 100;
-    
-    // 'relevantTicks' will store ticks and the corresponding slippage in bps
-    // [tick: number]: number
-    // {
-    //     "205970": 100,
-    //     "205920": 150,
-    //     "205870": 200,
-    // }
+    const sqrtP = new BigNumber(sqrtPriceX96).div(_96bits);
+    const P = sqrtP.times(sqrtP).toNumber();
+    const decimalFactor = new BigNumber(10).pow(tokenDecimals);
 
+    let workingTick = getNextLowerTick(currentTick, tickSpacing);
     
+    // store tick [tickNumber]: slippageBps
     const relevantTicks = {};
+    for(let slippageBps = 50; slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100; slippageBps += 50) {
+        const targetPrice = P * (10000 - slippageBps)/10000;
+        const targetPriceTick = getTickForPrice(targetPrice);
+        const spacingTargetPriceTick = getNextLowerTick(targetPriceTick, tickSpacing);
+        if(!relevantTicks[spacingTargetPriceTick] && spacingTargetPriceTick < workingTick ) {
+            relevantTicks[spacingTargetPriceTick] = slippageBps;
+        }
+    }
     
-    const slippageIncr = tickSpacing > 50 ? tickSpacing : 50;
-    let slippageBps = slippageIncr;
-    while(slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100) {
-        let currentSlippageTick = currTick - slippageBps;
-        if(!relevantTicks[currentSlippageTick]) {
-            // only add if the value does not exists yet
-            relevantTicks[currentSlippageTick] = slippageBps;
+    const minTarget = Math.min(...Object.keys(relevantTicks).map(_ => Number(_)));
+
+    let totalY = 0;
+    while(workingTick >= minTarget) {
+        const L = new BigNumber(liquidities[workingTick]).times(CONSTANT_1e18);
+        if(!L.isNaN()) {
+            // pa = lower bound price range
+            const lowerBoundTick = getNextLowerTick(workingTick, tickSpacing);
+            const pa = getTickPrice(lowerBoundTick);
+            const sqrtPa = Math.sqrt(pa);
+            // pb = upper bound price range
+            const upperBoundTick = lowerBoundTick + tickSpacing;
+            const pb = getTickPrice(upperBoundTick);
+            const sqrtPb = Math.sqrt(pb);
+            let yLiquidityInTick = 0;
+
+            // Assuming P ≤ pa, the position is fully in X, so y = 0
+            if(P <= pa) {
+            // We want X so don't care for this case
+            } 
+            // Assuming P ≥ pb, the position is fully in Y , so x = 0:
+            else if(P >= pb) {
+                const y = L.times(sqrtPb - sqrtPa);
+                yLiquidityInTick = y.div(decimalFactor).toNumber();
+            } 
+            // If the current price is in the range: pa < P < pb. mix of x and y
+            else {
+                const y = L.times(sqrtP - sqrtPa);
+                yLiquidityInTick = y.div(decimalFactor).toNumber();
+            }
+
+            totalY += yLiquidityInTick;
+            if(relevantTicks[workingTick]) {
+                result[relevantTicks[workingTick]] = totalY;
+            }
         }
-        // console.log(`${fnName()}: ${currentSlippageTick} slippage = ${relevantTicks[currentSlippageTick]}`);
-        slippageBps += slippageIncr;
+
+        workingTick -= tickSpacing;
     }
 
-    // 'slippageData' will store for each amount of slippage, the amount of y tradable
-    const slippageData = {};
-
-    // when selling x, the price goes up
-    while(currTick >= targetTick) {
-        const nextTick = currTick - Number(tickSpacing);
-        const nextSqrtPrice = (base.pow(nextTick)).sqrt();
-
-        let liquidityAtTick = liquidity[currTick];
-        if(!liquidityAtTick) {
-            liquidityAtTick = 0;
-        }
-
-        // if(currTick == currentTick) {
-        //     liquidityAtTick = liquidityAtTick * 0.4;
-        // }
-
-        const L = new BigNumber(liquidityAtTick).times(CONSTANT_1e18);
-        if(currTick == currentTick) {
-            // liquidityAtTick = liquidityAtTick * 0.6;
-            
-            // x = L / sqrt(P)
-            // y = L * sqrt(P)
-            const bottomTick = getNextLowerTick(currTick, tickSpacing);
-            const upperTick = bottomTick + Number(tickSpacing);
-            const priceAtTick = getTickPrice(currTick);
-            const pa = getTickPrice(bottomTick);
-            const pb = getTickPrice(upperTick);
-            realLiquidityAtTick = L.times(Math.sqrt(pb) - Math.sqrt(priceAtTick)).div(Math.sqrt(priceAtTick) * Math.sqrt(pb));
-            // console.log(realLiquidityAtTick.toString());
-        } else {
-            
-        }
-
-        const dSqrtP = currSqrtPrice.minus(nextSqrtPrice);
-        const realLiquidityAtTick = L.times(dSqrtP);
-        dy = dy.plus(realLiquidityAtTick);
-        console.log(`tick ${currTick} [${currTick - currentTick}]: realLiquidityAtTick ${realLiquidityAtTick.div(decimalFactor).toNumber()}, new dxValue ${dy.div(decimalFactor).toNumber()}`);
-
-        
-        // store dy value if currTick is in relevant ticks
-        if(relevantTicks[currTick]) {
-            slippageData[relevantTicks[currTick]] = dy.div(decimalFactor).toNumber() || 0;
-            console.log(`added slippageData ${relevantTicks[currTick]}: ${slippageData[relevantTicks[currTick]]}`);
-        }
-
-        // move to next tick
-        currSqrtPrice = nextSqrtPrice;
-        currTick = nextTick;
-    }
-
-    return slippageData;
+    return result;
 }
 
 function getAvailableUniswapV3(dataDir) {
@@ -471,15 +407,3 @@ function getUniV3DataContents(selectedFiles, dataDir, minBlock=0) {
 }
 
 module.exports = { getPriceNormalized, getSlippages, getAvailableUniswapV3, getUniV3DataforBlockInterval };
-
-async function test() {
-    const latestData = JSON.parse(fs.readFileSync('./cbETH-WETH-500-data.json', 'utf-8'));
-
-    // 470--474-----480
-    const dxSlippage = get_dx_slippage(latestData.lastLiquidity, latestData.currentTick, 10, latestData.currentSqrtPriceX96, latestData.ticks, 18);
-    console.log(dxSlippage);
-    const dySlippage = get_dy_slippage(latestData.lastLiquidity, latestData.currentTick, 10, latestData.currentSqrtPriceX96, latestData.ticks, 18);
-    console.log(dySlippage);
-}
-
-test();
