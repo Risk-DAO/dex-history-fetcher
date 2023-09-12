@@ -259,13 +259,13 @@ function processEvents(events, iface, latestData, token0, token1, latestDataFile
             case 'mint':
                 if (parsedEvent.args.amount.gt(0)) {
                     const lqtyToAdd = new BigNumber(parsedEvent.args.amount.toString());
-                    updateLatestDataLiquidity(latestData, event.blockNumber, parsedEvent.args.tickLower, parsedEvent.args.tickUpper, lqtyToAdd, latestData.tickSpacing);
+                    updateLatestDataLiquidity(latestData, event.blockNumber, parsedEvent.args.tickLower, parsedEvent.args.tickUpper, lqtyToAdd);
                 }
                 break;
             case 'burn':
                 if (parsedEvent.args.amount.gt(0)) {
                     const lqtyToSub = new BigNumber(-1).times(new BigNumber(parsedEvent.args.amount.toString()));
-                    updateLatestDataLiquidity(latestData, event.blockNumber, parsedEvent.args.tickLower, parsedEvent.args.tickUpper, lqtyToSub, latestData.tickSpacing);
+                    updateLatestDataLiquidity(latestData, event.blockNumber, parsedEvent.args.tickLower, parsedEvent.args.tickUpper, lqtyToSub);
                 }
                 break;
             case 'swap':
@@ -290,10 +290,10 @@ function processEvents(events, iface, latestData, token0, token1, latestDataFile
     logFnDuration(dtStart, events.length, 'event');
 }
 
-function updateLatestDataLiquidity(latestData, blockNumber, tickLower, tickUpper, amount, tickSpacing) {
+function updateLatestDataLiquidity(latestData, blockNumber, tickLower, tickUpper, amount) {
     // console.log(`Adding ${amount} from ${tickLower} to ${tickUpper}`);
     const amountNorm = amount.div(CONSTANT_1e18).toNumber();
-    for(let tick = tickLower ; tick <= tickUpper ; tick += tickSpacing) {
+    for(let tick = tickLower ; tick < tickUpper ; tick += latestData.tickSpacing) {
         if(!latestData.ticks[tick]) {
             latestData.ticks[tick] = 0;
         }
