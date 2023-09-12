@@ -28,7 +28,7 @@ function unifyProtocolData(protocol) {
                 if (!protocolData[market]) {
                     protocolData[market] = {};
                 }
-                for (const [collateral, collateralValues] of Object.entries(marketData.data)) {
+                for (const [collateral, collateralValues] of Object.entries(marketData.collateralsData)) {
                     if (!protocolData[market][collateral] && collateralValues) {
                         protocolData[market][collateral] = {};
                     }
