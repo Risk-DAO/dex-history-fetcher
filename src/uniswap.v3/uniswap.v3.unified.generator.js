@@ -9,17 +9,17 @@ const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 async function generateUnifiedFileUniv3(endBlock) {
     const available = getAvailableUniswapV3(DATA_DIR);
 
+    const blockLastYear = await getBlocknumberForTimestamp(Math.round(Date.now()/1000) - 365 * 24 * 60 * 60);
     for(const base of Object.keys(available)) {
         for(const quote of available[base]) {
-            await createUnifiedFileForPair(endBlock, base, quote);
+            await createUnifiedFileForPair(endBlock, base, quote, blockLastYear);
         }
     }
 
-    const blockLastYear = await getBlocknumberForTimestamp(Math.round(Date.now()/1000) - 365 * 24 * 60 * 60);
     truncateUnifiedFiles('uniswapv3', blockLastYear);
 }
 
-async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol) {
+async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol, blockLastYear) {
     console.log(`${fnName()}: create/append for ${fromSymbol} ${toSymbol}`);
     const unifiedFilename = `${fromSymbol}-${toSymbol}-unified-data.csv`;
     const unifiedFullFilename = path.join(DATA_DIR, 'precomputed', 'uniswapv3', unifiedFilename);
@@ -30,7 +30,7 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol) {
         const lastLine = await readLastLine(unifiedFullFilename);
         sinceBlock = Number(lastLine.split(',')[0]) + 1;
         if(isNaN(sinceBlock)) {
-            sinceBlock = 0;
+            sinceBlock = blockLastYear;
         }
     }
 
