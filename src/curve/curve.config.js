@@ -35,16 +35,16 @@ const curvePairs = [
             ]
         }
     },
-    {
-        poolAddress: '0xdc24316b9ae028f1497c275eb9192a3ea0f67022',
-        poolName: 'steth',
-        version: 1,
-        abi: 'erc20ABI',
-        ampType: 'RampA',
-        ampFactor: 500,
-        lpTokenName: 'steCRV',
-        lpTokenAddress: '0x06325440D014e39736583c165C2963BA99fAf14E'
-    },
+    // {
+    //     poolAddress: '0xdc24316b9ae028f1497c275eb9192a3ea0f67022',
+    //     poolName: 'steth',
+    //     version: 1,
+    //     abi: 'erc20ABI',
+    //     ampType: 'RampA',
+    //     ampFactor: 500,
+    //     lpTokenName: 'steCRV',
+    //     lpTokenAddress: '0x06325440D014e39736583c165C2963BA99fAf14E'
+    // },
 ]
 // conf for risk oracle oracle
 // const curvePairs = [
