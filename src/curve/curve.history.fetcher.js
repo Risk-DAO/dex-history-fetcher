@@ -128,7 +128,6 @@ async function FetchHistory(pool, currentBlock) {
         console.log('Could not fetch token symbol');
         throw error;
     }
-
     
     /**
      * lastData will hold the latest data we have on the curve pool

@@ -124,6 +124,6 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol, pools) {
     }
 }
 
-// generateUnifiedFileCurve(18000000);
+generateUnifiedFileCurve(19000000);
 
 module.exports = { generateUnifiedFileCurve, createUnifiedFileForPair };
