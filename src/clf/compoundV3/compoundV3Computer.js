@@ -17,7 +17,7 @@ const spans = [7, 30, 180];
  * Compute the CLFs values for compound v3
  * @param {number} fetchEveryMinutes 
  */
-async function compoundV3Computer(fetchEveryMinutes) {
+async function compoundV3Computer(fetchEveryMinutes, startDate=Date.now()) {
     const MONITORING_NAME = 'CompoundV3 CLF Computer';
     const start = Date.now();
     try {
@@ -47,7 +47,7 @@ async function compoundV3Computer(fetchEveryMinutes) {
         // }
         const fromBlocks = {};
         for(const span of spans) {
-            const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (span * 24 * 60 * 60));
+            const startBlock = await getBlocknumberForTimestamp(Math.round(startDate/ 1000) - (span * 24 * 60 * 60));
             fromBlocks[span] = startBlock;
         }
 
@@ -78,7 +78,7 @@ async function compoundV3Computer(fetchEveryMinutes) {
         };
 
         console.log('firing record function');
-        recordResults(toRecord);
+        recordResults(toRecord, startDate);
 
         console.log('CompoundV3 CLF Computer: ending');
 
@@ -356,8 +356,8 @@ function computeProtocolWeightedCLF(protocolData) {
     return weightedCLF;
 }
 
-function recordResults(results) {
-    const date = getDay();
+function recordResults(results, timestamp=undefined) {
+    const date = getDay(timestamp);
     if (!fs.existsSync(`${DATA_DIR}/clf/${date}`)) {
         fs.mkdirSync(`${DATA_DIR}/clf/${date}`);
     }

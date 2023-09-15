@@ -104,8 +104,8 @@ async function sleep(ms) {
     });
 }
 
-const getDay = () => {
-    const dateObj = new Date();
+const getDay = (timestamp=undefined) => {
+    const dateObj = timestamp ? new Date(timestamp) : new Date();
     const month = dateObj.getUTCMonth() + 1; //months from 1-12
     const day = dateObj.getUTCDate();
     const year = dateObj.getUTCFullYear();
