@@ -9,14 +9,11 @@ const { DATA_DIR } = require('../utils/constants');
 async function generateUnifiedFileCurve(endBlock) {
     const available = getAvailableCurve(DATA_DIR);
 
-    const threads = [];
     for(const base of Object.keys(available)) {
         for(const quote of Object.keys(available[base])) {
             await createUnifiedFileForPair(endBlock, base, quote, Object.keys(available[base][quote]));
         }
     }
-
-    await Promise.all(threads);
 }
 
 async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol, pools) {
@@ -124,6 +121,6 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol, pools) {
     }
 }
 
-generateUnifiedFileCurve(19000000);
+// generateUnifiedFileCurve(19000000);
 
 module.exports = { generateUnifiedFileCurve, createUnifiedFileForPair };

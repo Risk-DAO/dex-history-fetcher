@@ -11,6 +11,7 @@ const { RecordMonitoring } = require('../utils/monitoring');
 const { DATA_DIR } = require('../utils/constants');
 const { providers } = require('@0xsequence/multicall');
 const { getConfTokenBySymbol, normalize } = require('../utils/token.utils');
+const { generateUnifiedFileCurve } = require('./curve.unified.generator');
 
 dotenv.config();
 const RPC_URL = process.env.RPC_URL;
@@ -37,8 +38,10 @@ async function CurveHistoryFetcher() {
 
             const lastResults = {};
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
+
             const currentBlock = await web3Provider.getBlockNumber() - 10;
             for(const fetchConfig of curveConfig.curvePairsHistory) {
+                console.log(`Start fetching history for ${fetchConfig.poolName}`);
                 const lastData = await FetchHistory(fetchConfig, currentBlock, web3Provider);
                 lastResults[`${fetchConfig.poolName}_${fetchConfig.lpTokenName}`] = lastData;
             }
@@ -46,7 +49,7 @@ async function CurveHistoryFetcher() {
             const poolSummaryFullname = path.join(DATA_DIR, 'curve', 'curve_pools_summary.json');
             fs.writeFileSync(poolSummaryFullname, JSON.stringify(lastResults, null, 2));
 
-            // await generateUnifiedFileCurve(currentBlock);
+            await generateUnifiedFileCurve(currentBlock);
 
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({
@@ -75,6 +78,69 @@ async function CurveHistoryFetcher() {
     }
 }
 
+function getCurveContract(fetchConfig, web3Provider) {
+    let curveContract = undefined;
+    switch(fetchConfig.abi.toLowerCase()) {
+        case 'stableswap':
+            curveContract = new Contract(fetchConfig.poolAddress, curveConfig.stableSwapAbi, web3Provider);
+            break;
+        case 'curvepool':
+            curveContract = new Contract(fetchConfig.poolAddress, curveConfig.curvePoolAbi, web3Provider);
+            break;
+        case 'susdpool':
+            curveContract = new Contract(fetchConfig.poolAddress, curveConfig.susdCurvePoolAbi, web3Provider);
+            break;
+        default: 
+            throw new Error(`Unknown abi: ${fetchConfig.abi}`);
+    }
+
+    return curveContract;
+}
+
+function getCurveTopics(curveContract, fetchConfig) {
+    let topics = [];
+    
+    switch(fetchConfig.abi.toLowerCase()) {
+        case 'stableswap':
+            topics = [
+                curveContract.filters.TokenExchange().topics[0],
+                curveContract.filters.TokenExchangeUnderlying().topics[0],
+                curveContract.filters.AddLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidityOne().topics[0],
+                curveContract.filters.RemoveLiquidityImbalance().topics[0],
+                curveContract.filters.RampA().topics[0],
+                curveContract.filters.StopRampA().topics[0],
+            ];
+            break;
+        case 'curvepool':
+            topics = [
+                curveContract.filters.TokenExchange().topics[0],
+                curveContract.filters.AddLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidityOne().topics[0],
+                curveContract.filters.RemoveLiquidityImbalance().topics[0],
+                curveContract.filters.RampA().topics[0],
+                curveContract.filters.StopRampA().topics[0],
+            ];
+            break;
+        case 'susdpool':
+            topics = [
+                curveContract.filters.TokenExchange().topics[0],
+                curveContract.filters.TokenExchangeUnderlying().topics[0],
+                curveContract.filters.AddLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidityImbalance().topics[0],
+                curveContract.filters.NewParameters().topics[0],
+                curveContract.filters.CommitNewParameters().topics[0],
+            ];
+            break;
+        default: 
+            throw new Error(`Unknown abi: ${fetchConfig.abi}`);
+    }
+
+    return topics;
+}
 /**
  * Takes a fetchConfig from curve.config.js and outputs liquidity file in /data
  * @param {{poolAddress: string, poolName: string, version: number, abi: string, ampFactor: number, additionnalTransferEvents: {[symbol: string]: string[]}}} fetchConfig 
@@ -97,7 +163,10 @@ async function FetchHistory(fetchConfig, currentBlock, web3Provider) {
     }
 
     // fetch all blocks where an event occured since startBlock
-    const allBlocksWithEvents = await getAllBlocksWithEvents(fetchConfig, startBlock, currentBlock, web3Provider);
+    const curveContract = getCurveContract(fetchConfig, web3Provider);
+    const topics = getCurveTopics(curveContract, fetchConfig);
+
+    const allBlocksWithEvents = await getAllBlocksWithEventsForContractAndTopics(fetchConfig, startBlock, currentBlock, curveContract, topics);
 
     console.log(`found ${allBlocksWithEvents.length} blocks with events since ${startBlock}`);
     
@@ -120,7 +189,7 @@ async function fetchReservesData(fetchConfig, historyFileName, lastBlock, web3Pr
     let lastBlockCurrent = lastBlock;
     const multicallProvider = new providers.MulticallProvider(web3Provider);
     const lpTokenContract = new Contract(fetchConfig.lpTokenAddress, curveConfig.erc20Abi, multicallProvider);
-    const poolContract = new Contract(fetchConfig.poolAddress, curveConfig.stableSwapAbi, multicallProvider);
+    const poolContract = getCurveContract(fetchConfig, multicallProvider);
 
     if(!fs.existsSync(historyFileName)) {
         let tokensStr = [];
@@ -155,6 +224,16 @@ async function fetchReservesData(fetchConfig, historyFileName, lastBlock, web3Pr
         }
 
         fs.appendFileSync(historyFileName, `${blockNum},${promiseResults[0]},${promiseResults[1].toString()},${tokenReserves.join(',')}\n`);
+            
+        // const A = await poolContract.A({blockTag: blockNum});
+        // console.log('A:', A.toString());
+
+        // const supply = await lpTokenContract.totalSupply({blockTag: blockNum});
+        // console.log('lpSupply:', supply.toString());
+        // for(let i = 0; i < fetchConfig.tokens.length; i++) {
+        //     const balance = await poolContract.balances(i, {blockTag: blockNum});
+        //     console.log(`${fetchConfig.tokens[i].symbol}: ${balance.toString()}`);
+        // }
         lastBlockCurrent = blockNum;
     }
 }
@@ -168,51 +247,6 @@ async function fetchReservesData(fetchConfig, historyFileName, lastBlock, web3Pr
  * @returns {Promise<number[]>}
  */
 async function getAllBlocksWithEvents(fetchConfig, fromBlock, toBlock, web3Provider) {
-    let curveContract = undefined;
-    let topics = [];
-    switch(fetchConfig.abi.toLowerCase()) {
-        case 'stableswap':
-            curveContract = new Contract(fetchConfig.poolAddress, curveConfig.stableSwapAbi, web3Provider);
-            topics = [
-                curveContract.filters.TokenExchange().topics[0],
-                curveContract.filters.TokenExchangeUnderlying().topics[0],
-                curveContract.filters.AddLiquidity().topics[0],
-                curveContract.filters.RemoveLiquidity().topics[0],
-                curveContract.filters.RemoveLiquidityOne().topics[0],
-                curveContract.filters.RemoveLiquidityImbalance().topics[0],
-                curveContract.filters.RampA().topics[0],
-                curveContract.filters.StopRampA().topics[0],
-            ];
-            break;
-        case 'curvepool':
-            curveContract = new Contract(fetchConfig.poolAddress, curveConfig.curvePoolAbi, web3Provider);
-            topics = [
-                curveContract.filters.TokenExchange().topics[0],
-                curveContract.filters.AddLiquidity().topics[0],
-                curveContract.filters.RemoveLiquidity().topics[0],
-                curveContract.filters.RemoveLiquidityOne().topics[0],
-                curveContract.filters.RemoveLiquidityImbalance().topics[0],
-                curveContract.filters.RampA().topics[0],
-                curveContract.filters.StopRampA().topics[0],
-            ];
-            break;
-        case 'susdpool':
-            curveContract = new Contract(fetchConfig.poolAddress, curveConfig.curvePoolAbi, web3Provider);
-            topics = [
-                curveContract.filters.TokenExchange().topics[0],
-                curveContract.filters.AddLiquidity().topics[0],
-                curveContract.filters.RemoveLiquidity().topics[0],
-                curveContract.filters.RemoveLiquidityOne().topics[0],
-                curveContract.filters.RemoveLiquidityImbalance().topics[0],
-                curveContract.filters.NewParameters().topics[0],
-                curveContract.filters.CommitNewParameters().topics[0],
-            ];
-            break;
-        default: 
-            throw new Error(`Unknown abi: ${fetchConfig.abi}`);
-    }
-
-    return await getAllBlocksWithEventsForContractAndTopics(fetchConfig, fromBlock, toBlock, curveContract, topics);
 }
 
 async function getAllBlocksWithEventsForContractAndTopics(fetchConfig, startBlock, endBlock, curveContract, topics) {
