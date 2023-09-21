@@ -1,9 +1,10 @@
 const path = require('path');
 const fs = require('fs');
 const { fnName, readLastLine } = require('../utils/utils');
-const { getAvailableCurve, getCurveDataforBlockInterval, computePriceAndSlippageMapForReserveValue } = require('./curve.utils');
+const { getAvailableCurve, getCurveDataforBlockInterval, computePriceAndSlippageMapForReserveValue, computePriceAndSlippageMapForReserveValueCryptoV2 } = require('./curve.utils');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { DATA_DIR } = require('../utils/constants');
+const { getConfTokenBySymbol } = require('../utils/token.utils');
 
 // this can be very long if done from the begining. 
 async function generateUnifiedFileCurve(endBlock) {
@@ -66,11 +67,32 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol, pools) {
         for(const poolToken of poolData[mainPool].poolTokens) {
             mainReserves.push(poolData[mainPool].reserveValues[blockNumber][poolToken]);
         }
-        const mainPriceAndSlippage = computePriceAndSlippageMapForReserveValue(fromSymbol,
-            toSymbol,
-            poolData[mainPool].poolTokens,
-            mainDataForBlock.ampFactor,
-            mainReserves);
+
+
+        let mainPriceAndSlippage = undefined;
+        if(poolData[mainPool].isCryptoV2) {
+            const precisions = [];
+            for(const token of poolData[mainPool].poolTokens) {
+                const tokenConf = getConfTokenBySymbol(token);
+                precisions.push(10n**BigInt(18 - tokenConf.decimals));
+            }
+
+            mainPriceAndSlippage = computePriceAndSlippageMapForReserveValueCryptoV2(fromSymbol,
+                toSymbol,
+                poolData[mainPool].poolTokens,
+                mainDataForBlock.ampFactor,
+                mainReserves,
+                precisions,
+                mainDataForBlock.gamma,
+                mainDataForBlock.D,
+                mainDataForBlock.priceScale);
+        } else {
+            mainPriceAndSlippage = computePriceAndSlippageMapForReserveValue(fromSymbol,
+                toSymbol,
+                poolData[mainPool].poolTokens,
+                mainDataForBlock.ampFactor,
+                mainReserves);
+        }
 
         // compute slippage map for other pools
         for(const poolName of pools) {
@@ -92,11 +114,31 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol, pools) {
             for(const poolToken of poolData[poolName].poolTokens) {
                 reserves.push(poolData[poolName].reserveValues[nearestBlockNumber][poolToken]);
             }
-            const poolPriceAndSlippage = computePriceAndSlippageMapForReserveValue(fromSymbol,
-                toSymbol,
-                poolData[poolName].poolTokens,
-                poolDataForBlock.ampFactor,
-                reserves);
+            let poolPriceAndSlippage = undefined;
+
+            if(poolData[poolName].isCryptoV2) {
+                const precisions = [];
+                for(const token of poolData[poolName].poolTokens) {
+                    const tokenConf = getConfTokenBySymbol(token);
+                    precisions.push(10n**BigInt(18 - tokenConf.decimals));
+                }
+    
+                poolPriceAndSlippage = computePriceAndSlippageMapForReserveValueCryptoV2(fromSymbol,
+                    toSymbol,
+                    poolData[mainPool].poolTokens,
+                    mainDataForBlock.ampFactor,
+                    mainReserves,
+                    precisions,
+                    mainDataForBlock.gamma,
+                    mainDataForBlock.D,
+                    mainDataForBlock.priceScale);
+            } else {
+                poolPriceAndSlippage = computePriceAndSlippageMapForReserveValue(fromSymbol,
+                    toSymbol,
+                    poolData[poolName].poolTokens,
+                    poolDataForBlock.ampFactor,
+                    reserves);
+            }
 
             // add the slippageMap to the mainPool one
             for(const slippageBps of Object.keys(poolPriceAndSlippage.slippageMap)) {

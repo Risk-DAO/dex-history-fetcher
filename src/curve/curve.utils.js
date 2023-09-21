@@ -9,24 +9,103 @@ function getCurveDataforBlockInterval(dataDir, poolName, startBlock, endBlock) {
     if(!filePath) {
         throw new Error(`Could not find pool data in ${dataDir}/curve/${poolName} for curve`);
     }
-    
-    const dataContents = {
-        poolTokens: [], // ORDERED
-        reserveValues: {},
-    };
 
     // load the file in RAM
     const fileContent = fs.readFileSync(filePath, 'utf-8').split('\n');
 
-
     // header looks like: 
     // blocknumber,ampfactor,lp_supply_0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490,reserve_DAI_0x6B175474E89094C44Da98b954EedeAC495271d0F,reserve_USDC_0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,reserve_USDT_0xdAC17F958D2ee523a2206206994597C13D831ec7
     const headersSplitted = fileContent[0].split(',');
-    for(let i = 3; i < headersSplitted.length; i++) {
+    if(headersSplitted.includes('gamma')) {
+        return getCurveDataforBlockIntervalCryptoV2(fileContent, startBlock, endBlock);
+    } else {
+        const dataContents = {
+            isCryptoV2: false,
+            poolTokens: [], // ORDERED
+            reserveValues: {},
+        };
+
+        for(let i = 3; i < headersSplitted.length; i++) {
         // save the symbol value into pool tokens
-        dataContents.poolTokens.push(headersSplitted[i].split('_')[1]);
-    }
+            dataContents.poolTokens.push(headersSplitted[i].split('_')[1]);
+        }
     
+
+        let lastValue = undefined;
+        for(let i = 1; i < fileContent.length - 1; i++) {
+            const line = fileContent[i];
+            const splt = line.split(',');
+            const blockNum = Number(splt[0]);
+
+            if(blockNum > endBlock) {
+                break;
+            }
+
+            // if blockNum inferior to startBlock, ignore but save last value
+            if(blockNum < startBlock) {
+                lastValue = {
+                    blockNumber: blockNum,
+                    lineValue: line.toString(),
+                };
+            } else {
+            // here it means we went through the sinceBlock, save the last value before 
+            // reaching sinceBlock to have one previous data
+                if(lastValue && blockNum != startBlock) {
+                    const beforeValueSplitted = lastValue.lineValue.split(',');
+                    const lastValueBlock = lastValue.blockNumber;
+
+                    dataContents.reserveValues[lastValueBlock] = {
+                        ampFactor: Number(beforeValueSplitted[1]),
+                        lpSupply: beforeValueSplitted[2]
+                    };
+
+                    for(let i = 3; i < beforeValueSplitted.length; i++) {
+                        const token = dataContents.poolTokens[i-3];
+                        dataContents.reserveValues[lastValueBlock][token] = beforeValueSplitted[i];
+                    }
+
+                    // set lastValue to null, meaning we already saved it
+                    lastValue = null;
+                }
+
+                // save current value
+                dataContents.reserveValues[blockNum] = {
+                    ampFactor: Number(splt[1]),
+                    lpSupply: splt[2]
+                };
+
+                for(let i = 3; i < splt.length; i++) {
+                    const token = dataContents.poolTokens[i-3];
+                    dataContents.reserveValues[blockNum][token] = splt[i];
+                }
+            }
+
+        }
+
+        return dataContents;
+    }
+}
+
+/**
+ * 
+ * @param {string[]} fileContent 
+ */
+function getCurveDataforBlockIntervalCryptoV2(fileContent, startBlock, endBlock) {
+    const headersSplitted = fileContent[0].split(',');
+    const dataContents = {
+        isCryptoV2: true,
+        poolTokens: [], // ORDERED
+        reserveValues: {},
+    };
+
+    for(let i = 5; i < headersSplitted.length; i++) {
+        const type = headersSplitted[i].split('_')[0]; // reserve of price_scale
+
+        if(type == 'reserve') {
+            // save the symbol value into pool tokens
+            dataContents.poolTokens.push(headersSplitted[i].split('_')[1]);
+        }
+    }
 
     let lastValue = undefined;
     for(let i = 1; i < fileContent.length - 1; i++) {
@@ -53,12 +132,19 @@ function getCurveDataforBlockInterval(dataDir, poolName, startBlock, endBlock) {
 
                 dataContents.reserveValues[lastValueBlock] = {
                     ampFactor: Number(beforeValueSplitted[1]),
-                    lpSupply: beforeValueSplitted[2]
+                    gamma: beforeValueSplitted[2],
+                    D: beforeValueSplitted[3],
+                    lpSupply: beforeValueSplitted[4],
                 };
 
-                for(let i = 3; i < beforeValueSplitted.length; i++) {
-                    const token = dataContents.poolTokens[i-3];
-                    dataContents.reserveValues[lastValueBlock][token] = beforeValueSplitted[i];
+                for(let i = 0; i < dataContents.poolTokens.length; i++) {
+                    const token = dataContents.poolTokens[i];
+                    dataContents.reserveValues[lastValueBlock][token] = beforeValueSplitted[i+5];
+                }
+
+                dataContents.reserveValues[lastValueBlock].priceScale = [];
+                for(let i = 0; i < dataContents.poolTokens.length - 1; i++) {
+                    dataContents.reserveValues[lastValueBlock].priceScale.push(beforeValueSplitted[i+5+dataContents.poolTokens.length]);
                 }
 
                 // set lastValue to null, meaning we already saved it
@@ -68,15 +154,21 @@ function getCurveDataforBlockInterval(dataDir, poolName, startBlock, endBlock) {
             // save current value
             dataContents.reserveValues[blockNum] = {
                 ampFactor: Number(splt[1]),
-                lpSupply: splt[2]
+                gamma: splt[2],
+                D: splt[3],
+                lpSupply: splt[4],
             };
+            
+            for(let i = 0; i < dataContents.poolTokens.length; i++) {
+                const token = dataContents.poolTokens[i];
+                dataContents.reserveValues[blockNum][token] = splt[i+5];
+            }
 
-            for(let i = 3; i < splt.length; i++) {
-                const token = dataContents.poolTokens[i-3];
-                dataContents.reserveValues[blockNum][token] = splt[i];
+            dataContents.reserveValues[blockNum].priceScale = [];
+            for(let i = 0; i < dataContents.poolTokens.length - 1; i++) {
+                dataContents.reserveValues[blockNum].priceScale.push(splt[i+5+dataContents.poolTokens.length]);
             }
         }
-
     }
 
     return dataContents;
@@ -113,6 +205,51 @@ function computeLiquidityForSlippageCurvePool(baseQty, targetPrice, reserves, i,
         const qtyTo = get_return(i, j, qtyFrom, reserves, amplificationFactor);
         const normalizedFrom = normalize(qtyFrom.toString(), 18);
         const normalizedTo = normalize(qtyTo.toString(), 18);
+        const currentPrice = normalizedTo / normalizedFrom;
+
+        const variation = (Number(high) / Number(low)) - 1;
+        // console.log(`DAI Qty: [${low ? normalize(BigNumber.from(low), 18) : '0'} <-> ${high ? normalize(BigNumber.from(high), 18) : '+∞'}]. Current price: 1 ${fromSymbol} = ${currentPrice} ${toSymbol}, targetPrice: ${targetPrice}. Try qty: ${normalizedFrom} ${fromSymbol} = ${normalizedTo} ${toSymbol}. variation: ${variation * 100}%`);
+        if(low && high) {
+            if(variation < exitBoundsDiff) {
+                return (high + low) / 2n;
+            }
+        }
+
+        if (currentPrice > targetPrice) {
+            // current price too high, must increase qtyFrom
+            low = qtyFrom;
+
+            if(!high) {
+                // if high is undefined, just double next try qty
+                qtyFrom = qtyFrom * 2n;
+            } else {
+                qtyFrom = qtyFrom + ((high - low) / 2n);
+            }
+        } else {
+            // current price too low, must decrease qtyFrom
+            high = qtyFrom;
+
+            if(!low) {
+                // if low is undefined, next try qty = qty / 2
+                qtyFrom = qtyFrom / 2n;
+            } else {
+                qtyFrom = qtyFrom - ((high - low) / 2n);
+            }
+        }
+    }
+}
+
+
+function computeLiquidityForSlippageCurvePoolCryptoV2(baseQty, targetPrice, reserves, i, j, amplificationFactor, gamma, D, priceScale, precisions, decimalsFrom, decimalsTo) {
+    let low = undefined;
+    let high = undefined;
+    let qtyFrom = baseQty * 2n;
+    const exitBoundsDiff = 0.1/100; // exit binary search when low and high bound have less than this amount difference
+    // eslint-disable-next-line no-constant-condition
+    while(true) {
+        const qtyTo = get_dy_v2(i, j, qtyFrom, reserves, BigInt(reserves.length), amplificationFactor, gamma, D, priceScale, precisions);
+        const normalizedFrom = normalize(qtyFrom.toString(), decimalsFrom);
+        const normalizedTo = normalize(qtyTo.toString(), decimalsTo);
         const currentPrice = normalizedTo / normalizedFrom;
 
         const variation = (Number(high) / Number(low)) - 1;
@@ -251,14 +388,14 @@ function get_y(i, j, x, _xp, N_COINS, A) {
  * @param {*} price_scale 
  * @returns 
  */
-function get_y_v2(i, j, dx, reserves, N_COINS, A, gamma, D, price_scale, precisions) {
+function get_dy_v2(i, j, dx, reserves, N_COINS, A, gamma, D, price_scale, precisions) {
 
     // xp: uint256[N_COINS] = empty(uint256[N_COINS])
     // for k in range(N_COINS):
     // xp[k] = Curve(msg.sender).balances(k)
     const xp = [];
     for(let k = 0; k < N_COINS; k++) {
-        xp[k] = reserves[k];
+        xp[k] = structuredClone(reserves[k]);
     }
 
     // xp[i] += dx
@@ -433,10 +570,9 @@ function get_newton_y(ANN, gamma, reserves, D, i, N_COINS) {
 }
 
 // eslint-disable-next-line quotes
-const tricryptoAbi = [{"name":"TokenExchange","inputs":[{"name":"buyer","type":"address","indexed":true},{"name":"sold_id","type":"uint256","indexed":false},{"name":"tokens_sold","type":"uint256","indexed":false},{"name":"bought_id","type":"uint256","indexed":false},{"name":"tokens_bought","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"AddLiquidity","inputs":[{"name":"provider","type":"address","indexed":true},{"name":"token_amounts","type":"uint256[3]","indexed":false},{"name":"fee","type":"uint256","indexed":false},{"name":"token_supply","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"RemoveLiquidity","inputs":[{"name":"provider","type":"address","indexed":true},{"name":"token_amounts","type":"uint256[3]","indexed":false},{"name":"token_supply","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"RemoveLiquidityOne","inputs":[{"name":"provider","type":"address","indexed":true},{"name":"token_amount","type":"uint256","indexed":false},{"name":"coin_index","type":"uint256","indexed":false},{"name":"coin_amount","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"CommitNewAdmin","inputs":[{"name":"deadline","type":"uint256","indexed":true},{"name":"admin","type":"address","indexed":true}],"anonymous":false,"type":"event"},{"name":"NewAdmin","inputs":[{"name":"admin","type":"address","indexed":true}],"anonymous":false,"type":"event"},{"name":"CommitNewParameters","inputs":[{"name":"deadline","type":"uint256","indexed":true},{"name":"admin_fee","type":"uint256","indexed":false},{"name":"mid_fee","type":"uint256","indexed":false},{"name":"out_fee","type":"uint256","indexed":false},{"name":"fee_gamma","type":"uint256","indexed":false},{"name":"allowed_extra_profit","type":"uint256","indexed":false},{"name":"adjustment_step","type":"uint256","indexed":false},{"name":"ma_half_time","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"NewParameters","inputs":[{"name":"admin_fee","type":"uint256","indexed":false},{"name":"mid_fee","type":"uint256","indexed":false},{"name":"out_fee","type":"uint256","indexed":false},{"name":"fee_gamma","type":"uint256","indexed":false},{"name":"allowed_extra_profit","type":"uint256","indexed":false},{"name":"adjustment_step","type":"uint256","indexed":false},{"name":"ma_half_time","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"RampAgamma","inputs":[{"name":"initial_A","type":"uint256","indexed":false},{"name":"future_A","type":"uint256","indexed":false},{"name":"initial_gamma","type":"uint256","indexed":false},{"name":"future_gamma","type":"uint256","indexed":false},{"name":"initial_time","type":"uint256","indexed":false},{"name":"future_time","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"StopRampA","inputs":[{"name":"current_A","type":"uint256","indexed":false},{"name":"current_gamma","type":"uint256","indexed":false},{"name":"time","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"ClaimAdminFee","inputs":[{"name":"admin","type":"address","indexed":true},{"name":"tokens","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"stateMutability":"nonpayable","type":"constructor","inputs":[{"name":"owner","type":"address"},{"name":"admin_fee_receiver","type":"address"},{"name":"A","type":"uint256"},{"name":"gamma","type":"uint256"},{"name":"mid_fee","type":"uint256"},{"name":"out_fee","type":"uint256"},{"name":"allowed_extra_profit","type":"uint256"},{"name":"fee_gamma","type":"uint256"},{"name":"adjustment_step","type":"uint256"},{"name":"admin_fee","type":"uint256"},{"name":"ma_half_time","type":"uint256"},{"name":"initial_prices","type":"uint256[2]"}],"outputs":[]},{"stateMutability":"payable","type":"fallback"},{"stateMutability":"view","type":"function","name":"price_oracle","inputs":[{"name":"k","type":"uint256"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"price_scale","inputs":[{"name":"k","type":"uint256"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"last_prices","inputs":[{"name":"k","type":"uint256"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"token","inputs":[],"outputs":[{"name":"","type":"address"}]},{"stateMutability":"view","type":"function","name":"coins","inputs":[{"name":"i","type":"uint256"}],"outputs":[{"name":"","type":"address"}]},{"stateMutability":"view","type":"function","name":"A","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"gamma","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"fee_calc","inputs":[{"name":"xp","type":"uint256[3]"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"get_virtual_price","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"payable","type":"function","name":"exchange","inputs":[{"name":"i","type":"uint256"},{"name":"j","type":"uint256"},{"name":"dx","type":"uint256"},{"name":"min_dy","type":"uint256"}],"outputs":[]},{"stateMutability":"payable","type":"function","name":"exchange","inputs":[{"name":"i","type":"uint256"},{"name":"j","type":"uint256"},{"name":"dx","type":"uint256"},{"name":"min_dy","type":"uint256"},{"name":"use_eth","type":"bool"}],"outputs":[]},{"stateMutability":"view","type":"function","name":"get_dy","inputs":[{"name":"i","type":"uint256"},{"name":"j","type":"uint256"},{"name":"dx","type":"uint256"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"calc_token_fee","inputs":[{"name":"amounts","type":"uint256[3]"},{"name":"xp","type":"uint256[3]"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"nonpayable","type":"function","name":"add_liquidity","inputs":[{"name":"amounts","type":"uint256[3]"},{"name":"min_mint_amount","type":"uint256"}],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"remove_liquidity","inputs":[{"name":"_amount","type":"uint256"},{"name":"min_amounts","type":"uint256[3]"}],"outputs":[]},{"stateMutability":"view","type":"function","name":"calc_token_amount","inputs":[{"name":"amounts","type":"uint256[3]"},{"name":"deposit","type":"bool"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"calc_withdraw_one_coin","inputs":[{"name":"token_amount","type":"uint256"},{"name":"i","type":"uint256"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"nonpayable","type":"function","name":"remove_liquidity_one_coin","inputs":[{"name":"token_amount","type":"uint256"},{"name":"i","type":"uint256"},{"name":"min_amount","type":"uint256"}],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"claim_admin_fees","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"ramp_A_gamma","inputs":[{"name":"future_A","type":"uint256"},{"name":"future_gamma","type":"uint256"},{"name":"future_time","type":"uint256"}],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"stop_ramp_A_gamma","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"commit_new_parameters","inputs":[{"name":"_new_mid_fee","type":"uint256"},{"name":"_new_out_fee","type":"uint256"},{"name":"_new_admin_fee","type":"uint256"},{"name":"_new_fee_gamma","type":"uint256"},{"name":"_new_allowed_extra_profit","type":"uint256"},{"name":"_new_adjustment_step","type":"uint256"},{"name":"_new_ma_half_time","type":"uint256"}],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"apply_new_parameters","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"revert_new_parameters","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"commit_transfer_ownership","inputs":[{"name":"_owner","type":"address"}],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"apply_transfer_ownership","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"revert_transfer_ownership","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"kill_me","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"unkill_me","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"set_admin_fee_receiver","inputs":[{"name":"_admin_fee_receiver","type":"address"}],"outputs":[]},{"stateMutability":"view","type":"function","name":"last_prices_timestamp","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"initial_A_gamma","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_A_gamma","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"initial_A_gamma_time","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_A_gamma_time","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"allowed_extra_profit","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_allowed_extra_profit","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"fee_gamma","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_fee_gamma","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"adjustment_step","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_adjustment_step","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"ma_half_time","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_ma_half_time","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"mid_fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"out_fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"admin_fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_mid_fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_out_fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_admin_fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"balances","inputs":[{"name":"arg0","type":"uint256"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"D","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"owner","inputs":[],"outputs":[{"name":"","type":"address"}]},{"stateMutability":"view","type":"function","name":"future_owner","inputs":[],"outputs":[{"name":"","type":"address"}]},{"stateMutability":"view","type":"function","name":"xcp_profit","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"xcp_profit_a","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"virtual_price","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"is_killed","inputs":[],"outputs":[{"name":"","type":"bool"}]},{"stateMutability":"view","type":"function","name":"kill_deadline","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"transfer_ownership_deadline","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"admin_actions_deadline","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"admin_fee_receiver","inputs":[],"outputs":[{"name":"","type":"address"}]}]
+const tricryptoAbi = [{"name":"TokenExchange","inputs":[{"name":"buyer","type":"address","indexed":true},{"name":"sold_id","type":"uint256","indexed":false},{"name":"tokens_sold","type":"uint256","indexed":false},{"name":"bought_id","type":"uint256","indexed":false},{"name":"tokens_bought","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"AddLiquidity","inputs":[{"name":"provider","type":"address","indexed":true},{"name":"token_amounts","type":"uint256[3]","indexed":false},{"name":"fee","type":"uint256","indexed":false},{"name":"token_supply","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"RemoveLiquidity","inputs":[{"name":"provider","type":"address","indexed":true},{"name":"token_amounts","type":"uint256[3]","indexed":false},{"name":"token_supply","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"RemoveLiquidityOne","inputs":[{"name":"provider","type":"address","indexed":true},{"name":"token_amount","type":"uint256","indexed":false},{"name":"coin_index","type":"uint256","indexed":false},{"name":"coin_amount","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"CommitNewAdmin","inputs":[{"name":"deadline","type":"uint256","indexed":true},{"name":"admin","type":"address","indexed":true}],"anonymous":false,"type":"event"},{"name":"NewAdmin","inputs":[{"name":"admin","type":"address","indexed":true}],"anonymous":false,"type":"event"},{"name":"CommitNewParameters","inputs":[{"name":"deadline","type":"uint256","indexed":true},{"name":"admin_fee","type":"uint256","indexed":false},{"name":"mid_fee","type":"uint256","indexed":false},{"name":"out_fee","type":"uint256","indexed":false},{"name":"fee_gamma","type":"uint256","indexed":false},{"name":"allowed_extra_profit","type":"uint256","indexed":false},{"name":"adjustment_step","type":"uint256","indexed":false},{"name":"ma_half_time","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"NewParameters","inputs":[{"name":"admin_fee","type":"uint256","indexed":false},{"name":"mid_fee","type":"uint256","indexed":false},{"name":"out_fee","type":"uint256","indexed":false},{"name":"fee_gamma","type":"uint256","indexed":false},{"name":"allowed_extra_profit","type":"uint256","indexed":false},{"name":"adjustment_step","type":"uint256","indexed":false},{"name":"ma_half_time","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"RampAgamma","inputs":[{"name":"initial_A","type":"uint256","indexed":false},{"name":"future_A","type":"uint256","indexed":false},{"name":"initial_gamma","type":"uint256","indexed":false},{"name":"future_gamma","type":"uint256","indexed":false},{"name":"initial_time","type":"uint256","indexed":false},{"name":"future_time","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"StopRampA","inputs":[{"name":"current_A","type":"uint256","indexed":false},{"name":"current_gamma","type":"uint256","indexed":false},{"name":"time","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"name":"ClaimAdminFee","inputs":[{"name":"admin","type":"address","indexed":true},{"name":"tokens","type":"uint256","indexed":false}],"anonymous":false,"type":"event"},{"stateMutability":"nonpayable","type":"constructor","inputs":[{"name":"owner","type":"address"},{"name":"admin_fee_receiver","type":"address"},{"name":"A","type":"uint256"},{"name":"gamma","type":"uint256"},{"name":"mid_fee","type":"uint256"},{"name":"out_fee","type":"uint256"},{"name":"allowed_extra_profit","type":"uint256"},{"name":"fee_gamma","type":"uint256"},{"name":"adjustment_step","type":"uint256"},{"name":"admin_fee","type":"uint256"},{"name":"ma_half_time","type":"uint256"},{"name":"initial_prices","type":"uint256[2]"}],"outputs":[]},{"stateMutability":"payable","type":"fallback"},{"stateMutability":"view","type":"function","name":"price_oracle","inputs":[{"name":"k","type":"uint256"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"price_scale","inputs":[{"name":"k","type":"uint256"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"last_prices","inputs":[{"name":"k","type":"uint256"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"token","inputs":[],"outputs":[{"name":"","type":"address"}]},{"stateMutability":"view","type":"function","name":"coins","inputs":[{"name":"i","type":"uint256"}],"outputs":[{"name":"","type":"address"}]},{"stateMutability":"view","type":"function","name":"A","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"gamma","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"fee_calc","inputs":[{"name":"xp","type":"uint256[3]"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"get_virtual_price","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"payable","type":"function","name":"exchange","inputs":[{"name":"i","type":"uint256"},{"name":"j","type":"uint256"},{"name":"dx","type":"uint256"},{"name":"min_dy","type":"uint256"}],"outputs":[]},{"stateMutability":"payable","type":"function","name":"exchange","inputs":[{"name":"i","type":"uint256"},{"name":"j","type":"uint256"},{"name":"dx","type":"uint256"},{"name":"min_dy","type":"uint256"},{"name":"use_eth","type":"bool"}],"outputs":[]},{"stateMutability":"view","type":"function","name":"get_dy","inputs":[{"name":"i","type":"uint256"},{"name":"j","type":"uint256"},{"name":"dx","type":"uint256"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"calc_token_fee","inputs":[{"name":"amounts","type":"uint256[3]"},{"name":"xp","type":"uint256[3]"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"nonpayable","type":"function","name":"add_liquidity","inputs":[{"name":"amounts","type":"uint256[3]"},{"name":"min_mint_amount","type":"uint256"}],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"remove_liquidity","inputs":[{"name":"_amount","type":"uint256"},{"name":"min_amounts","type":"uint256[3]"}],"outputs":[]},{"stateMutability":"view","type":"function","name":"calc_token_amount","inputs":[{"name":"amounts","type":"uint256[3]"},{"name":"deposit","type":"bool"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"calc_withdraw_one_coin","inputs":[{"name":"token_amount","type":"uint256"},{"name":"i","type":"uint256"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"nonpayable","type":"function","name":"remove_liquidity_one_coin","inputs":[{"name":"token_amount","type":"uint256"},{"name":"i","type":"uint256"},{"name":"min_amount","type":"uint256"}],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"claim_admin_fees","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"ramp_A_gamma","inputs":[{"name":"future_A","type":"uint256"},{"name":"future_gamma","type":"uint256"},{"name":"future_time","type":"uint256"}],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"stop_ramp_A_gamma","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"commit_new_parameters","inputs":[{"name":"_new_mid_fee","type":"uint256"},{"name":"_new_out_fee","type":"uint256"},{"name":"_new_admin_fee","type":"uint256"},{"name":"_new_fee_gamma","type":"uint256"},{"name":"_new_allowed_extra_profit","type":"uint256"},{"name":"_new_adjustment_step","type":"uint256"},{"name":"_new_ma_half_time","type":"uint256"}],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"apply_new_parameters","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"revert_new_parameters","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"commit_transfer_ownership","inputs":[{"name":"_owner","type":"address"}],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"apply_transfer_ownership","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"revert_transfer_ownership","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"kill_me","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"unkill_me","inputs":[],"outputs":[]},{"stateMutability":"nonpayable","type":"function","name":"set_admin_fee_receiver","inputs":[{"name":"_admin_fee_receiver","type":"address"}],"outputs":[]},{"stateMutability":"view","type":"function","name":"last_prices_timestamp","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"initial_A_gamma","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_A_gamma","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"initial_A_gamma_time","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_A_gamma_time","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"allowed_extra_profit","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_allowed_extra_profit","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"fee_gamma","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_fee_gamma","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"adjustment_step","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_adjustment_step","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"ma_half_time","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_ma_half_time","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"mid_fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"out_fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"admin_fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_mid_fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_out_fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"future_admin_fee","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"balances","inputs":[{"name":"arg0","type":"uint256"}],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"D","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"owner","inputs":[],"outputs":[{"name":"","type":"address"}]},{"stateMutability":"view","type":"function","name":"future_owner","inputs":[],"outputs":[{"name":"","type":"address"}]},{"stateMutability":"view","type":"function","name":"xcp_profit","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"xcp_profit_a","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"virtual_price","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"is_killed","inputs":[],"outputs":[{"name":"","type":"bool"}]},{"stateMutability":"view","type":"function","name":"kill_deadline","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"transfer_ownership_deadline","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"admin_actions_deadline","inputs":[],"outputs":[{"name":"","type":"uint256"}]},{"stateMutability":"view","type":"function","name":"admin_fee_receiver","inputs":[],"outputs":[{"name":"","type":"address"}]}];
 
 async function test_new_dy() {
-
     const web3Provider = new ethers.providers.StaticJsonRpcProvider('https://eth-mainnet.nodereal.io/v1/62a9a61a9bef4c49933102aec78dffd1');
     const tricryptoContract = new Contract('0xd51a44d3fae010294c616388b506acda1bfaae46', tricryptoAbi, web3Provider);
     const A = await tricryptoContract.A();
@@ -460,24 +596,27 @@ async function test_new_dy() {
         1n,
     ];
 
-    const dx = BigNumber.from(100000).mul(BigNumber.from(10).pow(8)); // 1000 USDT
+    // const dx = BigNumber.from(10000000).mul(BigNumber.from(10).pow(6));
 
-    const realDy = await tricryptoContract.get_dy(0, 1, dx);
+    // const realDy = await tricryptoContract.get_dy(0, 1, dx);
 
     //  y = 3683879
 
-    const y = get_y_v2(0, 1, BigInt(dx.toString()), reserves, 3n, BigInt(A.toString()), BigInt(gamma.toString()), BigInt(D.toString()), priceScale, precisions);
- 
-    console.log(realDy.toString(), '<<< contract result from get_dy()', );
-    console.log(y, '<<< javascript result from same data');
-    console.log(normalize(realDy.toString(), 8), '<<< normalized contract result from get_dy()', );
-    console.log(normalize(y.toString(), 8), '<<< normalized javascript result from same data');
-    console.log(normalize(y.toString(), 8) * (1 - 0.042/100), '<<< normalized javascript with fees from same data');
+    const slippageMap = computePriceAndSlippageMapForReserveValueCryptoV2('USDT', 'WBTC', ['USDT', 'WBTC', 'WETH'], A.toString(), reserves, precisions, gamma.toString(), D.toString(), priceScale)
 
+    console.log(slippageMap);
+    console.log(`computed liquidity for 5% slippage: ${slippageMap.slippageMap[500]} USDT vs WBTC`);
+    // const y = get_dy_v2(0, 1, BigInt(dx.toString()), reserves, 3n, BigInt(A.toString()), BigInt(gamma.toString()), BigInt(D.toString()), priceScale, precisions);
+    
 
+    // console.log(realDy.toString(), '<<< contract result from get_dy()', );
+    // console.log(y, '<<< javascript result from same data');
+    // console.log(normalize(realDy.toString(), 8), '<<< normalized contract result from get_dy()', );
+    // console.log(normalize(y.toString(), 8), '<<< normalized javascript result from same data');
+    // console.log(normalize(y.toString(), 8) * (1 - 0.042/100), '<<< normalized javascript with fees from same data');
 }
 
-test_new_dy();
+// test_new_dy();
 
 /**
  * get the amount of token j you will receive when selling 'x' amount of i
@@ -554,6 +693,46 @@ function computePriceAndSlippageMapForReserveValue(fromSymbol, toSymbol, poolTok
 
 /**
  * 
+ * @param {string} fromSymbol 
+ * @param {string} toSymbol 
+ * @param {string[]} poolTokens 
+ * @param {number} ampFactor
+ * @param {string[]} reserves 
+ */
+function computePriceAndSlippageMapForReserveValueCryptoV2(fromSymbol, toSymbol, poolTokens, ampFactor, reserves, precisions, gamma, D, priceScale) {
+    if(poolTokens.length != reserves.length) {
+        throw new Error('Tokens array must be same length as reserves array');
+    }
+
+    reserves = reserves.map(_ => BigInt(_));
+    priceScale = priceScale.map(_ => BigInt(_));
+    ampFactor = BigInt(ampFactor);
+    gamma = BigInt(gamma);
+    D = BigInt(D);
+    
+    const indexFrom = poolTokens.indexOf(fromSymbol);
+    const indexTo = poolTokens.indexOf(toSymbol);
+    const fromConf = getConfTokenBySymbol(fromSymbol);
+    const toConf = getConfTokenBySymbol(toSymbol);
+    const baseAmount = 10n**BigInt(fromConf.decimals);
+    const returnVal = get_dy_v2(indexFrom, indexTo, baseAmount, reserves, BigInt(poolTokens.length), BigInt(ampFactor), BigInt(gamma), BigInt(D), priceScale, precisions);
+    const price = normalize(returnVal.toString(), toConf.decimals);
+    const slippageMap = {};
+    let lastAmount = baseAmount;
+    for(let slippageBps = 50; slippageBps <= 2000; slippageBps += 50) {
+        const targetPrice = price - (price * slippageBps / 10000);
+        const amountFromForSlippage = computeLiquidityForSlippageCurvePoolCryptoV2(lastAmount, targetPrice, reserves, indexFrom, indexTo, ampFactor, gamma, D, priceScale, precisions, fromConf.decimals, toConf.decimals);
+        const liquidityAtSlippage = normalize(amountFromForSlippage.toString(), fromConf.decimals);
+        lastAmount = amountFromForSlippage;
+        
+        slippageMap[slippageBps] = liquidityAtSlippage;
+    }
+
+    return {price, slippageMap};
+}
+
+/**
+ * 
  * @param {tokenConf[]} tokens 
  * @param {string[]} reserves 
  * @returns 
@@ -572,4 +751,4 @@ function getReservesNormalizedTo18Decimals(tokens, reserves) {
     return reservesNorm;
 }
 
-module.exports = { getAvailableCurve, getCurveDataforBlockInterval, computePriceAndSlippageMapForReserveValue };
+module.exports = { getAvailableCurve, getCurveDataforBlockInterval, computePriceAndSlippageMapForReserveValue, computePriceAndSlippageMapForReserveValueCryptoV2 };
