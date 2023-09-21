@@ -14,6 +14,7 @@ const { getConfTokenBySymbol, normalize } = require('../utils/token.utils');
 const { generateUnifiedFileCurve } = require('./curve.unified.generator');
 
 dotenv.config();
+const SAVE_BLOCK_STEP = 300;
 const RPC_URL = process.env.RPC_URL;
 
 const runnerName = 'Curve Fetcher';
@@ -91,6 +92,9 @@ function getCurveContract(fetchConfig, web3Provider) {
         case 'susdpool':
             curveContract = new Contract(fetchConfig.poolAddress, curveConfig.susdCurvePoolAbi, web3Provider);
             break;
+        case 'cryptov2':
+            curveContract = new Contract(fetchConfig.poolAddress, curveConfig.cryptov2Abi, web3Provider);
+            break;
         default: 
             throw new Error(`Unknown abi: ${fetchConfig.abi}`);
     }
@@ -136,6 +140,17 @@ function getCurveTopics(curveContract, fetchConfig) {
                 curveContract.filters.CommitNewParameters().topics[0],
             ];
             break;
+        case 'cryptov2':
+            topics = [
+                curveContract.filters.TokenExchange().topics[0],
+                curveContract.filters.AddLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidityOne().topics[0],
+                curveContract.filters.NewParameters().topics[0],
+                curveContract.filters.CommitNewParameters().topics[0],
+                curveContract.filters.RampAgamma().topics[0],
+            ];
+            break;
         default: 
             throw new Error(`Unknown abi: ${fetchConfig.abi}`);
     }
@@ -171,19 +186,35 @@ async function FetchHistory(fetchConfig, currentBlock, web3Provider) {
 
     console.log(`found ${allBlocksWithEvents.length} blocks with events since ${startBlock}`);
     
-    await fetchReservesData(fetchConfig, historyFileName, startBlock, web3Provider, allBlocksWithEvents);
+    if(fetchConfig.abi == 'cryptov2') {
+        await fetchReservesDataCryptoV2(fetchConfig, historyFileName, startBlock, web3Provider, allBlocksWithEvents);
+        // read the lalst line of the file to return lastData
+        const lastLine = await readLastLine(historyFileName);
+        const lastData = {};
+        for(let i = 0; i < fetchConfig.tokens.length; i++) {
+            const tokenSymbol = fetchConfig.tokens[i].symbol;
+            const confToken = getConfTokenBySymbol(tokenSymbol);
+            const tokenReserve = normalize(lastLine.split(',')[i+5], confToken.decimals);
+            lastData[tokenSymbol] = tokenReserve;
+        }
 
-    // read the lalst line of the file to return lastData
-    const lastLine = await readLastLine(historyFileName);
-    const lastData = {};
-    for(let i = 0; i < fetchConfig.tokens.length; i++) {
-        const tokenSymbol = fetchConfig.tokens[i].symbol;
-        const confToken = getConfTokenBySymbol(tokenSymbol);
-        const tokenReserve = normalize(lastLine.split(',')[i+3], confToken.decimals);
-        lastData[tokenSymbol] = tokenReserve;
+        return lastData;
+    } else {
+        await fetchReservesData(fetchConfig, historyFileName, startBlock, web3Provider, allBlocksWithEvents);
+        // read the lalst line of the file to return lastData
+        const lastLine = await readLastLine(historyFileName);
+        const lastData = {};
+        for(let i = 0; i < fetchConfig.tokens.length; i++) {
+            const tokenSymbol = fetchConfig.tokens[i].symbol;
+            const confToken = getConfTokenBySymbol(tokenSymbol);
+            const tokenReserve = normalize(lastLine.split(',')[i+3], confToken.decimals);
+            lastData[tokenSymbol] = tokenReserve;
+        }
+
+        return lastData;
     }
 
-    return lastData;
+    
 }
 
 async function fetchReservesData(fetchConfig, historyFileName, lastBlock, web3Provider, allBlocksWithEvents) {
@@ -202,7 +233,7 @@ async function fetchReservesData(fetchConfig, historyFileName, lastBlock, web3Pr
     }
 
     for(const blockNum of allBlocksWithEvents) {
-        if(blockNum - 50 < lastBlockCurrent) {
+        if(blockNum - SAVE_BLOCK_STEP < lastBlockCurrent) {
             console.log(`ignoring block ${blockNum}`);
             continue;
         }
@@ -217,14 +248,8 @@ async function fetchReservesData(fetchConfig, historyFileName, lastBlock, web3Pr
         }
 
         const promiseResults = await Promise.all(promises);
-
-        const tokenReserves = [];
-
-        for(let i = 0; i < fetchConfig.tokens.length; i++) {
-            tokenReserves.push(promiseResults[i+2].toString());
-        }
-
-        fs.appendFileSync(historyFileName, `${blockNum},${promiseResults[0]},${promiseResults[1].toString()},${tokenReserves.join(',')}\n`);
+        const lineToWrite = promiseResults.map( _ => _.toString()).join(',');
+        fs.appendFileSync(historyFileName, `${blockNum},${lineToWrite}\n`);
             
         // const A = await poolContract.A({blockTag: blockNum});
         // console.log('A:', A.toString());
@@ -235,6 +260,54 @@ async function fetchReservesData(fetchConfig, historyFileName, lastBlock, web3Pr
         //     const balance = await poolContract.balances(i, {blockTag: blockNum});
         //     console.log(`${fetchConfig.tokens[i].symbol}: ${balance.toString()}`);
         // }
+        lastBlockCurrent = blockNum;
+    }
+}
+
+async function fetchReservesDataCryptoV2(fetchConfig, historyFileName, lastBlock, web3Provider, allBlocksWithEvents) {
+    let lastBlockCurrent = lastBlock;
+    const multicallProvider = new providers.MulticallProvider(web3Provider);
+    const lpTokenContract = new Contract(fetchConfig.lpTokenAddress, curveConfig.erc20Abi, multicallProvider);
+    const poolContract = getCurveContract(fetchConfig, multicallProvider);
+
+    if(!fs.existsSync(historyFileName)) {
+        let tokensStr = [];
+        for(const token of fetchConfig.tokens) {
+            tokensStr.push(`reserve_${token.symbol}`);
+        }
+
+        let priceScaleStr = [];
+        for(let i = 1; i < fetchConfig.tokens.length; i++) {
+            priceScaleStr.push(`price_scale_${fetchConfig.tokens[i].symbol}`);
+        }
+
+        fs.writeFileSync(historyFileName, `blocknumber,ampFactor,gamma,D,lp_supply,${tokensStr.join(',')},${priceScaleStr.join(',')}\n`);
+    }
+
+    for(const blockNum of allBlocksWithEvents) {
+        if(blockNum - SAVE_BLOCK_STEP < lastBlockCurrent) {
+            console.log(`ignoring block ${blockNum}`);
+            continue;
+        }
+
+        console.log(`Working on block ${blockNum}`);
+
+        const promises = [];
+        promises.push(poolContract.A({blockTag: blockNum}));
+        promises.push(poolContract.gamma({blockTag: blockNum}));
+        promises.push(poolContract.D({blockTag: blockNum}));
+        promises.push(lpTokenContract.totalSupply({blockTag: blockNum}));
+        for(let i = 0; i < fetchConfig.tokens.length; i++) {
+            promises.push(poolContract.balances(i, {blockTag: blockNum}));
+        }
+        for(let i = 0; i < fetchConfig.tokens.length - 1; i++) {
+            promises.push(poolContract.price_scale(i, {blockTag: blockNum}));
+        }
+
+        const promiseResults = await Promise.all(promises);
+
+        const lineToWrite = promiseResults.map( _ => _.toString()).join(',');
+        fs.appendFileSync(historyFileName, `${blockNum},${lineToWrite}\n`);
         lastBlockCurrent = blockNum;
     }
 }
