@@ -6,6 +6,7 @@ dotenv.config();
 const { computeAveragesForProtocol } = require('./computeAveragesForProtocol');
 const { DATA_DIR } = require('../utils/constants');
 const { CLFsConfig } = require('./CLFs.config');
+const { computeCLFHistoryForProtocol } = require('./computeCLFHistoryForProtocol');
 
 async function main() {
     const start = Date.now();
@@ -19,6 +20,11 @@ async function main() {
             const averagesData = computeAveragesForProtocol(protocol.name);
             console.log('writing average data file');
             recordResults(averagesData, `${protocol.name}_average_CLFs`);
+            console.log('organizing graph data');
+            const graphData = computeCLFHistoryForProtocol(protocol.name);
+            console.log('writing graphData file');
+            recordResults(graphData, `${protocol.name}_graphData`);
+
         }
         console.log('unifying all the protocols files');
         const toWrite = unifyFiles();
