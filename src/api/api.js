@@ -221,6 +221,47 @@ app.get('/api/getcurrentclfgraphdata', async (req, res, next) => {
     }
 });
 
+// getcurrentaverageclfs?platform=compoundV3&date=18.2.2023 (date optional)
+app.get('/api/getcurrentaverageclfs', async (req, res, next) => {
+    try {
+        const platform = req.query.platform;
+        const date = req.query.date ? req.query.date : getDay();
+        const folder = req.query.latest === undefined ? 'latest' : req.query.latest === false ? date : 'latest';
+
+
+        if (!platform) {
+            res.status(400).json({ error: 'platform required' });
+            next();
+        }
+        const fileName = req.query.latest ? `${platform}_average_CLFs.json` : `${date}_${platform}_average_CLFs.json`;
+        const cacheKey = req.query.latest ? `${platform}_average_CLFs.json` : `${date}_${platform}_average_CLFs.json`;
+        if (!cache[cacheKey]
+            || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
+            const filePath = path.join(DATA_DIR, 'clf', folder, fileName);
+            console.log(`try reading file ${filePath}`);
+            if (!fs.existsSync(filePath)) {
+                console.log(`${filePath} does not exists`);
+                res.status(404).json({ error: 'file does not exist' });
+                return;
+            }
+            else {
+                console.log(`${filePath} exists, saving data to cache`);
+                cache[cacheKey] = {
+                    data: JSON.parse(fs.readFileSync(filePath)),
+                    cachedDate: Date.now(),
+                };
+            }
+        } else {
+            const cacheRemaining = cacheDuration - (Date.now() - cache[cacheKey].cachedDate);
+            console.log(`returning key ${cacheKey} from cache. Cache remaining duration ${roundTo(cacheRemaining/1000, 2)} seconds`);
+        }
+
+        res.json(cache[cacheKey].data);
+    } catch (error) {
+        next(error);
+    }
+});
+
 app.listen(port, () => {
     console.log(`listening on port ${port}`);
 });
