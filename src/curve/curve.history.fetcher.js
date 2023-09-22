@@ -92,6 +92,9 @@ function getCurveContract(fetchConfig, web3Provider) {
         case 'susdpool':
             curveContract = new Contract(fetchConfig.poolAddress, curveConfig.susdCurvePoolAbi, web3Provider);
             break;
+        case 'tricryptov2':
+            curveContract = new Contract(fetchConfig.poolAddress, curveConfig.triCryptov2Abi, web3Provider);
+            break;
         case 'cryptov2':
             curveContract = new Contract(fetchConfig.poolAddress, curveConfig.cryptov2Abi, web3Provider);
             break;
@@ -140,6 +143,17 @@ function getCurveTopics(curveContract, fetchConfig) {
                 curveContract.filters.CommitNewParameters().topics[0],
             ];
             break;
+        case 'tricryptov2':
+            topics = [
+                curveContract.filters.TokenExchange().topics[0],
+                curveContract.filters.AddLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidityOne().topics[0],
+                curveContract.filters.NewParameters().topics[0],
+                curveContract.filters.CommitNewParameters().topics[0],
+                curveContract.filters.RampAgamma().topics[0],
+            ];
+            break;
         case 'cryptov2':
             topics = [
                 curveContract.filters.TokenExchange().topics[0],
@@ -186,7 +200,7 @@ async function FetchHistory(fetchConfig, currentBlock, web3Provider) {
 
     console.log(`found ${allBlocksWithEvents.length} blocks with events since ${startBlock}`);
     
-    if(fetchConfig.abi == 'cryptov2') {
+    if(fetchConfig.isCryptoV2) {
         await fetchReservesDataCryptoV2(fetchConfig, historyFileName, startBlock, web3Provider, allBlocksWithEvents);
         // read the lalst line of the file to return lastData
         const lastLine = await readLastLine(historyFileName);
@@ -300,8 +314,14 @@ async function fetchReservesDataCryptoV2(fetchConfig, historyFileName, lastBlock
         for(let i = 0; i < fetchConfig.tokens.length; i++) {
             promises.push(poolContract.balances(i, {blockTag: blockNum}));
         }
-        for(let i = 0; i < fetchConfig.tokens.length - 1; i++) {
-            promises.push(poolContract.price_scale(i, {blockTag: blockNum}));
+
+        // when only two crypto, price_scale is not an array, it's a normal field...
+        if(fetchConfig.tokens.length == 2) {
+            promises.push(poolContract.price_scale({blockTag: blockNum}));
+        } else {
+            for(let i = 0; i < fetchConfig.tokens.length - 1; i++) {
+                promises.push(poolContract.price_scale(i, {blockTag: blockNum}));
+            }
         }
 
         const promiseResults = await Promise.all(promises);
