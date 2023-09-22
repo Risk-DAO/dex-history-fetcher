@@ -58,21 +58,25 @@ function computeCLFHistoryForProtocol(protocol = 'compoundv3') {
     for (const [market, marketData] of Object.entries(protocolData)) {
         orderedCLFData[market] = {};
         for (const [token, tokenData] of Object.entries(marketData)) {
-            const objectToStore = {};
             for (const volatility of volatilities) {
-                orderedCLFData[market][volatility] = {};
+                if(!orderedCLFData[market][volatility]) {
+                    orderedCLFData[market][volatility] = {};
+                }
                 for (const span of spans) {
                     if (!orderedCLFData[market][volatility][span]) {
                         orderedCLFData[market][volatility][span] = [];
                     }
                     for (const [date, dateData] of Object.entries(tokenData)) {
-                        const index = orderedCLFData[market][volatility][span].indexOf(_ => _.date === date);
+                        const index = orderedCLFData[market][volatility][span].findIndex(_ => _.date === date);
                         if (index >= 0) {
                             orderedCLFData[market][volatility][span][index][token] = dateData[volatility][span];
                         }
                         else {
-                            objectToStore['date'] = date;
-                            objectToStore[token] = dateData[volatility][span];
+                            const objectToStore = {
+                                date: date,
+                                [`${token}`]: dateData[volatility][span]
+                            };
+
                             orderedCLFData[market][volatility][span].push(objectToStore);
                         }
                     }
