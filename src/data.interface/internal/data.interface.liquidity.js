@@ -151,12 +151,14 @@ function computeAverageData(liquidityDataForInterval, fromBlock, toBlock) {
  * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
  */
 function getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock=50) {
-    const data = getUnifiedDataForPlatform(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
+    const data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
     return data;
 }
 
 /**
- * Get the slippage maps for each blocks of the interval using jump routes
+ * Get the slippage maps for each blocks of the interval
+ * Using WBTC, WETH and USDC as pivot to try to find aggregated volumes
+ * example, for UNI->USDC, we will add UNI/USDC volume to UNI->WETH->USDC and UNI->WBTC->USDC volumes
  * @param {string} fromSymbol 
  * @param {string} toSymbol 
  * @param {number} fromBlock 
@@ -166,7 +168,7 @@ function getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBloc
  */
 function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock=50) {
     const liquidityData = {};
-    let data = getUnifiedDataForPlatform(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
+    let data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
     const pivotData = getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
     if(!data) {
         // if no data and no pivot data, can return undefined: we don't have any liquidity even
