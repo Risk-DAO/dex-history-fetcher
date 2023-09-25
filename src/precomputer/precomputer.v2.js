@@ -18,8 +18,6 @@ const MONITORING_NAME = 'Precomputer V2';
 
 /**
  * Precompute data for the risk oracle front
- * @param {number} daysToFetch 
- * @param {number} fetchEveryMinutes
  */
 async function precomputeDataV2() {
     // eslint-disable-next-line no-constant-condition
@@ -75,6 +73,7 @@ async function precomputeDataV2() {
 
                 // creating blockrange
                 const blockTimeStamps = {};
+                console.log(`${fnName()}: getting all block timestamps`);
                 for(const blockNumber of allBlocksForSpan) {
                     const blockTimestampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockNumber}`);
                     blockTimeStamps[blockNumber] = blockTimestampResp.data.timestamp;
