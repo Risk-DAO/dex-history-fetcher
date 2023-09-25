@@ -127,7 +127,7 @@ async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provi
             resultsData.collateralsData[collateral.symbol] = {};
             resultsData.collateralsData[collateral.symbol].collateral = await getCollateralAmount(collateral, cometContract);
             resultsData.collateralsData[collateral.symbol].clfs = await computeMarketCLF(assetParameters, collateral, baseAsset, fromBlocks, endBlock);
-            resultsData.collateralsData[collateral.symbol].liquidityHistory = await computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAsset, assetParameters);
+            // resultsData.collateralsData[collateral.symbol].liquidityHistory = await computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAsset, assetParameters);
             console.log('resultsData', resultsData);
         }
         catch (error) {
