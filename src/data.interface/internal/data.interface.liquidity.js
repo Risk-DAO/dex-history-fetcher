@@ -1,5 +1,6 @@
 const { computeAggregatedVolumeFromPivot } = require('../../utils/aggregator');
-const { getUnifiedDataForInterval, getUnifiedDataForPlatform, getBlankUnifiedData } = require('./data.interface.utils');
+const { DEFAULT_STEP_BLOCK } = require('../../utils/constants');
+const { getUnifiedDataForInterval, getBlankUnifiedData } = require('./data.interface.utils');
 
 const PIVOTS = ['USDC', 'WETH', 'WBTC'];
 
@@ -35,7 +36,7 @@ function getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock
  * @param {stepBlock} stepBlock 
  * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
  */
-function getLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true, stepBlock = 50) {
+function getLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true, stepBlock = DEFAULT_STEP_BLOCK) {
     const liquidities = [];
     for(const platform of platforms) {
         const liquidity = getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps, stepBlock);
@@ -81,7 +82,7 @@ function getLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, to
  * @param {stepBlock} stepBlock 
  * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
  */
-function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps, stepBlock=50) {
+function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps, stepBlock=DEFAULT_STEP_BLOCK) {
     // with jumps mean that we will try to add pivot routes (with WBTC, WETH and USDC as pivot)
     if(withJumps) {
         const liquidityDataWithJumps = getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock);
@@ -150,7 +151,7 @@ function computeAverageData(liquidityDataForInterval, fromBlock, toBlock) {
  * @param {string} platform
  * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
  */
-function getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock=50) {
+function getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock=DEFAULT_STEP_BLOCK) {
     const data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
     return data;
 }
@@ -166,7 +167,7 @@ function getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBloc
  * @param {string}  
  * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
  */
-function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock=50) {
+function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock=DEFAULT_STEP_BLOCK) {
     const liquidityData = {};
     let data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
     const pivotData = getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
@@ -255,7 +256,7 @@ function getPivotDataForBlock(pivotData, base, quote, blockNumber) {
     return pivotData[base][quote][blockNumber];
 }
 
-function getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock=50) {
+function getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock=DEFAULT_STEP_BLOCK) {
     const pivotData = {};
 
     for (const pivot of PIVOTS) {

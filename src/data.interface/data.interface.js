@@ -8,7 +8,7 @@
 const { getParkinsonVolatilityForInterval, getAveragePriceForInterval } = require('./internal/data.interface.price');
 const { getAverageLiquidityForInterval, getSlippageMapForInterval, getLiquidityForPlatforms } = require('./internal/data.interface.liquidity');
 const { logFnDurationWithLabel } = require('../utils/utils');
-const { PLATFORMS } = require('../utils/constants');
+const { PLATFORMS, DEFAULT_STEP_BLOCK } = require('../utils/constants');
 
 
 //    _____  _   _  _______  ______  _____   ______        _____  ______     ______  _    _  _   _   _____  _______  _____  ____   _   _   _____ 
@@ -84,7 +84,7 @@ function getAverageLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock,
  * @param {bool} withJumps default true. pivot route jump: from UNI to MKR, we will add "additional routes" using UNI->USDC->MKR + UNI->WETH->MKR + UNI->WBTC+MKR
  * @param {number} stepBlock default to 50. The amount of block between each data point
  */
-function getLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true, stepBlock = 50) {
+function getLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true, stepBlock = DEFAULT_STEP_BLOCK) {
     checkPlatform(platform);
     const start = Date.now();
     const liquidity = getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps, stepBlock);
@@ -102,7 +102,7 @@ function getLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock, withJu
  * @param {bool} withJumps default true. pivot route jump: from UNI to MKR, we will add "additional routes" using UNI->USDC->MKR + UNI->WETH->MKR + UNI->WBTC+MKR
  * @param {number} stepBlock default to 50. The amount of block between each data point
  */
-function getLiquidityAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true, stepBlock = 50) {
+function getLiquidityAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true, stepBlock = DEFAULT_STEP_BLOCK) {
     const start = Date.now();
     const liquidity = getLiquidityForPlatforms(PLATFORMS, fromSymbol, toSymbol, fromBlock, toBlock, withJumps, stepBlock);
     logFnDurationWithLabel(start, `p: ${PLATFORMS}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}, step: ${stepBlock}`);

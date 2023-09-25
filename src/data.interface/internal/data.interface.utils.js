@@ -190,7 +190,6 @@ function getUnifiedDataForIntervalByFilename(fullFilename, fromBlock, toBlock, s
 
 
 function getUnifiedDataForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBlock, stepBlock) {
-
     // for curve, find all files in the precomputed/curve directory that math the fromSymbol-toSymbol.*.csv
     const searchString = `${fromSymbol}-${toSymbol}`;
     const directory = path.join(DATA_DIR, 'precomputed', 'curve');
