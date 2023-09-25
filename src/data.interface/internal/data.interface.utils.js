@@ -22,7 +22,7 @@ function getUnifiedDataForPlatform(platform, fromSymbol, toSymbol, fromBlock, to
         const filename = `${fromSymbol}-${toSymbol}-unified-data.csv`;
         const fullFilename = path.join(DATA_DIR, 'precomputed', platform, filename);
     
-        unifiedData = getUnifiedDataForInterval(fullFilename, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
+        unifiedData = getUnifiedDataForInterval(fullFilename, fromBlock, toBlock, stepBlock);
     }
     if (!unifiedData) {
         console.log(`getUnifiedDataForPlatforms for ${fromSymbol}/${toSymbol}: could not find data on platform ${platform}`);
@@ -52,11 +52,6 @@ function getUnifiedDataForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBl
         return undefined;
     }
 
-    for(const unified of unifiedDataForPools) {
-        const lastBlock = Object.keys(unified).at(-1);
-        console.log(`${unified[lastBlock].slippageMap[50]}`);
-    }
-
     const unifiedData = unifiedDataForPools[0];
     
     for(const block of Object.keys(unifiedData)) {
@@ -64,10 +59,7 @@ function getUnifiedDataForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBl
             const unifiedDataToAdd = unifiedDataForPools[i];
     
             for(const slippageBps of Object.keys(unifiedData[block].slippageMap)) {
-                // console.log(`${block} ${slippageBps} old data: ${unifiedData[block].slippageMap[slippageBps]}`);
-                // console.log(`${block} ${slippageBps} adding ${unifiedDataToAdd[block].slippageMap[slippageBps]}`);
                 unifiedData[block].slippageMap[slippageBps] += unifiedDataToAdd[block].slippageMap[slippageBps];
-                // console.log(`${block} ${slippageBps} new data: ${unifiedData[block].slippageMap[slippageBps]}`);
             }
 
             unifiedData[block].price += unifiedDataToAdd[block].price;
