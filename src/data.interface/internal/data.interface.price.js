@@ -46,7 +46,7 @@ function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBl
 
     console.log(`${label}: getting data and compute volatility`);
 
-    const data = getUnifiedDataForPlatform(platform, fromSymbol, toSymbol, fromBlock, toBlock);
+    const data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock);
 
     if(!data || Object.keys(data).length == 0) {
         console.log(`${label}: Cannot find volatility, returning 0`);
