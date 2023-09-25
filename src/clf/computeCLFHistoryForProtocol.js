@@ -69,12 +69,12 @@ function computeCLFHistoryForProtocol(protocol = 'compoundv3') {
                     for (const [date, dateData] of Object.entries(tokenData)) {
                         const index = orderedCLFData[market][volatility][span].findIndex(_ => _.date === date);
                         if (index >= 0) {
-                            orderedCLFData[market][volatility][span][index][token] = dateData[volatility][span];
+                            orderedCLFData[market][volatility][span][index][token] = Math.min(dateData[volatility][span], 1);
                         }
                         else {
                             const objectToStore = {
                                 date: date,
-                                [`${token}`]: dateData[volatility][span]
+                                [`${token}`]: Math.min(dateData[volatility][span], 1)
                             };
 
                             orderedCLFData[market][volatility][span].push(objectToStore);
@@ -87,5 +87,5 @@ function computeCLFHistoryForProtocol(protocol = 'compoundv3') {
     return orderedCLFData;
 }
 
-computeCLFHistoryForProtocol();
+// computeCLFHistoryForProtocol();
 module.exports = { computeCLFHistoryForProtocol };
