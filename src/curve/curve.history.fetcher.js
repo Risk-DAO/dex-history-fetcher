@@ -70,9 +70,9 @@ async function CurveHistoryFetcher() {
             });
         }
 
-        // sleep 10 min - time it took to run the loop
-        // if the loop took more than 10 minutes, restart directly
-        const sleepTime = 600 * 1000 - (Date.now() - start);
+        // sleep 30 min minus time it took to run the loop
+        // if the loop took more than 30 minutes, restart directly
+        const sleepTime = 30 * 60 * 1000 - (Date.now() - start);
         if(sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
             await sleep(sleepTime);
