@@ -44,7 +44,7 @@ async function CurveHistoryFetcher() {
             for(const fetchConfig of curveConfig.curvePairs) {
                 console.log(`Start fetching history for ${fetchConfig.poolName}`);
                 const lastData = await FetchHistory(fetchConfig, currentBlock, web3Provider);
-                lastResults[`${fetchConfig.poolName}_${fetchConfig.lpTokenName}`] = lastData;
+                lastResults[`${fetchConfig.poolName}`] = lastData;
             }
 
             const poolSummaryFullname = path.join(DATA_DIR, 'curve', 'curve_pools_summary.json');
@@ -178,7 +178,7 @@ function getCurveTopics(curveContract, fetchConfig) {
  * @param {StaticJsonRpcProvider} web3Provider 
  */
 async function FetchHistory(fetchConfig, currentBlock, web3Provider) {
-    const historyFileName = path.join(DATA_DIR, 'curve', `${fetchConfig.poolName}_${fetchConfig.lpTokenName}_curve.csv`);
+    const historyFileName = path.join(DATA_DIR, 'curve', `${fetchConfig.poolName}_curve.csv`);
     // by default, fetch for the last 380 days (a bit more than 1 year)
 
     const startDate = Math.round(Date.now()/1000) - 380 * 24 * 60 * 60;

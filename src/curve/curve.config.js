@@ -13,7 +13,7 @@ const cryptov2Abi = [{"name":"TokenExchange","inputs":[{"name":"buyer","type":"a
 const curvePairs = [
     {
         poolAddress: '0xdc24316b9ae028f1497c275eb9192a3ea0f67022',
-        poolName: 'steth',
+        poolName: 'stETHPool',
         lpTokenAddress: '0x06325440D014e39736583c165C2963BA99fAf14E',
         lpTokenName: 'steCRV',
         abi: 'StableSwap',
@@ -51,7 +51,7 @@ const curvePairs = [
     },
     {
         poolAddress: '0xa5407eae9ba41422680e2e00537571bcc53efbfd',
-        poolName: 'susd',
+        poolName: 'sUSDPool',
         lpTokenAddress: '0xc25a3a3b969415c80451098fa907ec722572917f',
         lpTokenName: 'crvPlain3andSUSD',
         abi: 'susdPool',
@@ -76,7 +76,7 @@ const curvePairs = [
     },
     {
         poolAddress: '0xD51a44d3FaE010294C616388b506AcdA1bfAAE46',
-        poolName: 'tricrypto2',
+        poolName: 'tricrypto2Pool',
         lpTokenAddress: '0xc4ad29ba4b3c580e6d59105fff484999997675ff',
         lpTokenName: 'crv3crypto',
         abi: 'tricryptov2',
@@ -98,7 +98,7 @@ const curvePairs = [
     },
     {
         poolAddress: '0x5fae7e604fc3e24fd43a72867cebac94c65b404a',
-        poolName: 'cbETHETH',
+        poolName: 'cbETHPool',
         lpTokenAddress: '0x5b6c539b224014a09b3388e51caaa8e354c959c8',
         lpTokenName: 'cbETHETH-f',
         isCryptoV2: true,
@@ -116,7 +116,7 @@ const curvePairs = [
     },
     {
         poolAddress: '0xf5f5b97624542d72a9e06f04804bf81baa15e2b4',
-        poolName: 'tricryptoUSDT',
+        poolName: 'tricryptoUSDTPool',
         lpTokenAddress: '0xf5f5b97624542d72a9e06f04804bf81baa15e2b4',
         lpTokenName: 'crvUSDTWBTCWETH',
         abi: 'tricryptov2',
@@ -138,7 +138,7 @@ const curvePairs = [
     },
     {
         poolAddress: '0x7f86bf177dd4f3494b841a37e810a34dd56c829b',
-        poolName: 'tricryptoUSDC',
+        poolName: 'tricryptoUSDCPool',
         lpTokenAddress: '0x7f86bf177dd4f3494b841a37e810a34dd56c829b',
         lpTokenName: 'crvUSDCWBTCWETH',
         abi: 'tricryptov2',
