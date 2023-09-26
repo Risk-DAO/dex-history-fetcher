@@ -51,7 +51,7 @@ async function compoundV3Computer(fetchEveryMinutes, startDate=Date.now()) {
             fromBlocks[span] = startBlock;
         }
 
-        const currentBlock = await web3Provider.getBlockNumber() - 10;
+        const currentBlock =  await getBlocknumberForTimestamp(Math.round(startDate/ 1000));
         const results = {};
         const averagePerAsset = {};
         /// for all pools in compound v3

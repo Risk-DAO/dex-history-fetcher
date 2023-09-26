@@ -6,7 +6,7 @@ const fs = require('fs');
 
 
 async function backComputing() {
-    const startDate = new Date('03/01/2023');
+    const startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
     const endDate = new Date();
     let condition = startDate;
     while (condition <= endDate) {
