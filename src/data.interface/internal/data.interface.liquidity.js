@@ -88,7 +88,7 @@ function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, pla
         const liquidityDataWithJumps = getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock);
         return liquidityDataWithJumps;
     } else {
-        const liquidityData = getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock);
+        const liquidityData = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
         return liquidityData;
     }
 }
@@ -138,22 +138,6 @@ function computeAverageData(liquidityDataForInterval, fromBlock, toBlock) {
     }
 
     return {avgPrice: avgPrice, avgSlippageMap: avgSlippageMap};
-}
-
-/**
- * Get the slippage maps for each blocks of the interval
- * Using WBTC, WETH and USDC as pivot to try to find aggregated volumes
- * example, for UNI->USDC, we will add UNI/USDC volume to UNI->WETH->USDC and UNI->WBTC->USDC volumes
- * @param {string} fromSymbol 
- * @param {string} toSymbol 
- * @param {number} fromBlock 
- * @param {number} toBlock 
- * @param {string} platform
- * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
- */
-function getSimpleSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock=DEFAULT_STEP_BLOCK) {
-    const data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
-    return data;
 }
 
 /**
