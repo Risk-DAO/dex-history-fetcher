@@ -2,7 +2,7 @@
 
 const { arrayAverage, fnName, roundTo } = require('../../utils/utils');
 const { computeParkinsonVolatility } = require('../../utils/volatility');
-const { getUnifiedDataForInterval, getUnifiedDataForPlatform } = require('./data.interface.utils');
+const { getUnifiedDataForInterval } = require('./data.interface.utils');
 
 /**
  * Compute the average price from each platform then re-average for all platforms
@@ -28,8 +28,6 @@ function getAveragePriceForInterval(fromSymbol, toSymbol, fromBlock, toBlock, pl
     const avgPrice = arrayAverage(priceArray);
     return avgPrice;
 }
-
-
 
 /**
  * Compute the parkinson's volatility for a pair and a platform
