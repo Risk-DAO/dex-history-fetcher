@@ -49,6 +49,13 @@ function getSlippages(currentTick, tickSpacing, sqrtPriceX96, liquidity, token0D
     return {token0Slippage, token1Slippage};
 }
 
+// function test() {
+//     const latestData = JSON.parse(fs.readFileSync('data/uniswapv3/wstETH-WETH-100-latestdata.json', 'utf-8'));
+//     const slippages = getSlippages(latestData.currentTick, latestData.tickSpacing, latestData.currentSqrtPriceX96, latestData.ticks, 18, 18);
+// }
+
+// test();
+
 
 
 /**
@@ -113,6 +120,7 @@ function GetXAmountForSlippages(currentTick, tickSpacing, liquidities, tokenDeci
             }
 
             totalX += xLiquidityInTick;
+            // console.log(`[${workingTick}]: xLiquidity ${xLiquidityInTick}. New Total: ${totalX}. sqrtPa: ${sqrtPa}`);
             if(relevantTicks[workingTick]) {
                 result[relevantTicks[workingTick]] = totalX;
             }
@@ -186,6 +194,7 @@ function GetYAmountForSlippages(currentTick, tickSpacing, liquidities, tokenDeci
             }
 
             totalY += yLiquidityInTick;
+            // console.log(`[${workingTick}]: xLiquidity ${yLiquidityInTick}. New Total: ${totalY}`);
             if(relevantTicks[workingTick]) {
                 result[relevantTicks[workingTick]] = totalY;
             }
