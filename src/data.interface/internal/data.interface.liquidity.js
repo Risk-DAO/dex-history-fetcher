@@ -176,6 +176,12 @@ function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toB
             data = getBlankUnifiedData(fromBlock, toBlock, stepBlock);
         }
     }
+    
+    const pivots = [];
+    pivots.push(...PIVOTS);
+    if(fromSymbol == 'stETH') {
+        pivots.push('wstETH');
+    }
 
     for(const [blockNumber, platformData] of Object.entries(data)) {
         liquidityData[blockNumber] = {
@@ -186,7 +192,7 @@ function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toB
         const aggregatedSlippageMap = platformData.slippageMap ? structuredClone(platformData.slippageMap) : getDefaultSlippageMap();
 
         // try to add pivot routes
-        for(const pivot of PIVOTS) {
+        for(const pivot of pivots) {
             if(fromSymbol == pivot) {
                 continue;
             }
@@ -249,7 +255,13 @@ function getPivotDataForBlock(pivotData, base, quote, blockNumber) {
 function getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock=DEFAULT_STEP_BLOCK) {
     const pivotData = {};
 
-    for (const pivot of PIVOTS) {
+    const pivots = [];
+    pivots.push(...PIVOTS);
+    if(fromSymbol == 'stETH') {
+        pivots.push('wstETH');
+    }
+
+    for (const pivot of pivots) {
         if (fromSymbol == pivot) {
             continue;
         }
