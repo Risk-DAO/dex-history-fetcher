@@ -323,7 +323,7 @@ function computeAverageCLFForPool(poolData) {
     for (const weight of Object.values(weightMap)) {
         weightedCLF += weight;
     }
-    weightedCLF = roundTo(weightedCLF * 100, 2);
+    weightedCLF = roundTo(weightedCLF, 2);
     return { weightedCLF, totalCollateral };
 }
 

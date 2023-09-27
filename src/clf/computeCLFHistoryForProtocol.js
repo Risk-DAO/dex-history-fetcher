@@ -69,12 +69,12 @@ function computeCLFHistoryForProtocol(protocol = 'compoundv3') {
                     for (const [date, dateData] of Object.entries(tokenData)) {
                         const index = orderedCLFData[market][volatility][span].findIndex(_ => _.date === date);
                         if (index >= 0) {
-                            orderedCLFData[market][volatility][span][index][token] = Math.min(dateData[volatility][span], 1);
+                            orderedCLFData[market][volatility][span][index][token] = dateData[volatility][span];
                         }
                         else {
                             const objectToStore = {
                                 date: date,
-                                [`${token}`]: Math.min(dateData[volatility][span], 1)
+                                [`${token}`]: dateData[volatility][span]
                             };
 
                             orderedCLFData[market][volatility][span].push(objectToStore);
