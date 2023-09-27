@@ -61,7 +61,8 @@ const uniswapV2Pairs = [
   "YFI-DAI",
   "YFI-USDC",
   "YFI-WBTC",
-  "YFI-WETH"
+  "YFI-WETH",
+  "stETH-WETH",
 ]
 // compound assets confi
 // const uniswapV2Pairs = [
