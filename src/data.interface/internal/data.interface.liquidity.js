@@ -14,6 +14,7 @@ const PIVOTS = ['USDC', 'WETH', 'WBTC'];
  * @param {bool} withJumps 
  */
 function getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps) {
+
     const liquidityDataForInterval = getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps);
 
     if(!liquidityDataForInterval || Object.keys(liquidityDataForInterval).length == 0) {
@@ -83,6 +84,11 @@ function getLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, to
  * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
  */
 function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps, stepBlock=DEFAULT_STEP_BLOCK) {
+    if(platform == 'curve') {
+        console.log('cannot aggregate routes with curve');
+        withJumps = false;
+    }
+
     // with jumps mean that we will try to add pivot routes (with WBTC, WETH and USDC as pivot)
     if(withJumps) {
         const liquidityDataWithJumps = getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock);
