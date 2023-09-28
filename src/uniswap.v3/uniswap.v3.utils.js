@@ -570,18 +570,26 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
 
     const dataContents = getUniV3DataContents(selectedFiles, dataDir, sinceBlock);
 
-    // select base file = the file with the most lines
+    // select base file = the file with the most available slippage in its last block for 0.5% slippage
     let baseFile = selectedFiles[0];
     const keys = {};
     keys[baseFile] = Object.keys(dataContents[baseFile]);
+    const lastDataBlockBaseFile = keys[baseFile].at(-1);
+    let lastBiggestVolumeFor50BpsSlippage = dataContents[baseFile][lastDataBlockBaseFile][`${fromSymbol}-slippagemap`][50] || 0;
+    console.log(`last volume for file ${baseFile} is ${lastBiggestVolumeFor50BpsSlippage}`);
     for(let i = 1; i < selectedFiles.length; i++) {
         const selectedFile = selectedFiles[i];
         keys[selectedFile] = Object.keys(dataContents[selectedFile]);
-        if(Object.keys(dataContents[baseFile]).length < keys[selectedFile].length) {
+        const lastDataBlock = keys[selectedFile].at(-1);
+        const lastVolumeFor50BpsSlippage = dataContents[selectedFile][lastDataBlock][`${fromSymbol}-slippagemap`][50] || 0;
+        console.log(`last volume for file ${selectedFile} is ${lastVolumeFor50BpsSlippage}`);
+        if(lastVolumeFor50BpsSlippage > lastBiggestVolumeFor50BpsSlippage) {
+            lastBiggestVolumeFor50BpsSlippage = lastVolumeFor50BpsSlippage;
             baseFile = selectedFile;
         }
     }
 
+    console.log(`selected base file: ${baseFile}`);
     for(const targetBlock of keys[baseFile]) {
         if(targetBlock > toBlock) {
             break;
