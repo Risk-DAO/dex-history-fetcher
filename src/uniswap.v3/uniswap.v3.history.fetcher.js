@@ -121,6 +121,10 @@ async function FetchUniswapV3HistoryForPair(pairConfig, fee, web3Provider, univ3
     } else {
         console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${fee}]: data file not found, starting from scratch`);
         poolAddress = await univ3Factory.getPool(token0.address, token1.address, fee);
+        if(poolAddress == ethers.constants.AddressZero) {
+            console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${fee}]: pool does not exist`);
+            return;
+        }
         univ3PairContract = new Contract(poolAddress, univ3Config.uniswapV3PairAbi, web3Provider);
 
         // verify that the token0 in config is the token0 of the pool
