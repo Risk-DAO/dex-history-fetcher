@@ -1,7 +1,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const { DATA_DIR } = require('../../utils/constants');
+const { DATA_DIR, DEFAULT_STEP_BLOCK } = require('../../utils/constants');
 
 /**
  * Gets the unified data from csv files
@@ -12,7 +12,7 @@ const { DATA_DIR } = require('../../utils/constants');
  * @param {number} toBlock 
  * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
  */
-function getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock=50) {
+function getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock= DEFAULT_STEP_BLOCK) {
     if(fromSymbol == 'stETH' && toSymbol == 'wstETH') {
         return specificUnifiedDataForIntervalForstETHwstETH(fromBlock, toBlock, stepBlock);
     }
@@ -36,7 +36,7 @@ function getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, to
  * @param {number} toBlock 
  * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
  */
-function getUnifiedDataForIntervalByFilename(fullFilename, fromBlock, toBlock, stepBlock=50) {
+function getUnifiedDataForIntervalByFilename(fullFilename, fromBlock, toBlock, stepBlock= DEFAULT_STEP_BLOCK) {
     // try to find the data
     if(!fs.existsSync(fullFilename)) {
         console.log(`Could not find file ${fullFilename}`);
@@ -123,7 +123,7 @@ function getUnifiedDataForIntervalByFilename(fullFilename, fromBlock, toBlock, s
  * @param {number} toBlock 
  * @param {number} stepBlock 
  */
-function specificUnifiedDataForIntervalForstETHwstETH(fromBlock, toBlock, stepBlock) {
+function specificUnifiedDataForIntervalForstETHwstETH(fromBlock, toBlock, stepBlock= DEFAULT_STEP_BLOCK) {
     const filename = 'WETH-wstETH-unified-data.csv';
     const fullFilename = path.join(DATA_DIR, 'precomputed', 'uniswapv3', filename);
 
@@ -139,7 +139,7 @@ function specificUnifiedDataForIntervalForstETHwstETH(fromBlock, toBlock, stepBl
 }
 
 
-function getUnifiedDataForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBlock, stepBlock) {
+function getUnifiedDataForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBlock, stepBlock= DEFAULT_STEP_BLOCK) {
     // for curve, find all files in the precomputed/curve directory that math the fromSymbol-toSymbol.*.csv
     const searchString = `${fromSymbol}-${toSymbol}`;
     const directory = path.join(DATA_DIR, 'precomputed', 'curve');
@@ -186,7 +186,7 @@ function getUnifiedDataForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBl
  * @param {number} stepBlock amount of blocks between two steps, default to 50
  * @returns {{[blocknumber: number]: {}}}
  */
-function getBlankUnifiedData(startBlock, endBlock, stepBlock=50) {
+function getBlankUnifiedData(startBlock, endBlock, stepBlock= DEFAULT_STEP_BLOCK) {
     if(stepBlock < 50) {
         console.log(`getBlankUnifiedData: cannot use stepBlock= ${stepBlock}, min value is 50`);
         stepBlock = 50;
