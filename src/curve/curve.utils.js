@@ -889,6 +889,6 @@ async function test_new_dy() {
     // console.log(normalize(y.toString(), 8) * (1 - 0.042/100), '<<< normalized javascript with fees from same data');
 }
 
-test_new_dy();
+// test_new_dy();
 
 module.exports = { getAvailableCurve, getCurveDataforBlockInterval, computePriceAndSlippageMapForReserveValue, computePriceAndSlippageMapForReserveValueCryptoV2 };
