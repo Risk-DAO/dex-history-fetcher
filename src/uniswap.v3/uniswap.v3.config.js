@@ -9,383 +9,127 @@ const uniswapFactoryV3Address = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const pairsToFetch = [
   {
     "token0": "DAI",
-    "token1": "WETH",
-    "fees": 10000
+    "token1": "WETH"
   },
   {
     "token0": "DAI",
-    "token1": "WETH",
-    "fees": 3000
-  },
-  {
-    "token0": "DAI",
-    "token1": "WETH",
-    "fees": 500
-  },
-  {
-    "token0": "DAI",
-    "token1": "WETH",
-    "fees": 100
-  },
-  {
-    "token0": "DAI",
-    "token1": "USDC",
-    "fees": 10000
-  },
-  {
-    "token0": "DAI",
-    "token1": "USDC",
-    "fees": 3000
-  },
-  {
-    "token0": "DAI",
-    "token1": "USDC",
-    "fees": 500
-  },
-  {
-    "token0": "DAI",
-    "token1": "USDC",
-    "fees": 100
+    "token1": "USDC"
   },
   {
     "token0": "WBTC",
-    "token1": "DAI",
-    "fees": 10000
+    "token1": "DAI"
   },
   {
     "token0": "WBTC",
-    "token1": "DAI",
-    "fees": 3000
+    "token1": "WETH"
   },
   {
     "token0": "WBTC",
-    "token1": "DAI",
-    "fees": 500
-  },
-  {
-    "token0": "WBTC",
-    "token1": "WETH",
-    "fees": 10000
-  },
-  {
-    "token0": "WBTC",
-    "token1": "WETH",
-    "fees": 3000
-  },
-  {
-    "token0": "WBTC",
-    "token1": "WETH",
-    "fees": 500
-  },
-  {
-    "token0": "WBTC",
-    "token1": "WETH",
-    "fees": 100
-  },
-  {
-    "token0": "WBTC",
-    "token1": "USDC",
-    "fees": 10000
-  },
-  {
-    "token0": "WBTC",
-    "token1": "USDC",
-    "fees": 3000
-  },
-  {
-    "token0": "WBTC",
-    "token1": "USDC",
-    "fees": 500
-  },
-  {
-    "token0": "WBTC",
-    "token1": "USDC",
-    "fees": 100
+    "token1": "USDC"
   },
   {
     "token0": "USDC",
-    "token1": "WETH",
-    "fees": 10000
-  },
-  {
-    "token0": "USDC",
-    "token1": "WETH",
-    "fees": 3000
-  },
-  {
-    "token0": "USDC",
-    "token1": "WETH",
-    "fees": 500
-  },
-  {
-    "token0": "USDC",
-    "token1": "WETH",
-    "fees": 100
+    "token1": "WETH"
   },
   {
     "token0": "UNI",
-    "token1": "WETH",
-    "fees": 10000
+    "token1": "WETH"
   },
   {
     "token0": "UNI",
-    "token1": "WETH",
-    "fees": 3000
+    "token1": "USDC"
   },
   {
     "token0": "UNI",
-    "token1": "WETH",
-    "fees": 500
+    "token1": "WBTC"
   },
   {
     "token0": "UNI",
-    "token1": "USDC",
-    "fees": 10000
-  },
-  {
-    "token0": "UNI",
-    "token1": "USDC",
-    "fees": 3000
-  },
-  {
-    "token0": "UNI",
-    "token1": "USDC",
-    "fees": 500
-  },
-  {
-    "token0": "UNI",
-    "token1": "USDC",
-    "fees": 100
-  },
-  {
-    "token0": "UNI",
-    "token1": "WBTC",
-    "fees": 10000
-  },
-  {
-    "token0": "UNI",
-    "token1": "WBTC",
-    "fees": 3000
-  },
-  {
-    "token0": "UNI",
-    "token1": "DAI",
-    "fees": 10000
-  },
-  {
-    "token0": "UNI",
-    "token1": "DAI",
-    "fees": 3000
-  },
-  {
-    "token0": "UNI",
-    "token1": "DAI",
-    "fees": 500
+    "token1": "DAI"
   },
   {
     "token0": "MKR",
-    "token1": "WETH",
-    "fees": 10000
+    "token1": "WETH"
   },
   {
     "token0": "MKR",
-    "token1": "WETH",
-    "fees": 3000
-  },
-  {
-    "token0": "MKR",
-    "token1": "WETH",
-    "fees": 500
-  },
-  {
-    "token0": "MKR",
-    "token1": "USDC",
-    "fees": 10000
-  },
-  {
-    "token0": "MKR",
-    "token1": "USDC",
-    "fees": 3000
-  },
-  {
-    "token0": "MKR",
-    "token1": "USDC",
-    "fees": 500
+    "token1": "USDC"
   },
   {
     "token0": "DAI",
-    "token1": "MKR",
-    "fees": 3000
+    "token1": "MKR"
   },
   {
     "token0": "MANA",
-    "token1": "WETH",
-    "fees": 10000
+    "token1": "WETH"
   },
   {
     "token0": "MANA",
-    "token1": "WETH",
-    "fees": 3000
-  },
-  {
-    "token0": "MANA",
-    "token1": "USDC",
-    "fees": 3000
-  },
-  {
-    "token0": "MANA",
-    "token1": "USDC",
-    "fees": 500
+    "token1": "USDC"
   },
   {
     "token0": "SNX",
-    "token1": "WETH",
-    "fees": 10000
-  },
-  {
-    "token0": "SNX",
-    "token1": "WETH",
-    "fees": 3000
+    "token1": "WETH"
   },
   {
     "token0": "USDC",
-    "token1": "SNX",
-    "fees": 10000
-  },
-  {
-    "token0": "USDC",
-    "token1": "SNX",
-    "fees": 3000
-  },
-  {
-    "token0": "USDC",
-    "token1": "SNX",
-    "fees": 500
+    "token1": "SNX"
   },
   {
     "token0": "WBTC",
-    "token1": "SNX",
-    "fees": 10000
+    "token1": "SNX"
   },
   {
     "token0": "DAI",
-    "token1": "SNX",
-    "fees": 10000
-  },
-  {
-    "token0": "DAI",
-    "token1": "SNX",
-    "fees": 3000
+    "token1": "SNX"
   },
   {
     "token0": "sUSD",
-    "token1": "WETH",
-    "fees": 3000
+    "token1": "WETH"
   },
   {
     "token0": "sUSD",
-    "token1": "USDC",
-    "fees": 500
+    "token1": "USDC"
   },
   {
     "token0": "sUSD",
-    "token1": "USDC",
-    "fees": 100
-  },
-  {
-    "token0": "sUSD",
-    "token1": "DAI",
-    "fees": 3000
-  },
-  {
-    "token0": "sUSD",
-    "token1": "DAI",
-    "fees": 500
+    "token1": "DAI"
   },
   {
     "token0": "WETH",
-    "token1": "USDT",
-    "fees": 10000
-  },
-  {
-    "token0": "WETH",
-    "token1": "USDT",
-    "fees": 3000
-  },
-  {
-    "token0": "WETH",
-    "token1": "USDT",
-    "fees": 500
-  },
-  {
-    "token0": "WETH",
-    "token1": "USDT",
-    "fees": 100
+    "token1": "USDT"
   },
   {
     "token0": "USDC",
-    "token1": "USDT",
-    "fees": 10000
-  },
-  {
-    "token0": "USDC",
-    "token1": "USDT",
-    "fees": 3000
-  },
-  {
-    "token0": "USDC",
-    "token1": "USDT",
-    "fees": 500
-  },
-  {
-    "token0": "USDC",
-    "token1": "USDT",
-    "fees": 100
+    "token1": "USDT"
   },
   {
     "token0": "WBTC",
-    "token1": "USDT",
-    "fees": 10000
-  },
-  {
-    "token0": "WBTC",
-    "token1": "USDT",
-    "fees": 3000
-  },
-  {
-    "token0": "WBTC",
-    "token1": "USDT",
-    "fees": 500
+    "token1": "USDT"
   },
   {
     "token0": "LINK",
-    "token1": "WETH",
-    "fees": 3000
+    "token1": "WETH"
   },
   {
     "token0": "LINK",
-    "token1": "USDC",
-    "fees": 3000
+    "token1": "USDC"
   },
   {
     "token0": "cbETH",
-    "token1": "WETH",
-    "fees": 500
+    "token1": "WETH"
   },
   {
     "token0": "wstETH",
-    "token1": "WETH",
-    "fees": 100
+    "token1": "WETH"
   },
   {
     "token0": "WBTC",
-    "token1": "wstETH",
-    "fees": 500
+    "token1": "wstETH"
   },
   {
     "token0": "wstETH",
-    "token1": "USDC",
-    "fees": 3000
+    "token1": "USDC"
   },
 ]
 // // conf compound assets & risk oracle 
