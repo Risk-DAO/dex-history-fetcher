@@ -11,94 +11,113 @@ async function outputData() {
     const RPC_URL = process.env.RPC_URL;
     const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
     const currentBlock = await web3Provider.getBlockNumber();
-    const block30DaysAgo = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (30 * 24 * 60 * 60)); 
+    const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (180 * 24 * 60 * 60)); 
+    const blockLastYear = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (380 * 24 * 60 * 60)); 
 
+    const bases = ['stETH', 'USDC'];
 
-    fs.rmSync('data.csv', {force: true});
-    for(const platform of PLATFORMS) {
-        generateData(platform, 'stETH', 'WETH', currentBlock, block30DaysAgo);
+    for(const base of bases) {
+        for(const platform of PLATFORMS) {
+            generateLiquidityData(platform, base, 'WETH', startBlock, currentBlock);
+        }
+
+        generateDataAllPlatforms(base, 'WETH', startBlock, currentBlock);
+        await generateVolatilyData(base, 'WETH', currentBlock);
     }
-
-    generateDataAllPlatforms('stETH', 'WETH', currentBlock);
-    for(const platform of PLATFORMS) {
-        generateData(platform, 'USDC', 'WETH', currentBlock, block30DaysAgo);
-    }
-
-    generateDataAllPlatforms('USDC', 'WETH', currentBlock);
 }
 
 outputData();
 
-function generateData(platform, base, quote, currentBlock, block30DaysAgo) {
-    let liquidity = getLiquidity(platform, base, quote, currentBlock - 300, currentBlock);
+async function generateVolatilyData(base, quote, currentBlock) {
+    const spans = [7, 30, 180];
+
+    const filename = `${base}-${quote}-volatilitydata.csv`;
+    fs.writeFileSync(filename, 'platform,day,volatility\n');
+    for(const span of spans) {
+        const startBlock = await getBlocknumberForTimestamp(Math.round(Date.now() / 1000) - (span * 24 * 60 * 60)); 
+        for(const platform of PLATFORMS) {
+            const volatility = getVolatility(platform, base, quote, startBlock, currentBlock, span);
+            fs.appendFileSync(filename, `${platform},${span},${volatility || 'N/A'}\n`);
+        }
+    }
+}
+
+function generateLiquidityData(platform, base, quote, startBlock, currentBlock) {
+    const liquidity = getLiquidity(platform, base, quote, startBlock, currentBlock);
     if(!liquidity) {
-        liquidity= getBlankUnifiedData(currentBlock - 300, currentBlock)
+        return;
     }
-
-    const parkinsonVol = getVolatility(platform, base, quote, block30DaysAgo, currentBlock, 30);
-    const lastBlock = Object.keys(liquidity).at(-1);
-    const lastData = liquidity[lastBlock];
-    // console.log(lastData);
+    const filename = `${base}-${quote}-${platform}-liquidity.csv`;
+    
     const headers = [];
-    const data = [];
     headers.push('platform');
-    data.push(platform);
-
     headers.push('base');
     headers.push('quote');
-    data.push(base);
-    data.push(quote);
-
-    headers.push('volatility');
-    data.push(parkinsonVol);
-
+    headers.push('block');
     for (let i = 1; i <= 20; i++) {
         headers.push(`liquidity for ${i}% slippage`);
-        if(! lastData.slippageMap) {
-            data.push(0);
-        } else {
-            const dataForSlippage = lastData.slippageMap[i * 100];
-            data.push(dataForSlippage);
-        }
     }
 
-    if (!fs.existsSync('data.csv')) {
-        fs.writeFileSync('data.csv', headers.join(',') + '\n');
+    fs.writeFileSync(filename, headers.join(',') + '\n');
+
+    for(const block of Object.keys(liquidity)) {
+        const data = [];
+        data.push(platform);
+        data.push(base);
+        data.push(quote);
+        data.push(block);
+
+        const liquidityDataAtBlock = liquidity[block];
+        for (let i = 1; i <= 20; i++) {
+            if(!liquidityDataAtBlock.slippageMap) {
+                data.push(0);
+            } else {
+                const dataForSlippage = liquidityDataAtBlock.slippageMap[i * 100];
+                data.push(dataForSlippage);
+            }
+        }
+
+        fs.appendFileSync(filename, data.join(',') + '\n');
     }
-    fs.appendFileSync('data.csv', data.join(',') + '\n');
 }
 
-function generateDataAllPlatforms(base, quote, currentBlock) {
-    const liquidity = getLiquidityAllPlatforms(base, quote, currentBlock - 300, currentBlock);
 
-    const lastBlock = Object.keys(liquidity).at(-1);
-    const lastData = liquidity[lastBlock];
-    // console.log(lastData);
+function generateDataAllPlatforms(base, quote, startBlock, currentBlock) {
+    const liquidity = getLiquidityAllPlatforms(base, quote, startBlock, currentBlock);
+    if(!liquidity) {
+        return;
+    }
+    const filename = `${base}-${quote}-all-platforms-liquidity.csv`;
+    
     const headers = [];
-    const data = [];
     headers.push('platform');
-    data.push('all');
-
     headers.push('base');
     headers.push('quote');
-    data.push(base);
-    data.push(quote);
-
-    headers.push('volatility');
-    data.push(0);
-
+    headers.push('block');
     for (let i = 1; i <= 20; i++) {
         headers.push(`liquidity for ${i}% slippage`);
-        if(! lastData.slippageMap) {
-            data.push(0);
-        } else {
-            const dataForSlippage = lastData.slippageMap[i * 100];
-            data.push(dataForSlippage);
-        }
     }
 
-    if (!fs.existsSync('data.csv')) {
-        fs.writeFileSync('data.csv', headers.join(',') + '\n');
+    fs.writeFileSync(filename, headers.join(',') + '\n');
+
+    for(const block of Object.keys(liquidity)) {
+        const data = [];
+        data.push('all');
+        data.push(base);
+        data.push(quote);
+        data.push(block);
+
+        const liquidityDataAtBlock = liquidity[block];
+        for (let i = 1; i <= 20; i++) {
+            if(!liquidityDataAtBlock.slippageMap) {
+                data.push(0);
+            } else {
+                const dataForSlippage = liquidityDataAtBlock.slippageMap[i * 100];
+                data.push(dataForSlippage);
+            }
+        }
+
+        fs.appendFileSync(filename, data.join(',') + '\n');
     }
-    fs.appendFileSync('data.csv', data.join(',') + '\n');
 }
+
