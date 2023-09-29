@@ -41,14 +41,21 @@ async function UniswapV2HistoryFetcher() {
             console.log(`${fnName()}: starting`);
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
             const currentBlock = await web3Provider.getBlockNumber() - 10;
+            const stalePools = [];
             for(const pairKey of univ2Config.uniswapV2Pairs) {
                 console.log(`${fnName()}: Start fetching pair ` + pairKey);
-                await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`, currentBlock);
+                const poolIsStale = await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`, currentBlock);
                 console.log(`${fnName()}: End fetching pair ` + pairKey);
+                if(poolIsStale) {
+                    stalePools.push(pairKey);
+                }
             }
 
             await generateUnifiedFileUniv2(currentBlock);
             console.log('UniswapV2HistoryFetcher: ending');
+            if(stalePools.length > 0) {
+                console.warn(`Stale pools: ${stalePools.join(',')}`);
+            }
         
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({
@@ -85,6 +92,7 @@ async function UniswapV2HistoryFetcher() {
  * if the file exists, start at the last block fetched + 1
  * @param {ethers.providers.BaseProvider} web3Provider 
  * @param {string} pairKey
+ * @returns {bool} if the pool is stale (no new data since 500k blocks)
  */
 async function FetchHistoryForPair(web3Provider, pairKey, historyFileName, currentBlock) {
     const token0Symbol = pairKey.split('-')[0];
@@ -134,6 +142,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName, curre
     let fromBlock =  startBlock;
     let toBlock = 0;
     let cptError = 0;
+    let lastEventBlock = startBlock;
     while(toBlock < currentBlock) {
 
         toBlock = fromBlock + blockStep - 1;
@@ -161,6 +170,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName, curre
         
         if(events.length > 0) {
             if(events.length == 1) {
+                lastEventBlock = events[0].blockNumber;
                 liquidityValues.push({
                     blockNumber: events[0].blockNumber,
                     reserve0: events[0].args.reserve0.toString(),
@@ -172,6 +182,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName, curre
                 // for each events, we will only save the last event of a block
                 for(let i = 1; i < events.length; i++) {
                     const workingEvent = events[i];
+                    lastEventBlock = events[i].blockNumber;
                     
                     // we save the 'previousEvent' when the workingEvent block number is different than the previousEvent
                     if(workingEvent.blockNumber != previousEvent.blockNumber) {
@@ -213,6 +224,9 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName, curre
         const textToAppend = liquidityValues.map(_ => `${_.blockNumber},${_.reserve0},${_.reserve1}`);
         fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
     }
+
+    // return true if the last event fetched is more than 500k blocks old
+    return lastEventBlock < currentBlock - 500_000;
 }
 
 UniswapV2HistoryFetcher();
