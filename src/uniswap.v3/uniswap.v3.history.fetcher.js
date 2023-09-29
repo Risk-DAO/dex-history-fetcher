@@ -23,6 +23,8 @@ const RPC_URL = process.env.RPC_URL;
 
 const UNISWAPV3_FEES = [100, 500, 3000, 10000];
 
+const RUN_EVERY_MINUTES = 30;
+
 UniswapV3HistoryFetcher();
 
 /**
@@ -38,7 +40,7 @@ async function UniswapV3HistoryFetcher() {
                 'name': 'UniswapV3 Fetcher',
                 'status': 'running',
                 'lastStart': Math.round(start/1000),
-                'runEvery': 10 * 60
+                'runEvery': RUN_EVERY_MINUTES * 60
             });
 
             if(!RPC_URL) {
@@ -81,7 +83,7 @@ async function UniswapV3HistoryFetcher() {
             });
         }
 
-        const sleepTime = 10 * 60 * 1000 - (Date.now() - start);
+        const sleepTime = RUN_EVERY_MINUTES * 60 * 1000 - (Date.now() - start);
         if(sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
             await sleep(sleepTime);
