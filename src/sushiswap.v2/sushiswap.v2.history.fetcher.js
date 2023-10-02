@@ -43,10 +43,18 @@ async function SushiswapV2HistoryFetcher() {
             console.log(`${fnName()}: starting`);
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
             const currentBlock = await web3Provider.getBlockNumber() - 10;
+            const stalePools = [];
             for(const pairToFetch of sushiv2Config.pairsToFetch) {
                 console.log(`${fnName()}: Start fetching pair `, pairToFetch);
-                await FetchHistoryForPair(web3Provider, pairToFetch, currentBlock);
+                const poolIsStale = await FetchHistoryForPair(web3Provider, pairToFetch, currentBlock);
                 console.log(`${fnName()}: End fetching pair `, pairToFetch);
+                if(poolIsStale) {
+                    stalePools.push(`${pairToFetch.base}-${pairToFetch.quote}`);
+                }
+            }
+
+            if(stalePools.length > 0) {
+                console.warn(`Stale pools: ${stalePools.join(',')}`);
             }
 
             await generateUnifiedFileSushiswapV2(currentBlock);
@@ -121,6 +129,7 @@ async function FetchHistoryForPair(web3Provider, pairConfig, currentBlock) {
     let fromBlock =  startBlock;
     let toBlock = 0;
     let cptError = 0;
+    let lastEventBlock = startBlock;
     while(toBlock < currentBlock) {
 
         toBlock = fromBlock + blockStep - 1;
@@ -148,6 +157,7 @@ async function FetchHistoryForPair(web3Provider, pairConfig, currentBlock) {
         
         if(events.length > 0) {
             if(events.length == 1) {
+                lastEventBlock = events[0].blockNumber;
                 liquidityValues.push({
                     blockNumber: events[0].blockNumber,
                     reserve0: events[0].args.reserve0.toString(),
@@ -159,6 +169,7 @@ async function FetchHistoryForPair(web3Provider, pairConfig, currentBlock) {
                 // for each events, we will only save the last event of a block
                 for(let i = 1; i < events.length; i++) {
                     const workingEvent = events[i];
+                    lastEventBlock = events[i].blockNumber;
                     
                     // we save the 'previousEvent' when the workingEvent block number is different than the previousEvent
                     if(workingEvent.blockNumber != previousEvent.blockNumber) {
@@ -200,6 +211,9 @@ async function FetchHistoryForPair(web3Provider, pairConfig, currentBlock) {
         const textToAppend = liquidityValues.map(_ => `${_.blockNumber},${_.reserve0},${_.reserve1}`);
         fs.appendFileSync(historyFileName, textToAppend.join('\n') + '\n');
     }
+
+    // return true if the last event fetched is more than 500k blocks old
+    return lastEventBlock < currentBlock - 500_000;
 }
 
 SushiswapV2HistoryFetcher();

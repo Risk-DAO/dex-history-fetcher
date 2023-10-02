@@ -51,11 +51,12 @@ async function UniswapV2HistoryFetcher() {
                 }
             }
 
-            await generateUnifiedFileUniv2(currentBlock);
-            console.log('UniswapV2HistoryFetcher: ending');
             if(stalePools.length > 0) {
                 console.warn(`Stale pools: ${stalePools.join(',')}`);
             }
+            
+            await generateUnifiedFileUniv2(currentBlock);
+            console.log('UniswapV2HistoryFetcher: ending');
         
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({
