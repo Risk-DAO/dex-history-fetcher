@@ -45,8 +45,8 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol, poolName
     const poolData = getCurveDataforBlockInterval(DATA_DIR, poolName, sinceBlock, endBlock);
     let lastSavedBlock = sinceBlock-1;
     for(const blockNumber of Object.keys(poolData.reserveValues)) {
-        // only save every 50 blocks
-        if(lastSavedBlock + 50 > blockNumber) {
+        // only save every 300 blocks
+        if(lastSavedBlock + 300 > blockNumber) {
             continue;
         }
         

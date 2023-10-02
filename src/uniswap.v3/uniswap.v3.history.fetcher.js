@@ -17,9 +17,13 @@ const path = require('path');
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
 // save liquidity data every 'CONSTANT_BLOCK_INTERVAL' blocks
-const CONSTANT_BLOCK_INTERVAL = 50;
+const CONSTANT_BLOCK_INTERVAL = 300;
 
 const RPC_URL = process.env.RPC_URL;
+
+const UNISWAPV3_FEES = [100, 500, 3000, 10000];
+
+const RUN_EVERY_MINUTES = 30;
 
 UniswapV3HistoryFetcher();
 
@@ -36,7 +40,7 @@ async function UniswapV3HistoryFetcher() {
                 'name': 'UniswapV3 Fetcher',
                 'status': 'running',
                 'lastStart': Math.round(start/1000),
-                'runEvery': 10 * 60
+                'runEvery': RUN_EVERY_MINUTES * 60
             });
 
             if(!RPC_URL) {
@@ -53,7 +57,9 @@ async function UniswapV3HistoryFetcher() {
             const currentBlock = await web3Provider.getBlockNumber() - 10;
 
             for(const pairToFetch of univ3Config.pairsToFetch) {
-                await FetchUniswapV3HistoryForPair(pairToFetch, web3Provider, univ3Factory, currentBlock);
+                for(const fee of UNISWAPV3_FEES) {
+                    await FetchUniswapV3HistoryForPair(pairToFetch, fee, web3Provider, univ3Factory, currentBlock);
+                }
             }
 
             // at the end, call the concatener script
@@ -77,7 +83,7 @@ async function UniswapV3HistoryFetcher() {
             });
         }
 
-        const sleepTime = 10 * 60 * 1000 - (Date.now() - start);
+        const sleepTime = RUN_EVERY_MINUTES * 60 * 1000 - (Date.now() - start);
         if(sleepTime > 0) {
             console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
             await sleep(sleepTime);
@@ -85,8 +91,8 @@ async function UniswapV3HistoryFetcher() {
     }
 }
 
-async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Factory, currentBlock) {
-    console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}]: start for pair ${pairConfig.token0}-${pairConfig.token1} and fees: ${pairConfig.fees}`);
+async function FetchUniswapV3HistoryForPair(pairConfig, fee, web3Provider, univ3Factory, currentBlock) {
+    console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}]: start for pair ${pairConfig.token0}-${pairConfig.token1} and fees: ${fee}`);
     const token0 = getConfTokenBySymbol(pairConfig.token0);
     if(!token0) {
         throw new Error('Cannot find token in global config with symbol: ' + pairConfig.token0);
@@ -97,7 +103,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
     }
 
     // try to find the json file representation of the pool latest value already fetched
-    const latestDataFilePath = `${DATA_DIR}/uniswapv3/${pairConfig.token0}-${pairConfig.token1}-${pairConfig.fees}-latestdata.json`;
+    const latestDataFilePath = `${DATA_DIR}/uniswapv3/${pairConfig.token0}-${pairConfig.token1}-${fee}-latestdata.json`;
     let latestData = undefined;
     let poolAddress = undefined;
     let univ3PairContract = undefined;
@@ -108,15 +114,19 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
         poolAddress = latestData.poolAddress;
         if(!poolAddress) {
             console.log(`Could not find pool address in latest data file ${latestDataFilePath}`);
-            poolAddress = await univ3Factory.getPool(token0.address, token1.address, pairConfig.fees);
+            poolAddress = await univ3Factory.getPool(token0.address, token1.address, fee);
             latestData.poolAddress = poolAddress;
         }
 
         univ3PairContract = new Contract(poolAddress, univ3Config.uniswapV3PairAbi, web3Provider);
-        console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${pairConfig.fees}]: data file found ${latestDataFilePath}, last block fetched: ${latestData.blockNumber}`);
+        console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${fee}]: data file found ${latestDataFilePath}, last block fetched: ${latestData.blockNumber}`);
     } else {
-        console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${pairConfig.fees}]: data file not found, starting from scratch`);
-        poolAddress = await univ3Factory.getPool(token0.address, token1.address, pairConfig.fees);
+        console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${fee}]: data file not found, starting from scratch`);
+        poolAddress = await univ3Factory.getPool(token0.address, token1.address, fee);
+        if(poolAddress == ethers.constants.AddressZero) {
+            console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${fee}]: pool does not exist`);
+            return;
+        }
         univ3PairContract = new Contract(poolAddress, univ3Config.uniswapV3PairAbi, web3Provider);
 
         // verify that the token0 in config is the token0 of the pool
@@ -136,7 +146,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
         latestData.poolAddress = poolAddress;
     }
 
-    const dataFileName = `${DATA_DIR}/uniswapv3/${token0.symbol}-${token1.symbol}-${pairConfig.fees}-data.csv`;
+    const dataFileName = `${DATA_DIR}/uniswapv3/${token0.symbol}-${token1.symbol}-${fee}-data.csv`;
     if(!fs.existsSync(dataFileName)) {
         fs.writeFileSync(dataFileName, 'blocknumber,data\n');
     }
@@ -179,7 +189,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, web3Provider, univ3Facto
             continue;
         }
 
-        console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${pairConfig.fees}]: [${fromBlock} - ${toBlock}] found ${events.length} Mint/Burn/Swap events after ${cptError} errors (fetched ${toBlock-fromBlock+1} blocks)`);
+        console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${fee}]: [${fromBlock} - ${toBlock}] found ${events.length} Mint/Burn/Swap events after ${cptError} errors (fetched ${toBlock-fromBlock+1} blocks)`);
         
         if(events.length != 0) {
             processEvents(events, iface, latestData, token0, token1, latestDataFilePath, dataFileName);

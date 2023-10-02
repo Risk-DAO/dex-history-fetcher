@@ -89,14 +89,13 @@ function getUniV2DataFile(dataDir, fromSymbol, toSymbol) {
 }
 
 /**
- * compute the liquidity of a token to another, using the reserves of one pool and a target slippage
- *  with the following formula: 
- *  a = (y / e) - x
- *  with :
- *      a = amount of token from we can exchange to achieve target slippage,
- *      y = reserve to,
- *      e = target price and
- *      x = reserve from
+ * Formula from
+ * https://ethereum.stackexchange.com/a/107170/105194
+ *  TL;DR:
+    a = sqrt(pxy)/p - x
+    where p is the target price to be maintained and x and y
+    are the quantities of the two tokens in the pool before the trade takes place.
+    and a is the amount of x I can sell to reach the price p
  * @param {string} fromSymbol 
  * @param {number} fromReserve must be normalized with correct decimal place
  * @param {string} toSymbol 
@@ -108,11 +107,35 @@ function computeLiquidityUniV2Pool(fromReserve, toReserve, targetSlippage) {
     if(fromReserve == 0) {
         return 0;
     }
-    
+
     const initPrice = toReserve / fromReserve;
     const targetPrice = initPrice - (initPrice * targetSlippage);
-    const amountOfFromToExchange = (toReserve / targetPrice) - fromReserve;
-    return amountOfFromToExchange;
+    const amountOfFromToSell = Math.sqrt(targetPrice * fromReserve * toReserve)/targetPrice - fromReserve;
+    
+    // const yReceived = calculateYReceived(fromReserve, toReserve, amountOfFromToExchange);
+    // const newFromReserve = fromReserve + amountOfFromToExchange;
+    // const newToReserve = toReserve - yReceived;
+    // const newPrice = newToReserve / newFromReserve;
+    // console.log({initPrice});
+    // console.log({targetPrice});
+    // console.log({newPrice});
+    // console.log(`diff wanted: ${targetSlippage * 100}%`);
+    // const priceDiff = (initPrice - newPrice) / initPrice;
+    // console.log(`real diff for the new price: ${priceDiff*100}%`);
+    return amountOfFromToSell;
+}
+
+// used for verifications
+function calculateYReceived(x0, y0, xSell) {
+    // Initial state of the liquidity pool
+    const k0 = x0 * y0;
+    // Calculate the new quantity of asset X after the sale (it increases)
+    const x1 = x0 + xSell;
+    // Calculate the new quantity of asset Y using the x * y = k formula
+    const y1 = k0 / x1;
+    // Calculate the difference in asset Y received
+    const deltaY = y0 - y1;
+    return deltaY;
 }
 
 /**
