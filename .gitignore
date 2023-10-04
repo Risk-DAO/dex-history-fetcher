@@ -91,4 +91,6 @@ lerna-debug.log
 Thumbs.db
 
 # csv files in the data dir
-data/**/*.csv
+data/*
+
+nocommit/
