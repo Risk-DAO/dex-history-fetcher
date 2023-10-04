@@ -11,6 +11,13 @@ const { truncateUnifiedFiles } = require('../data.interface/unified.truncator');
 async function generateUnifiedFileSushiswapV2(endBlock) {
     const available = getAvailableSushiswapV2(DATA_DIR);
 
+    if(!fs.existsSync(path.join(DATA_DIR, 'precomputed'))) {
+        fs.mkdirSync(path.join(DATA_DIR, 'precomputed'));
+    }
+    if(!fs.existsSync(path.join(DATA_DIR, 'precomputed', 'uniswapv2'))) {
+        fs.mkdirSync(path.join(DATA_DIR, 'precomputed', 'uniswapv2'));
+    }
+    
     for(const base of Object.keys(available)) {
         for(const quote of available[base]) {
             await createUnifiedFileForPair(endBlock, base, quote);

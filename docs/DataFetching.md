@@ -14,13 +14,16 @@ The fetcher codes are here:
 - [sushiswapv2](../src/sushiswap.v2/sushiswap.v2.history.fetcher.js)
 - [curve](../src/curve/curve.history.fetcher.js)
 
-A node process is started for each of the dexes, it generates files in `./data/{dexname}/`
+### Configuration
+Each fetcher has a configuration in the same directory named `*.config.js`. The configuration files contains the list of pairs to be fetched and many informations needed for the data fetch (like contract abi and addresses)
+
+A node process is started for each of the dexes, it generates files in `./data/{platform}/`
 
 Example: `./data/uniswapv2/WETH-USDT_uniswapv2.csv`
 
 This file holds the historical reserve values of the WETH-USDT pool
 
-|blocknumber                 |reserve_WETH_0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2|reserve_USDT_0xdAC17F958D2ee523a2206206994597C13D831ec7|
+|blocknumber                 |reserve_WETH|reserve_USDT|
 |----------------------------|-------------------------------------------------------|-------------------------------------------------------|
 |10111547                    |5973440903627713466                                    |1183858579                                             |
 |10111691                    |6012816252902470409                                    |1176129104                                             |

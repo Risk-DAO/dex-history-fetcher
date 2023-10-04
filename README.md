@@ -15,15 +15,15 @@ Documentation available [here](./docs/README.md)
 1. Set the RPC_URL environment variable
 
 `export RPC_URL=https://url/`
-1. Start the uniswapv2 history fetcher
+1. Start the sushiswapv2 history fetcher (the fastest one)
 
-`node .\src\uniswap.v2\uniswap.v2.history.fetcher.js`
+`node ./src/sushiswap.v2/sushiswap.v2.history.fetcher.js`
 
-At the end, the process should display
+It should run for several minutes the first time and at the end, the process should display
 
 ```
 UniswapV2HistoryFetcher: ending
-UniswapV2HistoryFetcher: sleeping 28.69 minutes
+UniswapV2HistoryFetcher: sleeping 24.69 minutes
 ```
 
 And you should be able to see the ./data directory filled with data
