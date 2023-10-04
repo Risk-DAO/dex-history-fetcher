@@ -10,6 +10,13 @@ const { getConfTokenBySymbol } = require('../utils/token.utils');
 async function generateUnifiedFileCurve(endBlock) {
     const available = getAvailableCurve(DATA_DIR);
 
+    if(!fs.existsSync(path.join(DATA_DIR, 'precomputed'))) {
+        fs.mkdirSync(path.join(DATA_DIR, 'precomputed'));
+    }
+    if(!fs.existsSync(path.join(DATA_DIR, 'precomputed', 'uniswapv2'))) {
+        fs.mkdirSync(path.join(DATA_DIR, 'precomputed', 'uniswapv2'));
+    }
+
     for(const base of Object.keys(available)) {
         for(const quote of Object.keys(available[base])) {
             for(const pool of Object.keys(available[base][quote])) {

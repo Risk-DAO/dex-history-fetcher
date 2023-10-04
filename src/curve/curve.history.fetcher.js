@@ -33,6 +33,10 @@ async function CurveHistoryFetcher() {
                 'runEvery': 10 * 60
             });
 
+            if(!fs.existsSync(DATA_DIR)) {
+                fs.mkdirSync(DATA_DIR);
+            }
+
             if(!fs.existsSync(path.join(DATA_DIR, 'curve'))) {
                 fs.mkdirSync(path.join(DATA_DIR, 'curve'));
             }

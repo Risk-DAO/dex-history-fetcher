@@ -9,6 +9,13 @@ const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 async function generateUnifiedFileUniv3(endBlock) {
     const available = getAvailableUniswapV3(DATA_DIR);
 
+    if(!fs.existsSync(path.join(DATA_DIR, 'precomputed'))) {
+        fs.mkdirSync(path.join(DATA_DIR, 'precomputed'));
+    }
+    if(!fs.existsSync(path.join(DATA_DIR, 'precomputed', 'uniswapv2'))) {
+        fs.mkdirSync(path.join(DATA_DIR, 'precomputed', 'uniswapv2'));
+    }
+
     const blockLastYear = await getBlocknumberForTimestamp(Math.round(Date.now()/1000) - 365 * 24 * 60 * 60);
     for(const base of Object.keys(available)) {
         for(const quote of available[base]) {
