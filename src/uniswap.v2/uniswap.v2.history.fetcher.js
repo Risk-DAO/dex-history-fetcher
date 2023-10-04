@@ -35,6 +35,10 @@ async function UniswapV2HistoryFetcher() {
             if(!RPC_URL) {
                 throw new Error('Could not find RPC_URL env variable');
             }
+
+            if(!fs.existsSync(DATA_DIR)) {
+                fs.mkdirSync(DATA_DIR);
+            }
         
             if(!fs.existsSync(path.join(DATA_DIR, 'uniswapv2'))) {
                 fs.mkdirSync(path.join(DATA_DIR, 'uniswapv2'));
