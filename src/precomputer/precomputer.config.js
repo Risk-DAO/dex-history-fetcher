@@ -48,4 +48,15 @@ const pairsToCompute = {
     ]
 };
 
-module.exports = { pairsToCompute };
+const dashboardPairsToCompute = [
+    {
+        base: 'stETH',
+        quote: 'WETH',
+    },
+    {
+        base: 'USDC',
+        quote: 'WETH',
+    }
+];
+
+module.exports = { pairsToCompute, dashboardPairsToCompute };
