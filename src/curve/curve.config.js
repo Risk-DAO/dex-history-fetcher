@@ -143,7 +143,7 @@ const curvePairs = [
         lpTokenName: 'crvUSDCWBTCWETH',
         abi: 'tricryptov2Factory',
         isCryptoV2: true,
-        minBlock: 17374355,
+        minBlock: 17404919,
         tokens: [
             {
                 symbol: 'USDC',

@@ -308,7 +308,7 @@ function computeLiquidityForSlippageCurvePool(baseQty, targetPrice, reserves, i,
 }
 
 
-function v2_computeLiquidityForSlippageCurvePoolCryptoV2(baseQty, targetPrice, baseReserves, i, j, amplificationFactor, gamma, D, priceScale, precisions, decimalsFrom, decimalsTo) {
+function v2_computeLiquidityForSlippageCurvePoolCryptoV2(baseAmountPrice, baseQty, targetPrice, baseReserves, i, j, amplificationFactor, gamma, D, priceScale, precisions, decimalsFrom, decimalsTo) {
     let low = undefined;
     let high = undefined;
     let qtyFrom = baseQty * 2n;
@@ -326,15 +326,14 @@ function v2_computeLiquidityForSlippageCurvePoolCryptoV2(baseQty, targetPrice, b
         newReserves[j] -= qtyTo;
 
         // get the new price for one token
-        const newQtyFrom = 10n ** BigInt(decimalsFrom);
-        const newQtyTo = get_dy_v2(i, j, newQtyFrom, newReserves, BigInt(newReserves.length), amplificationFactor, gamma, D, priceScale, precisions);
+        const newQtyTo = get_dy_v2(i, j, baseAmountPrice, newReserves, BigInt(newReserves.length), amplificationFactor, gamma, D, priceScale, precisions);
 
-        const normalizedFrom = normalize(newQtyFrom.toString(), decimalsFrom);
+        const normalizedFrom = normalize(baseAmountPrice.toString(), decimalsFrom);
         const normalizedTo = normalize(newQtyTo.toString(), decimalsTo);
         const currentPrice = normalizedTo / normalizedFrom;
 
         const variation = (Number(high) / Number(low)) - 1;
-        // console.log(`DAI Qty: [${low ? normalize(BigNumber.from(low), 18) : '0'} <-> ${high ? normalize(BigNumber.from(high), 18) : '+∞'}]. Current price: 1 ${fromSymbol} = ${currentPrice} ${toSymbol}, targetPrice: ${targetPrice}. Try qty: ${normalizedFrom} ${fromSymbol} = ${normalizedTo} ${toSymbol}. variation: ${variation * 100}%`);
+        // console.log(`WBTC Qty: [${low ? normalize(BigNumber.from(low), 18) : '0'} <-> ${high ? normalize(BigNumber.from(high), 18) : '+∞'}]. Current price: 1 WBTC = ${currentPrice} USDT, targetPrice: ${targetPrice}. Try qty: ${normalizedFrom} WBTC = ${normalizedTo} USDT. variation: ${variation * 100}%`);
         if(low && high) {
             if(variation < exitBoundsDiff) {
                 return (high + low) / 2n;
@@ -810,6 +809,7 @@ function computePriceAndSlippageMapForReserveValueCryptoV2(fromSymbol, toSymbol,
         console.warn(`No base amount for ${fromSymbol}`);
         baseAmount = 10n**BigInt(fromConf.decimals);
     }
+
     const returnVal = get_dy_v2(indexFrom, indexTo, baseAmount, reserves, BigInt(poolTokens.length), BigInt(ampFactor), BigInt(gamma), BigInt(D), priceScale, precisions);
     const price = normalize(returnVal.toString(), toConf.decimals) / normalize(baseAmount, fromConf.decimals);
     // console.log(price);
@@ -819,7 +819,7 @@ function computePriceAndSlippageMapForReserveValueCryptoV2(fromSymbol, toSymbol,
     let lastAmount = baseAmount;
     for(let slippageBps = 50; slippageBps <= 2000; slippageBps += 50) {
         const targetPrice = price - (price * slippageBps / 10000);
-        const amountFromForSlippage = v2_computeLiquidityForSlippageCurvePoolCryptoV2(lastAmount, targetPrice, reserves, indexFrom, indexTo, ampFactor, gamma, D, priceScale, precisions, fromConf.decimals, toConf.decimals);
+        const amountFromForSlippage = v2_computeLiquidityForSlippageCurvePoolCryptoV2(baseAmount, lastAmount, targetPrice, reserves, indexFrom, indexTo, ampFactor, gamma, D, priceScale, precisions, fromConf.decimals, toConf.decimals);
         const liquidityAtSlippage = normalize(amountFromForSlippage.toString(), fromConf.decimals);
         lastAmount = amountFromForSlippage;
         
