@@ -252,17 +252,8 @@ function v2_computeLiquidityForSlippageCurvePool(baseQty, targetPrice, baseReser
     }
 }
 
-/**
- * Find the liquidity for slippage using curve data
- * Use binary search to find the value
- * @param {BigInt} baseQty 
- * @param {number} basePrice 
- * @param {number} targetPrice 
- * @param {BigInt[]} reserves 
- * @param {number} i 
- * @param {number} j 
- * @param {number} amplificationFactor
- */
+
+// this is the old function: avg slippage
 function computeLiquidityForSlippageCurvePool(baseQty, targetPrice, reserves, i, j, amplificationFactor) {
     let low = undefined;
     let high = undefined;
@@ -364,7 +355,7 @@ function v2_computeLiquidityForSlippageCurvePoolCryptoV2(baseAmountPrice, baseQt
     }
 }
 
-
+// this is the old function: avg slippage
 function computeLiquidityForSlippageCurvePoolCryptoV2(baseQty, targetPrice, reserves, i, j, amplificationFactor, gamma, D, priceScale, precisions, decimalsFrom, decimalsTo) {
     let low = undefined;
     let high = undefined;
