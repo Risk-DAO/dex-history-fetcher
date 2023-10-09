@@ -11,7 +11,7 @@ const { RecordMonitoring } = require('../utils/monitoring');
 const { DATA_DIR } = require('../utils/constants');
 const { providers } = require('@0xsequence/multicall');
 const { getConfTokenBySymbol, normalize } = require('../utils/token.utils');
-const { generateUnifiedFileCurve } = require('./curve.unified.generator');
+const { runCurveUnifiedMultiThread } = require('../../scripts/runCurveUnifiedMultiThread');
 
 dotenv.config();
 const SAVE_BLOCK_STEP = 300;
@@ -54,7 +54,8 @@ async function CurveHistoryFetcher() {
             const poolSummaryFullname = path.join(DATA_DIR, 'curve', 'curve_pools_summary.json');
             fs.writeFileSync(poolSummaryFullname, JSON.stringify(lastResults, null, 2));
 
-            await generateUnifiedFileCurve(currentBlock);
+            // await generateUnifiedFileCurve(currentBlock);
+            await runCurveUnifiedMultiThread();
 
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({
@@ -98,6 +99,9 @@ function getCurveContract(fetchConfig, web3Provider) {
             break;
         case 'tricryptov2':
             curveContract = new Contract(fetchConfig.poolAddress, curveConfig.triCryptov2Abi, web3Provider);
+            break;
+        case 'tricryptov2factory':
+            curveContract = new Contract(fetchConfig.poolAddress, curveConfig.tricryptoFactoryAbi, web3Provider);
             break;
         case 'cryptov2':
             curveContract = new Contract(fetchConfig.poolAddress, curveConfig.cryptov2Abi, web3Provider);
@@ -158,6 +162,18 @@ function getCurveTopics(curveContract, fetchConfig) {
                 curveContract.filters.RampAgamma().topics[0],
             ];
             break;
+            
+        case 'tricryptov2factory':
+            topics = [
+                curveContract.filters.TokenExchange().topics[0],
+                curveContract.filters.AddLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidityOne().topics[0],
+                curveContract.filters.NewParameters().topics[0],
+                curveContract.filters.CommitNewParameters().topics[0],
+                curveContract.filters.RampAgamma().topics[0],
+            ];
+            break;
         case 'cryptov2':
             topics = [
                 curveContract.filters.TokenExchange().topics[0],
@@ -194,6 +210,12 @@ async function FetchHistory(fetchConfig, currentBlock, web3Provider) {
         startBlock = Number(lastLine.split(',')[0]) + 1;
     } else {
         startBlock = await getBlocknumberForTimestamp(startDate);
+    }
+
+    // this is done for the tricryptoUSDC pool because the first liquidity values are too low for 
+    // the liquidity algorithm to work. Dunno why
+    if(fetchConfig.minBlock && startBlock < fetchConfig.minBlock) {
+        startBlock = fetchConfig.minBlock;
     }
 
     // fetch all blocks where an event occured since startBlock
