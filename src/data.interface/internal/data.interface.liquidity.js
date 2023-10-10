@@ -72,6 +72,14 @@ function getLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, to
     return aggregData;
 }
 
+function getAverageLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, toBlock, withJumps= true) {
+    const liquidityAllPlatforms = getLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, toBlock, withJumps, DEFAULT_STEP_BLOCK);
+
+    const avgData = computeAverageData(liquidityAllPlatforms, fromBlock, toBlock);
+
+    return avgData;
+}
+
 /**
  * Get the slippage map for a pair
  * @param {string} fromSymbol 
@@ -294,4 +302,4 @@ function getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock,
     return pivotData;
 }
 
-module.exports = { getAverageLiquidityForInterval, getSlippageMapForInterval, getLiquidityForPlatforms};
+module.exports = { getAverageLiquidityForInterval, getSlippageMapForInterval, getLiquidityForPlatforms, getAverageLiquidityForPlatforms};

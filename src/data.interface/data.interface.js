@@ -6,7 +6,7 @@
 //////////// THE FETCHERS //////////////
 
 const { getParkinsonVolatilityForInterval, getAveragePriceForInterval } = require('./internal/data.interface.price');
-const { getAverageLiquidityForInterval, getSlippageMapForInterval, getLiquidityForPlatforms } = require('./internal/data.interface.liquidity');
+const { getAverageLiquidityForInterval, getSlippageMapForInterval, getLiquidityForPlatforms, getAverageLiquidityForPlatforms } = require('./internal/data.interface.liquidity');
 const { logFnDurationWithLabel } = require('../utils/utils');
 const { PLATFORMS, DEFAULT_STEP_BLOCK } = require('../utils/constants');
 
@@ -107,7 +107,15 @@ function getLiquidityAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, with
     const liquidity = getLiquidityForPlatforms(PLATFORMS, fromSymbol, toSymbol, fromBlock, toBlock, withJumps, stepBlock);
     logFnDurationWithLabel(start, `p: ${PLATFORMS}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}, step: ${stepBlock}`);
     return liquidity;
+}
 
+
+
+function getAverageLiquidityAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true) {
+    const start = Date.now();
+    const avgLiquidity = getAverageLiquidityForPlatforms(PLATFORMS, fromSymbol, toSymbol, fromBlock, toBlock, withJumps);
+    logFnDurationWithLabel(start, `p: ${PLATFORMS}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}`);
+    return avgLiquidity;
 }
 
 //    _    _  _______  _____  _        _____ 
@@ -129,4 +137,4 @@ function checkPlatform(platform) {
     }
 }
 
-module.exports = { getVolatility, getAveragePrice, getAverageLiquidity, getLiquidity, getLiquidityAllPlatforms};
+module.exports = { getVolatility, getAveragePrice, getAverageLiquidity, getLiquidity, getLiquidityAllPlatforms, getAverageLiquidityAllPlatforms};
