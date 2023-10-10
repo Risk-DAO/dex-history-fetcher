@@ -36,30 +36,45 @@ async function UniswapV2HistoryFetcher() {
                 throw new Error('Could not find RPC_URL env variable');
             }
 
-            if(!fs.existsSync(DATA_DIR)) {
-                fs.mkdirSync(DATA_DIR);
-            }
-        
             if(!fs.existsSync(path.join(DATA_DIR, 'uniswapv2'))) {
-                fs.mkdirSync(path.join(DATA_DIR, 'uniswapv2'));
+                fs.mkdirSync(path.join(DATA_DIR, 'uniswapv2'), {recursive: true});
             }
 
             console.log(`${fnName()}: starting`);
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
             const currentBlock = await web3Provider.getBlockNumber() - 10;
             const stalePools = [];
+            const poolsData = [];
             for(const pairKey of univ2Config.uniswapV2Pairs) {
                 console.log(`${fnName()}: Start fetching pair ` + pairKey);
-                const poolIsStale = await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`, currentBlock);
+                const fetchResult = await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`, currentBlock);
                 console.log(`${fnName()}: End fetching pair ` + pairKey);
-                if(poolIsStale) {
+                if(fetchResult.isStale) {
                     stalePools.push(pairKey);
                 }
+
+                
+                const token0Symbol = pairKey.split('-')[0];
+                const token1Symbol = pairKey.split('-')[1];
+                poolsData.push({
+                    tokens: [token0Symbol, token1Symbol],
+                    address: fetchResult.pairAddress,
+                    label: ''
+                });
             }
 
             if(stalePools.length > 0) {
                 console.warn(`Stale pools: ${stalePools.join(',')}`);
             }
+
+            const fetcherResult = {
+                dataSourceName: 'uniswapv2',
+                lastBlockFetched: currentBlock,
+                lastRunTimestampMs: Date.now(),
+                poolsFetched: poolsData
+            };
+
+            fs.writeFileSync(path.join(DATA_DIR, 'uniswapv2', 'uniswapv2-fetcher-result.json'), JSON.stringify(fetcherResult, null, 2));
             
             await generateUnifiedFileUniv2(currentBlock);
             console.log('UniswapV2HistoryFetcher: ending');
@@ -233,7 +248,7 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName, curre
     }
 
     // return true if the last event fetched is more than 500k blocks old
-    return lastEventBlock < currentBlock - 500_000;
+    return {isStale: lastEventBlock < currentBlock - 500_000, pairAddress: pairAddress}
 }
 
 UniswapV2HistoryFetcher();
