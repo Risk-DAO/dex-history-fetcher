@@ -52,6 +52,7 @@ function getUnifiedDataForIntervalByFilename(fullFilename, fromBlock, toBlock, s
 
     for(let i = 1; i < fileContent.length - 1; i++) {
         const blockNumber = Number(fileContent[i].split(',')[0]);
+
         if(blockNumber > toBlock) {
             break;
         }
@@ -64,6 +65,16 @@ function getUnifiedDataForIntervalByFilename(fullFilename, fromBlock, toBlock, s
             nextBlockNumber = toBlock + 1;
         }
         let blockToFill = blocksToFill[currentIndexToFill];
+
+        while(blockToFill < blockNumber) {
+            unifiedData[blockToFill] = {
+                price: 0,
+                slippageMap: getDefaultSlippageMap()
+            };
+
+            currentIndexToFill++;
+            blockToFill = blocksToFill[currentIndexToFill]
+        }
 
         if(nextBlockNumber > blockToFill) {
             const data = extractDataFromUnifiedLine(fileContent[i]);
@@ -179,6 +190,20 @@ function getUnifiedDataForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBl
 
     return unifiedData;
 }
+
+/**
+ * Instanciate a default slippage map: from 50 bps to 2000, containing only 0 volume
+ * @returns {{[slippageBps: number]: number}}
+ */
+function getDefaultSlippageMap() {
+    const slippageMap = {};
+    for(let i = 50; i <= 2000; i+=50) {
+        slippageMap[i] = 0;
+    }
+    return slippageMap;
+}
+
+
 /**
  * This function returns an object preinstanciated with all the blocks that will need to be filled
  * @param {number} startBlock 
@@ -215,4 +240,7 @@ function extractDataFromUnifiedLine(line) {
     };
 }
 
-module.exports = { getUnifiedDataForInterval, getBlankUnifiedData };
+// const toto = getUnifiedDataForIntervalByFilename('./data/precomputed/curve/USDC-WETH-tricryptoUSDCPool-unified-data.csv', 17_038_000, 17_838_000, 300);
+// console.log(toto);
+
+module.exports = { getUnifiedDataForInterval, getBlankUnifiedData, getDefaultSlippageMap };

@@ -1,6 +1,6 @@
 const { computeAggregatedVolumeFromPivot } = require('../../utils/aggregator');
 const { DEFAULT_STEP_BLOCK } = require('../../utils/constants');
-const { getUnifiedDataForInterval, getBlankUnifiedData } = require('./data.interface.utils');
+const { getUnifiedDataForInterval, getBlankUnifiedData, getDefaultSlippageMap } = require('./data.interface.utils');
 
 const PIVOTS = ['USDC', 'WETH', 'WBTC'];
 
@@ -105,19 +105,6 @@ function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, pla
         const liquidityData = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
         return liquidityData;
     }
-}
-
-
-/**
- * Instanciate a default slippage map: from 50 bps to 2000, containing only 0 volume
- * @returns {{[slippageBps: number]: number}}
- */
-function getDefaultSlippageMap() {
-    const slippageMap = {};
-    for(let i = 50; i <= 2000; i+=50) {
-        slippageMap[i] = 0;
-    }
-    return slippageMap;
 }
 
 /**
