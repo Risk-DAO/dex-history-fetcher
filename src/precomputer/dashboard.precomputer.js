@@ -13,7 +13,7 @@ const { getLiquidity, getLiquidityAllPlatforms } = require('../data.interface/da
 
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 const TARGET_DATA_POINTS = 200;
-const NB_DAYS = 30;
+const NB_DAYS = 180;
 
 async function PrecomputeDashboardData() {
 // eslint-disable-next-line no-constant-condition
