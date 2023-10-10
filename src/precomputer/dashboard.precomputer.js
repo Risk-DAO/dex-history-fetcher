@@ -12,7 +12,7 @@ const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { getLiquidity, getLiquidityAllPlatforms, getAverageLiquidity, getAverageLiquidityAllPlatforms } = require('../data.interface/data.interface');
 
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-const TARGET_DATA_POINTS = 200;
+const TARGET_DATA_POINTS = 500;
 const NB_DAYS = 180;
 
 async function PrecomputeDashboardData() {
