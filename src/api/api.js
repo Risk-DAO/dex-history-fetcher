@@ -2,13 +2,17 @@ const express = require('express');
 const fs = require('fs');
 const { getAvailableCurve } = require('../curve/curve.utils');
 const { getAvailableUniswapV2 } = require('../uniswap.v2/uniswap.v2.utils');
+const compression = require('compression')
 var cors = require('cors');
 var path = require('path');
 const { roundTo, getDay } = require('../utils/utils');
 const { DATA_DIR } = require('../utils/constants');
 const { getAvailableForDashboard, getDataForPairAndPlatform, checkPlatform, getFetcherResults } = require('./dashboardUtils');
 const app = express();
+
 app.use(cors());
+app.use(compression());
+
 const port = process.env.API_PORT || 3000;
 
 const cache = {};
