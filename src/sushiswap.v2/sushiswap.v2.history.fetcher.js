@@ -50,6 +50,7 @@ async function SushiswapV2HistoryFetcher() {
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
             const currentBlock = await web3Provider.getBlockNumber() - 10;
             const stalePools = [];
+            const poolsData = [];
             for(const pairToFetch of sushiv2Config.pairsToFetch) {
                 console.log(`${fnName()}: Start fetching pair `, pairToFetch);
                 const poolIsStale = await FetchHistoryForPair(web3Provider, pairToFetch, currentBlock);
@@ -57,11 +58,25 @@ async function SushiswapV2HistoryFetcher() {
                 if(poolIsStale) {
                     stalePools.push(`${pairToFetch.base}-${pairToFetch.quote}`);
                 }
+
+                poolsData.push({
+                    tokens: [pairToFetch.base, pairToFetch.quote],
+                    address: pairToFetch.pool,
+                    label: ''
+                });
             }
 
             if(stalePools.length > 0) {
                 console.warn(`Stale pools: ${stalePools.join(',')}`);
             }
+            
+            const fetcherResult = {
+                dataSourceName: 'sushiswapv2',
+                lastBlockFetched: currentBlock,
+                lastRunTimestampMs: Date.now(),
+                poolsFetched: poolsData
+            };
+            fs.writeFileSync(path.join(DATA_DIR, 'sushiswapv2', 'sushiswapv2-fetcher-result.json'), JSON.stringify(fetcherResult, null, 2));
 
             await generateUnifiedFileSushiswapV2(currentBlock);
             console.log(`${fnName()}: ending`);

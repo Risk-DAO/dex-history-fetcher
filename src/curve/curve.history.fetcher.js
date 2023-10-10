@@ -45,15 +45,38 @@ async function CurveHistoryFetcher() {
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 
             const currentBlock = await web3Provider.getBlockNumber() - 10;
+            const poolsData = [];
             for(const fetchConfig of curveConfig.curvePairs) {
                 console.log(`Start fetching history for ${fetchConfig.poolName}`);
                 const lastData = await FetchHistory(fetchConfig, currentBlock, web3Provider);
                 lastResults[`${fetchConfig.poolName}`] = lastData;
+                
+                const poolData = {
+                    tokens: [],
+                    address: fetchConfig.poolAddress,
+                    label: fetchConfig.poolName
+                };
+
+                for(const token of fetchConfig.tokens) {
+                    poolData.tokens.push(token.symbol);
+                }
+
+                poolsData.push(poolData);
             }
 
             const poolSummaryFullname = path.join(DATA_DIR, 'curve', 'curve_pools_summary.json');
             fs.writeFileSync(poolSummaryFullname, JSON.stringify(lastResults, null, 2));
 
+            
+            const fetcherResult = {
+                dataSourceName: 'curve',
+                lastBlockFetched: currentBlock,
+                lastRunTimestampMs: Date.now(),
+                poolsFetched: poolsData
+            };
+
+            fs.writeFileSync(path.join(DATA_DIR, 'curve', 'curve-fetcher-result.json'), JSON.stringify(fetcherResult, null, 2));
+            
             // await generateUnifiedFileCurve(currentBlock);
             await runCurveUnifiedMultiThread();
 

@@ -3,6 +3,17 @@ const path = require('path');
 const { DATA_DIR, PLATFORMS } = require('../utils/constants');
 const dirPath = path.join(DATA_DIR, 'precomputed', 'dashboard');
 
+function getFetcherResults() {
+    const fetcherResults = [];
+    for(const platform of PLATFORMS) {
+        const filename = path.join(DATA_DIR, platform, `${platform}-fetcher-result.json`);
+        if(fs.existsSync(filename)) {
+            fetcherResults.push(JSON.parse(fs.readFileSync(filename)));
+        }
+    }
+
+    return fetcherResults;
+}
 function getAvailableForDashboard(platform) {
     const availableFiles = fs.readdirSync(dirPath).filter(_ => _.endsWith('.json') && _.includes(platform));
 
@@ -32,4 +43,4 @@ function checkPlatform(platform) {
     }
 }
 
-module.exports = { getAvailableForDashboard, getDataForPairAndPlatform, checkPlatform };
+module.exports = { getAvailableForDashboard, getDataForPairAndPlatform, checkPlatform, getFetcherResults };

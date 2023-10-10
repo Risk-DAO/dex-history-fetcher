@@ -59,13 +59,30 @@ async function UniswapV3HistoryFetcher() {
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
             const univ3Factory = new Contract(univ3Config.uniswapFactoryV3Address, univ3Config.uniswapFactoryV3Abi, web3Provider);
             const currentBlock = await web3Provider.getBlockNumber() - 10;
+            const poolsData = [];
 
             for(const pairToFetch of univ3Config.pairsToFetch) {
                 for(const fee of UNISWAPV3_FEES) {
-                    await FetchUniswapV3HistoryForPair(pairToFetch, fee, web3Provider, univ3Factory, currentBlock);
+                    const pairAddress = await FetchUniswapV3HistoryForPair(pairToFetch, fee, web3Provider, univ3Factory, currentBlock);
+                    if(pairAddress) {
+                        poolsData.push({
+                            tokens: [pairToFetch.token0, pairToFetch.token1],
+                            address: pairAddress,
+                            label: `${pairToFetch.token0}-${pairToFetch.token1}-${fee}`
+                        });
+                    }
                 }
             }
 
+            const fetcherResult = {
+                dataSourceName: 'uniswapv3',
+                lastBlockFetched: currentBlock,
+                lastRunTimestampMs: Date.now(),
+                poolsFetched: poolsData
+            };
+
+            fs.writeFileSync(path.join(DATA_DIR, 'uniswapv3', 'uniswapv3-fetcher-result.json'), JSON.stringify(fetcherResult, null, 2));
+            
             // at the end, call the concatener script
             await generateUnifiedFileUniv3(currentBlock);
 
@@ -129,7 +146,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, fee, web3Provider, univ3
         poolAddress = await univ3Factory.getPool(token0.address, token1.address, fee);
         if(poolAddress == ethers.constants.AddressZero) {
             console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${fee}]: pool does not exist`);
-            return;
+            return undefined;
         }
         univ3PairContract = new Contract(poolAddress, univ3Config.uniswapV3PairAbi, web3Provider);
 
@@ -214,6 +231,9 @@ async function FetchUniswapV3HistoryForPair(pairConfig, fee, web3Provider, univ3
     // save that we have fetched blocks without events
     latestData.blockNumber = currentBlock;
     fs.writeFileSync(latestDataFilePath, JSON.stringify(latestData));
+
+    // return true because the pool exists
+    return latestData.poolAddress;
 }
 
 async function fetchInitializeData(web3Provider, poolAddress, univ3PairContract) {

@@ -6,7 +6,7 @@ var cors = require('cors');
 var path = require('path');
 const { roundTo, getDay } = require('../utils/utils');
 const { DATA_DIR } = require('../utils/constants');
-const { getAvailableForDashboard, getDataForPairAndPlatform, checkPlatform } = require('./dashboardUtils');
+const { getAvailableForDashboard, getDataForPairAndPlatform, checkPlatform, getFetcherResults } = require('./dashboardUtils');
 const app = express();
 app.use(cors());
 const port = process.env.API_PORT || 3000;
@@ -260,6 +260,17 @@ app.get('/api/getcurrentaverageclfs', async (req, res, next) => {
         res.json(cache[cacheKey].data);
     } catch (error) {
         next(error);
+    }
+});
+
+
+app.get('/api/dashboard/overview', async (req, res, next) => {
+    try {
+        const fetcherResults = getFetcherResults();
+        res.json(fetcherResults);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+        next();
     }
 });
 
