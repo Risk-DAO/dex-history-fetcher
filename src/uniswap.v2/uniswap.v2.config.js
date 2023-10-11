@@ -42,7 +42,6 @@ const uniswapV2Pairs = [
   "USDC-USDT",
   "USDC-WETH",
   "USDC-ZRX",
-  "USDP-USDC",
   "USDP-WETH",
   "WBTC-DAI",
   "WBTC-USDC",
