@@ -60,20 +60,26 @@ function computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, startBlo
     // console.log(rangeValues);
     let sumOfLn = 0;
 
+    let daysCountWithValue = daysToAvg;
     for (let T = 0; T < daysToAvg; T++) {
         const valuesForRange = rangeValues[T];
+        if(valuesForRange.low == 0) {
+            // empty range, consider 1 less days to avg
+            daysCountWithValue--;
+            continue;
+        }
         const htltRatio = valuesForRange.high / valuesForRange.low;
         const htltRatioSquare = htltRatio * htltRatio;
         const lnHtltRatioSquare = Math.log(htltRatioSquare);
         sumOfLn += lnHtltRatioSquare;
     }
 
-    const prefix = 1 / ((4 * daysToAvg) * Math.log(2));
+    const prefix = 1 / ((4 * daysCountWithValue) * Math.log(2));
 
     const insideSqrt = prefix * sumOfLn;
 
     const volatilityParkinson = Math.sqrt(insideSqrt);
-    console.log(`parkinson volatility for ${fromSymbol}/${toSymbol} for the last ${daysToAvg} days: ${volatilityParkinson}`);
+    console.log(`parkinson volatility for ${fromSymbol}/${toSymbol} for the last ${daysToAvg} days (days with values: ${daysCountWithValue}): ${volatilityParkinson}`);
     return volatilityParkinson;
 }
 
