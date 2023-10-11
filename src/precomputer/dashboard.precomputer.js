@@ -68,7 +68,7 @@ async function PrecomputeDashboardData() {
                         }
 
                         const fullFilename = path.join(dirPath, `${pair.base}-${pair.quote}-${platform}.json`);
-                        fs.writeFileSync(fullFilename, JSON.stringify(platformLiquidity));
+                        fs.writeFileSync(fullFilename, JSON.stringify({updated: Date.now(), liquidity: platformLiquidity}));
                     }
                 }
 
@@ -99,7 +99,7 @@ async function PrecomputeDashboardData() {
                     }
                     
                     const fullFilename = path.join(dirPath, `${pair.base}-${pair.quote}-all.json`);
-                    fs.writeFileSync(fullFilename, JSON.stringify(allLiquidity));
+                    fs.writeFileSync(fullFilename, JSON.stringify({updated: Date.now(), liquidity: allLiquidity}));
                 }
             }
 
