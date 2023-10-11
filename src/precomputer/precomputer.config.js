@@ -56,7 +56,23 @@ const dashboardPairsToCompute = [
     {
         base: 'USDC',
         quote: 'WETH',
-    }
+    },
+    {
+        base: 'HarryPotterObamaSonic10Inu',
+        quote: 'WETH'
+    },
+    {
+        base: 'PEPE',
+        quote: 'WETH'
+    },
+    {
+        base: 'BLUR',
+        quote: 'WETH'
+    },
+    {
+        base: 'SHIB',
+        quote: 'WETH'
+    },
 ];
 
 module.exports = { pairsToCompute, dashboardPairsToCompute };
