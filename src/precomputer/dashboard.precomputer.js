@@ -9,7 +9,8 @@ const RPC_URL = process.env.RPC_URL;
 const fs = require('fs');
 const path = require('path');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
-const { getLiquidity, getLiquidityAllPlatforms, getAverageLiquidity, getAverageLiquidityAllPlatforms } = require('../data.interface/data.interface');
+const { getLiquidity, getLiquidityAllPlatforms, getAverageLiquidity, getAverageLiquidityAllPlatforms, getVolatility, getVolatilityAllPlatforms } = require('../data.interface/data.interface');
+const { formToJSON } = require('axios');
 
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 const TARGET_DATA_POINTS = 500;
@@ -53,7 +54,9 @@ async function PrecomputeDashboardData() {
                             if(endBlock > currentBlock) {
                                 endBlock = currentBlock;
                             }
+
                             const avgLiquidity = getAverageLiquidity(platform, pair.base, pair.quote, block, endBlock, true);
+                            const volatility = getVolatility(platform, pair.base, pair.quote, block, endBlock, 30);
 
                             if(!avgForPlatform[block]) {
                                 avgForPlatform[block] = [];
@@ -63,6 +66,7 @@ async function PrecomputeDashboardData() {
 
                             while(liquidityBlocks[liquidityBlockIndex] <= endBlock) {
                                 platformLiquidity[liquidityBlocks[liquidityBlockIndex]].avgSlippageMap = avgLiquidity.avgSlippageMap;
+                                platformLiquidity[liquidityBlocks[liquidityBlockIndex]].volatility = volatility;
                                 liquidityBlockIndex++;
                             }
                         }
@@ -85,6 +89,7 @@ async function PrecomputeDashboardData() {
                         }
 
                         const avgLiquidity = getAverageLiquidityAllPlatforms(pair.base, pair.quote, block, endBlock, true);
+                        const volatility = getVolatilityAllPlatforms(pair.base, pair.quote, block, endBlock, 30);
 
                         if(!avgForPlatform[block]) {
                             avgForPlatform[block] = [];
@@ -94,6 +99,7 @@ async function PrecomputeDashboardData() {
 
                         while(liquidityBlocks[liquidityBlockIndex] <= endBlock) {
                             allLiquidity[liquidityBlocks[liquidityBlockIndex]].avgSlippageMap = avgLiquidity.avgSlippageMap;
+                            allLiquidity[liquidityBlocks[liquidityBlockIndex]].volatility = volatility;
                             liquidityBlockIndex++;
                         }
                     }

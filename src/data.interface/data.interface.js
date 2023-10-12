@@ -7,8 +7,9 @@
 
 const { getParkinsonVolatilityForInterval, getAveragePriceForInterval } = require('./internal/data.interface.price');
 const { getAverageLiquidityForInterval, getSlippageMapForInterval, getLiquidityForPlatforms, getAverageLiquidityForPlatforms } = require('./internal/data.interface.liquidity');
-const { logFnDurationWithLabel } = require('../utils/utils');
+const { logFnDurationWithLabel, roundTo, fnName } = require('../utils/utils');
 const { PLATFORMS, DEFAULT_STEP_BLOCK } = require('../utils/constants');
+const { computeParkinsonVolatility } = require('../utils/volatility');
 
 
 //    _____  _   _  _______  ______  _____   ______        _____  ______     ______  _    _  _   _   _____  _______  _____  ____   _   _   _____ 
@@ -23,7 +24,7 @@ const { PLATFORMS, DEFAULT_STEP_BLOCK } = require('../utils/constants');
 
 /**
  * Compute the volatility for an interval of blocks
- * @param {string} platforms platforms (univ2, univ3...), default to PLATFORMS
+ * @param {string} platform platform (univ2, univ3...)
  * @param {string} fromSymbol base symbol (WETH, USDC...)
  * @param {string} toSymbol quote symbol (WETH, USDC...)
  * @param {number} fromBlock start block of the query (included)
@@ -36,6 +37,40 @@ function getVolatility(platform, fromSymbol, toSymbol, fromBlock, toBlock, daysT
     const start = Date.now();
     const volatility = getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, daysToAvg);
     logFnDurationWithLabel(start, `p: ${platform}, blocks: ${(toBlock-fromBlock)}, daysToAvg: ${daysToAvg}`);
+    return volatility;
+}
+/**
+ * Compute the volatility for an interval of blocks, for all platforms
+ * @param {string} fromSymbol base symbol (WETH, USDC...)
+ * @param {string} toSymbol quote symbol (WETH, USDC...)
+ * @param {number} fromBlock start block of the query (included)
+ * @param {number} toBlock endblock of the query (included)
+ * @param {number} daysToAvg the number of days the interval spans, used to compute the parkinson's liquidity
+ * @returns {number} parkinson's volatility
+ */
+function getVolatilityAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, daysToAvg) {
+    const start = Date.now();
+    const label = `${fnName()}[${fromSymbol}/${toSymbol}] [${fromBlock}-${toBlock}]`;
+
+    console.log(`${label}: getting data and compute volatility`);
+
+    const data = getLiquidityAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, true, DEFAULT_STEP_BLOCK);
+
+    if(!data || Object.keys(data).length == 0) {
+        console.log(`${label}: Cannot find volatility, returning 0`);
+        return 0;
+    }
+
+    console.log(`${label}: computing parkinson volatility`);
+    // generate the priceAtBlock object
+    const priceAtBlock = {};
+    for(const [blockNumber, unifiedData] of Object.entries(data)) {
+        priceAtBlock[blockNumber] = unifiedData.price;
+    }
+
+    const volatility = computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, fromBlock, toBlock, daysToAvg);
+    console.log(`${label}: volatility found for ALL PLATFORMS: ${roundTo(volatility*100, 2)}%`);
+    logFnDurationWithLabel(start, `blocks: ${(toBlock-fromBlock)}, daysToAvg: ${daysToAvg}`);
     return volatility;
 }
 
@@ -137,4 +172,4 @@ function checkPlatform(platform) {
     }
 }
 
-module.exports = { getVolatility, getAveragePrice, getAverageLiquidity, getLiquidity, getLiquidityAllPlatforms, getAverageLiquidityAllPlatforms};
+module.exports = { getVolatility, getAveragePrice, getAverageLiquidity, getLiquidity, getLiquidityAllPlatforms, getAverageLiquidityAllPlatforms, getVolatilityAllPlatforms };
