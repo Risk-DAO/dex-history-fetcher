@@ -42,6 +42,16 @@ const pairsToFetch = [
         base: "LINK",
         quote: "WETH",
         pool: "0xC40D16476380e4037e6b1A2594cAF6a6cc8Da967"
+    },
+    {
+        base: "CVX",
+        quote: "WETH",
+        pool: "0x05767d9EF41dC40689678fFca0608878fb3dE906"
+    },
+    {
+        base: "FXS",
+        quote: "WETH",
+        pool: "0x61eb53ee427ab4e007d78a9134aacb3101a2dc23"
     }
 ]
 

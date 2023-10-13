@@ -10,16 +10,21 @@ const fs = require('fs');
 const path = require('path');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { getLiquidity, getLiquidityAllPlatforms, getAverageLiquidity, getAverageLiquidityAllPlatforms, getVolatility, getVolatilityAllPlatforms } = require('../data.interface/data.interface');
-const { formToJSON } = require('axios');
 
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 const TARGET_DATA_POINTS = 500;
 const NB_DAYS = 180;
+const NB_DAYS_AVG = 30;
+const NB_AVG_POINTS = Math.round(NB_DAYS / NB_DAYS_AVG); // have an average every 30 days
 
 async function PrecomputeDashboardData() {
 // eslint-disable-next-line no-constant-condition
     while(true) {
         const runStartDate = Date.now();
+        console.log({TARGET_DATA_POINTS});
+        console.log({NB_DAYS});
+        console.log({NB_DAYS_AVG});
+        console.log({NB_AVG_POINTS});
         try {
             await RecordMonitoring({
                 'name': MONITORING_NAME,
@@ -34,6 +39,8 @@ async function PrecomputeDashboardData() {
             const startBlock =  await getBlocknumberForTimestamp(daysAgo);
             const blockStep = Math.round((currentBlock - startBlock) / TARGET_DATA_POINTS);
 
+            const avgStep = Math.round((currentBlock - startBlock) / NB_AVG_POINTS);
+            console.log({avgStep});
             const dirPath = path.join(DATA_DIR, 'precomputed', 'dashboard');
             if(!fs.existsSync(path.join(DATA_DIR, 'precomputed', 'dashboard'))) {
                 fs.mkdirSync(dirPath);
@@ -49,14 +56,14 @@ async function PrecomputeDashboardData() {
                         // compute average liquidity over 200k blocks ~= 30 days
                         const liquidityBlocks = Object.keys(platformLiquidity);
                         let liquidityBlockIndex = 0; 
-                        for(let block = startBlock; block < currentBlock; block += 200_000) {
-                            let endBlock = block + 200_000 - 1;
+                        for(let block = startBlock; block < currentBlock; block += avgStep) {
+                            let endBlock = block + avgStep - 1;
                             if(endBlock > currentBlock) {
                                 endBlock = currentBlock;
                             }
 
                             const avgLiquidity = getAverageLiquidity(platform, pair.base, pair.quote, block, endBlock, true);
-                            const volatility = getVolatility(platform, pair.base, pair.quote, block, endBlock, 30);
+                            const volatility = getVolatility(platform, pair.base, pair.quote, block, endBlock, NB_DAYS_AVG, pair.volatilityPivot);
 
                             if(!avgForPlatform[block]) {
                                 avgForPlatform[block] = [];
@@ -82,14 +89,14 @@ async function PrecomputeDashboardData() {
                     // compute average liquidity over 200k blocks ~= 30 days
                     const liquidityBlocks = Object.keys(allLiquidity);
                     let liquidityBlockIndex = 0; 
-                    for(let block = startBlock; block < currentBlock; block += 200_000) {
-                        let endBlock = block + 200_000 - 1;
+                    for(let block = startBlock; block < currentBlock; block += avgStep) {
+                        let endBlock = block + avgStep - 1;
                         if(endBlock > currentBlock) {
                             endBlock = currentBlock;
                         }
 
                         const avgLiquidity = getAverageLiquidityAllPlatforms(pair.base, pair.quote, block, endBlock, true);
-                        const volatility = getVolatilityAllPlatforms(pair.base, pair.quote, block, endBlock, 30);
+                        const volatility = getVolatilityAllPlatforms(pair.base, pair.quote, block, endBlock, NB_DAYS_AVG, pair.volatilityPivot);
 
                         if(!avgForPlatform[block]) {
                             avgForPlatform[block] = [];

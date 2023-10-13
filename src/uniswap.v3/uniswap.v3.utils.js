@@ -575,13 +575,13 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
     const keys = {};
     keys[baseFile] = Object.keys(dataContents[baseFile]);
     const lastDataBlockBaseFile = keys[baseFile].at(-1);
-    let lastBiggestVolumeFor50BpsSlippage = dataContents[baseFile][lastDataBlockBaseFile][`${fromSymbol}-slippagemap`][50] || 0;
+    let lastBiggestVolumeFor50BpsSlippage = dataContents[baseFile][lastDataBlockBaseFile][`${fromSymbol}-slippagemap`][200] || 0;
     console.log(`last volume for file ${baseFile} is ${lastBiggestVolumeFor50BpsSlippage}`);
     for(let i = 1; i < selectedFiles.length; i++) {
         const selectedFile = selectedFiles[i];
         keys[selectedFile] = Object.keys(dataContents[selectedFile]);
         const lastDataBlock = keys[selectedFile].at(-1);
-        const lastVolumeFor50BpsSlippage = dataContents[selectedFile][lastDataBlock][`${fromSymbol}-slippagemap`][50] || 0;
+        const lastVolumeFor50BpsSlippage = dataContents[selectedFile][lastDataBlock][`${fromSymbol}-slippagemap`][200] || 0;
         console.log(`last volume for file ${selectedFile} is ${lastVolumeFor50BpsSlippage}`);
         if(lastVolumeFor50BpsSlippage > lastBiggestVolumeFor50BpsSlippage) {
             lastBiggestVolumeFor50BpsSlippage = lastVolumeFor50BpsSlippage;

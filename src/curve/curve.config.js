@@ -159,6 +159,42 @@ const curvePairs = [
             }
         ]
     },
+    {
+        poolAddress: '0x9409280dc1e6d33ab7a8c6ec03e5763fb61772b5',
+        poolName: 'LDOETHPool',
+        lpTokenAddress: '0xb79565c01b7ae53618d9b847b9443aaf4f9011e7',
+        lpTokenName: 'LDOETH-f',
+        abi: 'cryptov2',
+        isCryptoV2: true,
+        tokens: [
+            {
+                symbol: 'WETH',
+                address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+            },
+            {
+                symbol: 'LDO',
+                address: '0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32',
+            }
+        ]
+    },
+    {
+        poolAddress: '0xb576491f1e6e5e62f1d8f26062ee822b40b0e0d4',
+        poolName: 'CVXETHPool',
+        lpTokenAddress: '0x3a283d9c08e8b55966afb64c515f5143cf907611',
+        lpTokenName: 'crvCVXETH',
+        abi: 'cryptov2',
+        isCryptoV2: true,
+        tokens: [
+            {
+                symbol: 'WETH',
+                address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+            },
+            {
+                symbol: 'CVX',
+                address: '0x4e3FBD56CD56c3e72c1403e103b45Db9da5B9D2B',
+            }
+        ]
+    },
 ]
 
 module.exports = { curveFactoryAddress, curvePairs, curvePoolAbi, stableSwapAbi, 

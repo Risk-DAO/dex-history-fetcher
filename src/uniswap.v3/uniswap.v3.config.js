@@ -147,6 +147,30 @@ const pairsToFetch = [
     "token0": "SHIB",
     "token1": "WETH"
   },
+  {
+    "token0": "LDO",
+    "token1": "WETH"
+  },
+  {
+    "token0": "WETH",
+    "token1": "RPL"
+  },
+  {
+    "token0": "WETH",
+    "token1": "CRV"
+  },
+  {
+    "token0": "APE",
+    "token1": "WETH"
+  },
+  {
+    "token0": "CVX",
+    "token1": "WETH"
+  },
+  {
+    "token0": "FXS",
+    "token1": "WETH"
+  },
 ]
 
 module.exports = {

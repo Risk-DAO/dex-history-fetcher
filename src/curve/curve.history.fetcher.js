@@ -297,11 +297,11 @@ async function fetchReservesData(fetchConfig, historyFileName, lastBlock, web3Pr
 
     for(const blockNum of allBlocksWithEvents) {
         if(blockNum - SAVE_BLOCK_STEP < lastBlockCurrent) {
-            console.log(`ignoring block ${blockNum}`);
+            console.log(`fetchReservesData[${fetchConfig.poolName}]: ignoring block ${blockNum}`);
             continue;
         }
 
-        console.log(`Working on block ${blockNum}`);
+        console.log(`fetchReservesData[${fetchConfig.poolName}]: Working on block ${blockNum}`);
 
         const promises = [];
         promises.push(poolContract.A({blockTag: blockNum}));
@@ -349,11 +349,11 @@ async function fetchReservesDataCryptoV2(fetchConfig, historyFileName, lastBlock
 
     for(const blockNum of allBlocksWithEvents) {
         if(blockNum - SAVE_BLOCK_STEP < lastBlockCurrent) {
-            console.log(`ignoring block ${blockNum}`);
+            console.log(`fetchReservesData[${fetchConfig.poolName}]: ignoring block ${blockNum}`);
             continue;
         }
 
-        console.log(`Working on block ${blockNum}`);
+        console.log(`fetchReservesData[${fetchConfig.poolName}]: Working on block ${blockNum}`);
 
         const promises = [];
         promises.push(poolContract.A({blockTag: blockNum}));
