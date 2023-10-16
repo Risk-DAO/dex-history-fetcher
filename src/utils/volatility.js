@@ -1,6 +1,7 @@
 
 /**
  * Compute parkinson liquidity from price dictionary
+ * formula: https://portfolioslab.com/tools/parkinson
  * @param {{[blockNumber: number]: number}} priceAtBlock dictionary of prices, for each dictionary key (blocknumber), give the price
  * @param {string} fromSymbol 
  * @param {string} toSymbol 
