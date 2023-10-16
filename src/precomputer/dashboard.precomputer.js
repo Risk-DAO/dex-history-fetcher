@@ -12,7 +12,7 @@ const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { getLiquidity, getLiquidityAllPlatforms, getAverageLiquidity, getAverageLiquidityAllPlatforms, getVolatility, getVolatilityAllPlatforms } = require('../data.interface/data.interface');
 
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-const TARGET_DATA_POINTS = 500;
+const TARGET_DATA_POINTS = 200;
 const NB_DAYS = 180;
 const NB_DAYS_AVG = 30;
 const NB_AVG_POINTS = Math.round(NB_DAYS / NB_DAYS_AVG); // have an average every 30 days
@@ -38,6 +38,7 @@ async function PrecomputeDashboardData() {
             const daysAgo = Math.round(Date.now()/1000) - NB_DAYS * 24 * 60 * 60;
             const startBlock =  await getBlocknumberForTimestamp(daysAgo);
             const blockStep = Math.round((currentBlock - startBlock) / TARGET_DATA_POINTS);
+            console.log({blockStep});
 
             const avgStep = Math.round((currentBlock - startBlock) / NB_AVG_POINTS);
             console.log({avgStep});

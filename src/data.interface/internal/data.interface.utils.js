@@ -149,7 +149,6 @@ function specificUnifiedDataForIntervalForstETHwstETH(fromBlock, toBlock, stepBl
     return unifiedData;
 }
 
-
 function getUnifiedDataForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBlock, stepBlock= DEFAULT_STEP_BLOCK) {
     // for curve, find all files in the precomputed/curve directory that math the fromSymbol-toSymbol.*.csv
     const searchString = `${fromSymbol}-${toSymbol}`;
@@ -174,6 +173,7 @@ function getUnifiedDataForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBl
     const unifiedData = unifiedDataForPools[0];
     
     for(const block of Object.keys(unifiedData)) {
+        let nonZeroPriceCounter = unifiedData[block].price == 0 ? 0 : 1;
         for(let i = 1; i < unifiedDataForPools.length; i++) {
             const unifiedDataToAdd = unifiedDataForPools[i];
     
@@ -181,11 +181,15 @@ function getUnifiedDataForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBl
                 unifiedData[block].slippageMap[slippageBps] += unifiedDataToAdd[block].slippageMap[slippageBps];
             }
 
+            if(unifiedDataToAdd[block].price > 0) {
+                nonZeroPriceCounter++;
+            }
+
             unifiedData[block].price += unifiedDataToAdd[block].price;
         }
         
         // save avg price for each pools
-        unifiedData[block].price =  unifiedData[block].price / unifiedDataForPools.length;
+        unifiedData[block].price = nonZeroPriceCounter == 0 ? 0 : unifiedData[block].price / nonZeroPriceCounter;
     }
 
     return unifiedData;
