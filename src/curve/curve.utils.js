@@ -430,7 +430,7 @@ function get_D(xp, N_COINS, A) {
     }
 
     if (S == 0)
-        return 0;    
+        return 0n;    
 
     let Dprev = 0;
     let D = S;

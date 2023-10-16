@@ -114,6 +114,9 @@ function getCurveContract(fetchConfig, web3Provider) {
         case 'stableswap':
             curveContract = new Contract(fetchConfig.poolAddress, curveConfig.stableSwapAbi, web3Provider);
             break;
+        case 'stableswapfactory':
+            curveContract = new Contract(fetchConfig.poolAddress, curveConfig.stableSwapFactoryAbi, web3Provider);
+            break;
         case 'curvepool':
             curveContract = new Contract(fetchConfig.poolAddress, curveConfig.curvePoolAbi, web3Provider);
             break;
@@ -150,6 +153,18 @@ function getCurveTopics(curveContract, fetchConfig) {
                 curveContract.filters.RemoveLiquidityImbalance().topics[0],
                 curveContract.filters.RampA().topics[0],
                 curveContract.filters.StopRampA().topics[0],
+            ];
+            break;
+        case 'stableswapfactory':
+            topics = [
+                curveContract.filters.Transfer().topics[0],
+                curveContract.filters.Approval().topics[0],
+                curveContract.filters.TokenExchange().topics[0],
+                curveContract.filters.AddLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidity().topics[0],
+                curveContract.filters.RemoveLiquidityOne().topics[0],
+                curveContract.filters.RemoveLiquidityImbalance().topics[0],
+                curveContract.filters.RampA().topics[0],
             ];
             break;
         case 'curvepool':
