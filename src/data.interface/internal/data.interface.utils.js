@@ -39,7 +39,7 @@ function getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, to
 function getUnifiedDataForIntervalByFilename(fullFilename, fromBlock, toBlock, stepBlock= DEFAULT_STEP_BLOCK) {
     // try to find the data
     if(!fs.existsSync(fullFilename)) {
-        console.log(`Could not find file ${fullFilename}`);
+        // console.log(`Could not find file ${fullFilename}`);
         return undefined;
     }
 

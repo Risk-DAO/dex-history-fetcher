@@ -15,7 +15,7 @@ function computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, startBlo
     let lastPriceLow = priceAtBlock[blockNumbers[0]];
     const rangeValues = [];
     const avgBlockPerDay = Math.round((endBlock - startBlock) / daysToAvg);
-    console.log(`avgBlockPerDay: ${avgBlockPerDay}`);
+    // console.log(`avgBlockPerDay: ${avgBlockPerDay}`);
     for (let T = 0; T < daysToAvg; T++) {
         const blockStart = T * avgBlockPerDay + startBlock;
         const blockEnd = Math.min(blockStart + avgBlockPerDay, endBlock);
@@ -79,7 +79,7 @@ function computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, startBlo
     const insideSqrt = prefix * sumOfLn;
 
     const volatilityParkinson = Math.sqrt(insideSqrt);
-    console.log(`parkinson volatility for ${fromSymbol}/${toSymbol} for the last ${daysToAvg} days (days with values: ${daysCountWithValue}): ${volatilityParkinson}`);
+    // console.log(`parkinson volatility for ${fromSymbol}/${toSymbol} for the last ${daysToAvg} days (days with values: ${daysCountWithValue}): ${volatilityParkinson}`);
     return volatilityParkinson;
 }
 

@@ -10,9 +10,11 @@ const fs = require('fs');
 const path = require('path');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { getLiquidity, getLiquidityAllPlatforms, getAverageLiquidity, getAverageLiquidityAllPlatforms, getVolatility, getVolatilityAllPlatforms } = require('../data.interface/data.interface');
+const { computeParkinsonVolatility } = require('../utils/volatility');
+const { getDefaultSlippageMap } = require('../data.interface/internal/data.interface.utils');
 
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-const TARGET_DATA_POINTS = 200;
+const TARGET_DATA_POINTS = 100;
 const NB_DAYS = 180;
 const NB_DAYS_AVG = 30;
 const NB_AVG_POINTS = Math.round(NB_DAYS / NB_DAYS_AVG); // have an average every 30 days
@@ -39,6 +41,10 @@ async function PrecomputeDashboardData() {
             const startBlock =  await getBlocknumberForTimestamp(daysAgo);
             const blockStep = Math.round((currentBlock - startBlock) / TARGET_DATA_POINTS);
             console.log({blockStep});
+            const displayBlocks = [];
+            for(let b = startBlock; b <= currentBlock; b+= blockStep) {
+                displayBlocks.push(b);
+            }
 
             const avgStep = Math.round((currentBlock - startBlock) / NB_AVG_POINTS);
             console.log({avgStep});
@@ -49,71 +55,51 @@ async function PrecomputeDashboardData() {
 
             for(const pair of dashboardPairsToCompute) {
                 console.log(`${fnName()}: precomputing for pair ${pair.base}/${pair.quote}`);
-                const avgForPlatform = {};
                 for(const platform of PLATFORMS) {
                     console.log(`${fnName()}[${pair.base}/${pair.quote}]: precomputing for platform ${platform}`);
-                    const platformLiquidity = getLiquidity(platform, pair.base, pair.quote, startBlock, currentBlock, true, blockStep);
+                    // get the liquidity since startBlock - avgStep because, for the first block (= startBlock), we will compute the avg liquidity and volatility also
+                    const platformLiquidity = getLiquidity(platform, pair.base, pair.quote, startBlock - avgStep, currentBlock, true);
                     if(platformLiquidity) {
-                        // compute average liquidity over 200k blocks ~= 30 days
-                        const liquidityBlocks = Object.keys(platformLiquidity);
-                        let liquidityBlockIndex = 0; 
-                        for(let block = startBlock; block < currentBlock; block += avgStep) {
-                            let endBlock = block + avgStep - 1;
-                            if(endBlock > currentBlock) {
-                                endBlock = currentBlock;
+                        // if volatilitypivot is set, fetch the block prices for segment1 and segment2
+                        // example for APE/USDC, we go through WETH for the price: 
+                        // APE/WETH * WETH/USDC
+                        const pricesAtBlock = {};
+                        if(pair.volatilityPivot) {
+                            const segment1Prices = Object.entries(getLiquidity(platform, pair.base, pair.volatilityPivot, startBlock - avgStep, currentBlock, false)).reduce((d, v) => (d[v[0]] = v[1].price, d), {});
+                            const segment2Prices = Object.entries(getLiquidity(platform, pair.volatilityPivot, pair.quote, startBlock - avgStep, currentBlock, false)).reduce((d, v) => (d[v[0]] = v[1].price, d), {});
+                            for(const block of Object.keys(segment1Prices)) {
+                                pricesAtBlock[block] = segment1Prices[block] * segment2Prices[block];
                             }
-
-                            const avgLiquidity = getAverageLiquidity(platform, pair.base, pair.quote, block, endBlock, true);
-                            const volatility = getVolatility(platform, pair.base, pair.quote, block, endBlock, NB_DAYS_AVG, pair.volatilityPivot);
-
-                            if(!avgForPlatform[block]) {
-                                avgForPlatform[block] = [];
-                            }
-
-                            avgForPlatform[block].push(avgLiquidity.avgSlippageMap);
-
-                            while(liquidityBlocks[liquidityBlockIndex] <= endBlock) {
-                                platformLiquidity[liquidityBlocks[liquidityBlockIndex]].avgSlippageMap = avgLiquidity.avgSlippageMap;
-                                platformLiquidity[liquidityBlocks[liquidityBlockIndex]].volatility = volatility;
-                                liquidityBlockIndex++;
+                        // else, fill the pricesAtBlock from the platform liquidity data
+                        } else {
+                            for(const block of Object.keys(platformLiquidity)) {
+                                pricesAtBlock[block] = platformLiquidity[block].price;
                             }
                         }
 
-                        const fullFilename = path.join(dirPath, `${pair.base}-${pair.quote}-${platform}.json`);
-                        fs.writeFileSync(fullFilename, JSON.stringify({updated: Date.now(), liquidity: platformLiquidity}));
+                        generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock, displayBlocks, avgStep, pair, dirPath, platform);                        
                     }
                 }
 
-                // then also do for all
-                const allLiquidity = getLiquidityAllPlatforms(pair.base, pair.quote, startBlock, currentBlock, true, blockStep);
+                // then also do for all platforms
+                const allLiquidity = getLiquidityAllPlatforms(pair.base, pair.quote, startBlock - avgStep, currentBlock, true);
                 if(allLiquidity) {
-                    // compute average liquidity over 200k blocks ~= 30 days
-                    const liquidityBlocks = Object.keys(allLiquidity);
-                    let liquidityBlockIndex = 0; 
-                    for(let block = startBlock; block < currentBlock; block += avgStep) {
-                        let endBlock = block + avgStep - 1;
-                        if(endBlock > currentBlock) {
-                            endBlock = currentBlock;
+                    // if volatilitypivot is set, fetch the block prices for segment1 and segment2
+                    const pricesAtBlock = {};
+                    if(pair.volatilityPivot) {
+                        const segment1Prices = Object.entries(getLiquidityAllPlatforms(pair.base, pair.volatilityPivot, startBlock - avgStep, currentBlock, false)).reduce((d, v) => (d[v[0]] = v[1].price, d), {});
+                        const segment2Prices = Object.entries(getLiquidityAllPlatforms(pair.volatilityPivot, pair.quote, startBlock - avgStep, currentBlock, false)).reduce((d, v) => (d[v[0]] = v[1].price, d), {});
+                        for(const block of Object.keys(segment1Prices)) {
+                            pricesAtBlock[block] = segment1Prices[block] * segment2Prices[block];
                         }
-
-                        const avgLiquidity = getAverageLiquidityAllPlatforms(pair.base, pair.quote, block, endBlock, true);
-                        const volatility = getVolatilityAllPlatforms(pair.base, pair.quote, block, endBlock, NB_DAYS_AVG, pair.volatilityPivot);
-
-                        if(!avgForPlatform[block]) {
-                            avgForPlatform[block] = [];
-                        }
-
-                        avgForPlatform[block].push(avgLiquidity.avgSlippageMap);
-
-                        while(liquidityBlocks[liquidityBlockIndex] <= endBlock) {
-                            allLiquidity[liquidityBlocks[liquidityBlockIndex]].avgSlippageMap = avgLiquidity.avgSlippageMap;
-                            allLiquidity[liquidityBlocks[liquidityBlockIndex]].volatility = volatility;
-                            liquidityBlockIndex++;
+                        // else, fill the pricesAtBlock from the platform liquidity data
+                    } else {
+                        for(const block of Object.keys(allLiquidity)) {
+                            pricesAtBlock[block] = allLiquidity[block].price;
                         }
                     }
-                    
-                    const fullFilename = path.join(dirPath, `${pair.base}-${pair.quote}-all.json`);
-                    fs.writeFileSync(fullFilename, JSON.stringify({updated: Date.now(), liquidity: allLiquidity}));
+
+                    generateDashboardDataFromLiquidityData(allLiquidity, pricesAtBlock, displayBlocks, avgStep, pair, dirPath, 'all');                        
                 }
             }
 
@@ -149,4 +135,44 @@ async function PrecomputeDashboardData() {
 
 }
 
+function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock, displayBlocks, avgStep, pair, dirPath, platform) {
+    const platformOutputResult = {};
+    // compute average liquidity over ~= 30 days for all the display blocks
+    const liquidityBlocks = Object.keys(platformLiquidity).map(_ => Number(_));
+
+    for (const block of displayBlocks) {
+        platformOutputResult[block] = {};
+        const nearestBlockBefore = liquidityBlocks.filter(_ => _ <= block).at(-1);
+        if (!nearestBlockBefore) {
+            throw new Error(`Could not find blocks <= ${block} in liquidity data`);
+        }
+
+        const nearestBlockData = platformLiquidity[nearestBlockBefore];
+        platformOutputResult[block].price = pricesAtBlock[nearestBlockBefore];
+        platformOutputResult[block].slippageMap = nearestBlockData.slippageMap;
+
+        const startBlockForAvg = block - avgStep;
+        // average for all blocks in interval [startBlockForAvg -> block]
+        const blocksToAverage = liquidityBlocks.filter(_ => _ <= block && _ >= startBlockForAvg);
+        const avgSlippage = getDefaultSlippageMap();
+        for (const blockToAvg of blocksToAverage) {
+            for (const slippageBps of Object.keys(avgSlippage)) {
+                avgSlippage[slippageBps] += platformLiquidity[blockToAvg].slippageMap[slippageBps];
+            }
+        }
+
+        for (const slippageBps of Object.keys(avgSlippage)) {
+            avgSlippage[slippageBps] = avgSlippage[slippageBps] / blocksToAverage.length;
+        }
+
+        const volatility = computeParkinsonVolatility(pricesAtBlock, pair.base, pair.quote, startBlockForAvg, block, NB_DAYS_AVG);
+        platformOutputResult[block].volatility = volatility;
+        platformOutputResult[block].avgSlippageMap = avgSlippage;
+    }
+
+    const fullFilename = path.join(dirPath, `${pair.base}-${pair.quote}-${platform}.json`);
+    fs.writeFileSync(fullFilename, JSON.stringify({ updated: Date.now(), liquidity: platformOutputResult }));
+}
+
 PrecomputeDashboardData();
+

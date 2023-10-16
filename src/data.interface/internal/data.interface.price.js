@@ -44,7 +44,7 @@ function getAveragePriceForInterval(fromSymbol, toSymbol, fromBlock, toBlock, pl
 function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, daysToAvg) {
     const label = `${fnName()}[${fromSymbol}/${toSymbol}] [${fromBlock}-${toBlock}] [${platform}]`;
 
-    console.log(`${label}: getting data and compute volatility`);
+    // console.log(`${label}: getting data and compute volatility`);
 
     const data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, DEFAULT_STEP_BLOCK);
 
@@ -53,7 +53,7 @@ function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBl
         return 0;
     }
 
-    console.log(`${label}: computing parkinson volatility`);
+    // console.log(`${label}: computing parkinson volatility`);
     // generate the priceAtBlock object
     const priceAtBlock = {};
     for(const [blockNumber, unifiedData] of Object.entries(data)) {
@@ -80,7 +80,7 @@ function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBl
  */
 function getParkinsonVolatilityForIntervalViaPivot(fromSymbol, toSymbol, fromBlock, toBlock, platform, daysToAvg, pivotSymbol) {
     const label = `${fnName()}[${fromSymbol}->${pivotSymbol}->${toSymbol}] [${fromBlock}-${toBlock}] [${platform}]`;
-    console.log(`${label}: getting data and compute volatility`);
+    // console.log(`${label}: getting data and compute volatility`);
 
     const dataSegment1 = getUnifiedDataForInterval(platform, fromSymbol, pivotSymbol, fromBlock, toBlock, DEFAULT_STEP_BLOCK);
 
@@ -124,7 +124,7 @@ function getParkinsonVolatilityForIntervalViaPivot(fromSymbol, toSymbol, fromBlo
 function getParkinsonVolatilityForIntervalAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, daysToAvg) {
     const label = `${fnName()}[${fromSymbol}/${toSymbol}] [${fromBlock}-${toBlock}]`;
 
-    console.log(`${label}: getting data and compute volatility`);
+    // console.log(`${label}: getting data and compute volatility`);
 
     const data = getLiquidityForPlatforms(PLATFORMS, fromSymbol, toSymbol, fromBlock, toBlock, true, DEFAULT_STEP_BLOCK);
 
@@ -147,7 +147,7 @@ function getParkinsonVolatilityForIntervalAllPlatforms(fromSymbol, toSymbol, fro
 
 function getParkinsonVolatilityForIntervalAllPlatformsViaPivot(fromSymbol, toSymbol, fromBlock, toBlock, daysToAvg, pivotSymbol) {
     const label = `${fnName()}[${fromSymbol}->${pivotSymbol}->${toSymbol}] [${fromBlock}-${toBlock}]`;
-    console.log(`${label}: getting data and compute volatility`);
+    // console.log(`${label}: getting data and compute volatility`);
 
     const dataSegment1 = getLiquidityForPlatforms(PLATFORMS, fromSymbol, pivotSymbol, fromBlock, toBlock, true, DEFAULT_STEP_BLOCK);
 

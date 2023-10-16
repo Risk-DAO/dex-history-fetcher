@@ -46,6 +46,10 @@ function getLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, to
         }
     }
 
+    if(liquidities.length == 0) {
+        return undefined;
+    }
+
     const aggregData = {};
     for(const blockNumber of Object.keys(liquidities[0])) {
         aggregData[blockNumber] = {

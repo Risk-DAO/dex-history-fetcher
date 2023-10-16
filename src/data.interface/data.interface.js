@@ -41,7 +41,7 @@ function getVolatility(platform, fromSymbol, toSymbol, fromBlock, toBlock, daysT
         volatility = getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, daysToAvg);
     }
 
-    logFnDurationWithLabel(start, `p: ${platform}, blocks: ${(toBlock-fromBlock)}, daysToAvg: ${daysToAvg}`);
+    logFnDurationWithLabel(start, `p: ${platform}, [${fromSymbol}/${toSymbol}], blocks: ${(toBlock-fromBlock)}, daysToAvg: ${daysToAvg}`);
     return volatility;
 }
 
@@ -63,7 +63,7 @@ function getVolatilityAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, day
         volatility = getParkinsonVolatilityForIntervalAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, daysToAvg);
     }
     
-    logFnDurationWithLabel(start, `blocks: ${(toBlock-fromBlock)}, daysToAvg: ${daysToAvg}`);
+    logFnDurationWithLabel(start, `blocks: ${(toBlock-fromBlock)}, [${fromSymbol}/${toSymbol}], daysToAvg: ${daysToAvg}`);
     return volatility;
 }
 
@@ -80,7 +80,7 @@ function getAveragePrice(platform, fromSymbol, toSymbol, fromBlock, toBlock) {
     checkPlatform(platform);
     const start = Date.now();
     const averagePrice = getAveragePriceForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform);
-    logFnDurationWithLabel(start, `p: ${platform}, blocks: ${(toBlock-fromBlock)}`);
+    logFnDurationWithLabel(start, `p: ${platform}, [${fromSymbol}/${toSymbol}], blocks: ${(toBlock-fromBlock)}`);
     return averagePrice;
 }
 
@@ -97,7 +97,7 @@ function getAverageLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock,
     checkPlatform(platform);
     const start = Date.now();
     const avgLiquidity = getAverageLiquidityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps);
-    logFnDurationWithLabel(start, `p: ${platform}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}`);
+    logFnDurationWithLabel(start, `p: ${platform}, [${fromSymbol}/${toSymbol}], blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}`);
     return avgLiquidity;
 }
 
@@ -116,7 +116,7 @@ function getLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock, withJu
     checkPlatform(platform);
     const start = Date.now();
     const liquidity = getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps, stepBlock);
-    logFnDurationWithLabel(start, `p: ${platform}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}, step: ${stepBlock}`);
+    logFnDurationWithLabel(start, `p: ${platform}, [${fromSymbol}/${toSymbol}], blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}, step: ${stepBlock}`);
     return liquidity;
 }
 
@@ -133,7 +133,7 @@ function getLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock, withJu
 function getLiquidityAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true, stepBlock = DEFAULT_STEP_BLOCK) {
     const start = Date.now();
     const liquidity = getLiquidityForPlatforms(PLATFORMS, fromSymbol, toSymbol, fromBlock, toBlock, withJumps, stepBlock);
-    logFnDurationWithLabel(start, `p: ${PLATFORMS}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}, step: ${stepBlock}`);
+    logFnDurationWithLabel(start, `p: ${PLATFORMS}, [${fromSymbol}/${toSymbol}], blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}, step: ${stepBlock}`);
     return liquidity;
 }
 
@@ -142,7 +142,7 @@ function getLiquidityAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, with
 function getAverageLiquidityAllPlatforms(fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true) {
     const start = Date.now();
     const avgLiquidity = getAverageLiquidityForPlatforms(PLATFORMS, fromSymbol, toSymbol, fromBlock, toBlock, withJumps);
-    logFnDurationWithLabel(start, `p: ${PLATFORMS}, blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}`);
+    logFnDurationWithLabel(start, `p: ${PLATFORMS}, [${fromSymbol}/${toSymbol}], blocks: ${(toBlock-fromBlock)}, jumps: ${withJumps}`);
     return avgLiquidity;
 }
 
