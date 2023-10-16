@@ -9,12 +9,12 @@ const RPC_URL = process.env.RPC_URL;
 const fs = require('fs');
 const path = require('path');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
-const { getLiquidity, getLiquidityAllPlatforms, getAverageLiquidity, getAverageLiquidityAllPlatforms, getVolatility, getVolatilityAllPlatforms } = require('../data.interface/data.interface');
+const { getLiquidity, getLiquidityAllPlatforms } = require('../data.interface/data.interface');
 const { computeParkinsonVolatility } = require('../utils/volatility');
 const { getDefaultSlippageMap } = require('../data.interface/internal/data.interface.utils');
 
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-const TARGET_DATA_POINTS = 500;
+const TARGET_DATA_POINTS = 200;
 const NB_DAYS = 180;
 const NB_DAYS_AVG = 30;
 const NB_AVG_POINTS = Math.round(NB_DAYS / NB_DAYS_AVG); // have an average every 30 days
