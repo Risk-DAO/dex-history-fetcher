@@ -12,6 +12,7 @@ const { DATA_DIR } = require('../utils/constants');
 const { providers } = require('@0xsequence/multicall');
 const { getConfTokenBySymbol, normalize } = require('../utils/token.utils');
 const { runCurveUnifiedMultiThread } = require('../../scripts/runCurveUnifiedMultiThread');
+const { generateUnifiedFileCurve } = require('./curve.unified.generator');
 
 dotenv.config();
 const SAVE_BLOCK_STEP = 300;
@@ -22,6 +23,9 @@ const runnerName = 'Curve Fetcher';
  * the main entrypoint of the script, will run the fetch against all pool in the config
  */
 async function CurveHistoryFetcher() {
+    // run the process with 'multi' param to run the unified file generator in multithread
+    const multiThread = process.argv[2] == 'multi' ? true : false;
+    console.log({multiThread});
     // eslint-disable-next-line no-constant-condition
     while(true) {
         const start = Date.now();
@@ -33,12 +37,8 @@ async function CurveHistoryFetcher() {
                 'runEvery': 10 * 60
             });
 
-            if(!fs.existsSync(DATA_DIR)) {
-                fs.mkdirSync(DATA_DIR);
-            }
-
             if(!fs.existsSync(path.join(DATA_DIR, 'curve'))) {
-                fs.mkdirSync(path.join(DATA_DIR, 'curve'));
+                fs.mkdirSync(path.join(DATA_DIR, 'curve'), {recursive: true});
             }
 
             const lastResults = {};
@@ -77,8 +77,12 @@ async function CurveHistoryFetcher() {
 
             fs.writeFileSync(path.join(DATA_DIR, 'curve', 'curve-fetcher-result.json'), JSON.stringify(fetcherResult, null, 2));
             
-            // await generateUnifiedFileCurve(currentBlock);
-            await runCurveUnifiedMultiThread();
+            if(multiThread) {
+                await runCurveUnifiedMultiThread();
+
+            } else {
+                await generateUnifiedFileCurve(currentBlock);
+            }
 
             const runEndDate = Math.round(Date.now()/1000);
             await RecordMonitoring({
