@@ -11,6 +11,7 @@ const compoundV3Pools = {
             comp: {
                 index: 0,
                 symbol: "COMP",
+                volatilityPivot: "WETH",
                 address: "0xc00e94Cb662C3520282E6f5717214004A7f26888",
                 coinGeckoID: "compound-governance-token"
             },
@@ -29,12 +30,14 @@ const compoundV3Pools = {
             uni: {
                 index: 3,
                 symbol: "UNI",
+                volatilityPivot: "WETH",
                 address: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
                 coinGeckoID: "uniswap"
             },
             link: {
                 index: 4,
                 symbol: "LINK",
+                volatilityPivot: "WETH",
                 address: "0x514910771AF9Ca656af840dff83E8264EcF986CA",
                 coinGeckoID: "chainlink"
             }
