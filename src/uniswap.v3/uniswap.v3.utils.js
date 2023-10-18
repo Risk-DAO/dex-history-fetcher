@@ -202,7 +202,7 @@ function GetAmountXDumpable(currentTick, tickSpacing, liquidities, tokenDecimals
             totalY += yLiquidityInTick;
             // console.log(`[${workingTick}]: liquidity at tick: ${yLiquidityInTick} y. Sold ${xAmountToSell} x to buy it all. New total sold: ${totalX}`);
             if(relevantTicks[workingTick]) {
-                result[relevantTicks[workingTick]] = totalX;
+                result[relevantTicks[workingTick]] = {base: totalX, quote: totalY};
                 // result[relevantTicks[workingTick]] = {
                 //     totalYAvailable: totalY,
                 //     totalXToSell: totalX,
@@ -285,7 +285,7 @@ function GetAmountYDumpable(currentTick, tickSpacing, liquidities, tokenDecimals
             // console.log(`[${workingTick}]: liquidity at tick: ${xLiquidityInTick} x. Sold ${yAmountToSell} y to buy it all. New total sold: ${totalY}`);
 
             if(relevantTicks[workingTick]) {
-                result[relevantTicks[workingTick]] = totalY;
+                result[relevantTicks[workingTick]] = {base: totalY, quote: totalX};
                 // result[relevantTicks[workingTick]] = {
                 //     totalXAvailable: totalX,
                 //     totalYToSell: totalY,
@@ -575,16 +575,16 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
     const keys = {};
     keys[baseFile] = Object.keys(dataContents[baseFile]);
     const lastDataBlockBaseFile = keys[baseFile].at(-1);
-    let lastBiggestVolumeFor50BpsSlippage = dataContents[baseFile][lastDataBlockBaseFile][`${fromSymbol}-slippagemap`][200] || 0;
-    console.log(`last volume for file ${baseFile} is ${lastBiggestVolumeFor50BpsSlippage}`);
+    let lastBiggestVolumeFor200BpsSlippage = dataContents[baseFile][lastDataBlockBaseFile][`${fromSymbol}-slippagemap`][200].base || 0;
+    console.log(`last volume for file ${baseFile} is ${lastBiggestVolumeFor200BpsSlippage}`);
     for(let i = 1; i < selectedFiles.length; i++) {
         const selectedFile = selectedFiles[i];
         keys[selectedFile] = Object.keys(dataContents[selectedFile]);
         const lastDataBlock = keys[selectedFile].at(-1);
-        const lastVolumeFor50BpsSlippage = dataContents[selectedFile][lastDataBlock][`${fromSymbol}-slippagemap`][200] || 0;
-        console.log(`last volume for file ${selectedFile} is ${lastVolumeFor50BpsSlippage}`);
-        if(lastVolumeFor50BpsSlippage > lastBiggestVolumeFor50BpsSlippage) {
-            lastBiggestVolumeFor50BpsSlippage = lastVolumeFor50BpsSlippage;
+        const lastVolumeFor200BpsSlippage = dataContents[selectedFile][lastDataBlock][`${fromSymbol}-slippagemap`][200].base || 0;
+        console.log(`last volume for file ${selectedFile} is ${lastVolumeFor200BpsSlippage}`);
+        if(lastVolumeFor200BpsSlippage > lastBiggestVolumeFor200BpsSlippage) {
+            lastBiggestVolumeFor200BpsSlippage = lastVolumeFor200BpsSlippage;
             baseFile = selectedFile;
         }
     }
@@ -619,13 +619,17 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
                 // find the closest value that is < slippageBps
                 const sortedAvailableSlippageBps = Object.keys(baseFileSlippageMap).filter(_ => _ < slippageBps).sort((a,b) => b - a);
                 if(sortedAvailableSlippageBps.length == 0) {
-                    slippageValue = 0;
+                    slippageValue = {
+                        base: 0,
+                        quote: 0
+                    };
                 } else {
                     slippageValue = baseFileSlippageMap[sortedAvailableSlippageBps[0]];
                 } 
             }
-            if(slippageValue < 0) {
-                slippageValue = 0;
+            if(slippageValue.base < 0) {
+                slippageValue.base = 0;
+                slippageValue.quote = 0;
             }
             baseSlippageMap[slippageBps] = slippageValue;
             slippageBps += 50;
@@ -673,6 +677,12 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
     return results;
 }
 
+/**
+ * 
+ * @param {*} selectedFiles 
+ * @param {*} dataDir 
+ * @param {*} minBlock 
+ */
 function getUniV3DataContents(selectedFiles, dataDir, minBlock=0) {
     const dataContents = {};
     for (let i = 0; i < selectedFiles.length; i++) {
