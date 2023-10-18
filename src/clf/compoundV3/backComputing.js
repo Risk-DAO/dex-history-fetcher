@@ -28,7 +28,6 @@ async function backComputing() {
         if (!fs.existsSync(`${DATA_DIR}/clf/${currDay}`)) {
             console.log(`fetching ${startDate} data`);
             const cmd = `node ./src/clf/compoundV3/compoundV3ComputerLauncher.js ${startDate.getTime()}`;
-            // const cmd = `node ./scripts/runCurveUnifiedForPair.js ${currentBlock} ${base} ${quote} ${pool} > ${base}_${quote}_${pool}.log`;
             console.log(`starting cmd: ${cmd}`);
             const childProcess = exec(cmd);
             childProcess.stderr.on('data', function(data) {
