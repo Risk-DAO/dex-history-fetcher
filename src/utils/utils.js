@@ -130,12 +130,14 @@ async function retry(fn, params, retries = 0, maxRetries = 10) {
         }
         return res;
     } catch (e) {
-        console.error(e);
         retries++;
         if (retries >= maxRetries) {
+            console.error(e);
             throw e;
+        } else {
+            console.error(e);
+            console.error(`retry #${retries}`);
         }
-        console.log(`retry #${retries}`);
         await sleep(5000 * retries);
         return retry(fn, params, retries, maxRetries);
     }
