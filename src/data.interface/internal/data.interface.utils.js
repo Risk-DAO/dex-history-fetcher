@@ -73,7 +73,7 @@ function getUnifiedDataForIntervalByFilename(fullFilename, fromBlock, toBlock, s
             };
 
             currentIndexToFill++;
-            blockToFill = blocksToFill[currentIndexToFill]
+            blockToFill = blocksToFill[currentIndexToFill];
         }
 
         if(nextBlockNumber > blockToFill) {
@@ -230,6 +230,12 @@ function getBlankUnifiedData(startBlock, endBlock, stepBlock= DEFAULT_STEP_BLOCK
     return unifiedData;
 }
 
+/**
+ * Read a unified data line and transform it into an object but only keep the slippageMap of the base asset
+ * For retrocompatibility
+ * @param {string} line 
+ * @returns {{blockNumber: number, price: number, slippageMap: {[slippageBps: string]: number}}}
+ */
 function extractDataFromUnifiedLine(line) {
     const splt = line.split(',');
     const blockNumber = splt[0];
@@ -240,11 +246,31 @@ function extractDataFromUnifiedLine(line) {
     return {
         blockNumber: Number(blockNumber),
         price: Number(price),
-        slippageMap: slippageMap
+        // return only the base data from the slippage map so that all the data interface works the same as before
+        slippageMap: Object.entries(slippageMap).reduce((d, v) => (d[v[0]] = v[1].base, d), {}),
     };
 }
 
-// const toto = getUnifiedDataForIntervalByFilename('./data/precomputed/curve/USDC-WETH-tricryptoUSDCPool-unified-data.csv', 17_038_000, 17_838_000, 300);
+/**
+ * Read a unified data line and transform it into an object
+ * @param {string} line 
+ * @returns {{blockNumber: number, price: number, slippageMap: {[slippageBps: string]: number}}}
+ */
+function extractDataFromUnifiedLineWithQuote(line) {
+    const splt = line.split(',');
+    const blockNumber = splt[0];
+    const price = splt[1];
+    const slippageMapJson = line.replace(`${blockNumber},${price},`, '');
+    const slippageMap = JSON.parse(slippageMapJson);
+
+    return {
+        blockNumber: Number(blockNumber),
+        price: Number(price),
+        slippageMap: slippageMap,
+    };
+}
+
+// const toto = getUnifiedDataForIntervalByFilename('./data/precomputed/uniswapv3/USDC-WETH-unified-data.csv', 17_038_000, 17_838_000, 300);
 // console.log(toto);
 
 module.exports = { getUnifiedDataForInterval, getBlankUnifiedData, getDefaultSlippageMap };
