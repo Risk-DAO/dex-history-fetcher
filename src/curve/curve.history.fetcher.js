@@ -79,7 +79,6 @@ async function CurveHistoryFetcher() {
             
             if(multiThread) {
                 await runCurveUnifiedMultiThread();
-
             } else {
                 await generateUnifiedFileCurve(currentBlock);
             }
