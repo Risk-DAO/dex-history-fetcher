@@ -12,11 +12,15 @@ async function testNewBaseQuote() {
     const point = d[18000000];
     // console.log(point);
     console.log('base price', point.price);
-    console.log('base amount 20%:', point.slippageMap[2000].base);
-    console.log('quote amount 20%:', point.slippageMap[2000].quote);
-    const avgPrice = point.slippageMap[2000].quote / point.slippageMap[2000].base;
-    console.log('avg price 20%:', avgPrice);
-    console.log('avg slippage:', roundTo(100*(1 - (avgPrice/point.price)), 2) , '%');
+    if(point.slippageMap[2000].base) {
+        console.log('base amount 20%:', point.slippageMap[2000].base);
+        console.log('quote amount 20%:', point.slippageMap[2000].quote);
+        const avgPrice = point.slippageMap[2000].quote / point.slippageMap[2000].base;
+        console.log('avg price 20%:', avgPrice);
+        console.log('avg slippage:', roundTo(100*(1 - (avgPrice/point.price)), 2) , '%');
+    } else {
+        console.log(point.slippageMap[2000]);
+    }
 }
 
 testNewBaseQuote();
