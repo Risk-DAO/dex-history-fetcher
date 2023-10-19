@@ -577,13 +577,13 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
     const keys = {};
     keys[baseFile] = Object.keys(dataContents[baseFile]);
     const lastDataBlockBaseFile = keys[baseFile].at(-1);
-    let lastBiggestVolumeFor200BpsSlippage = dataContents[baseFile][lastDataBlockBaseFile][`${fromSymbol}-slippagemap`][200].base || 0;
+    let lastBiggestVolumeFor200BpsSlippage = dataContents[baseFile][lastDataBlockBaseFile][`${fromSymbol}-slippagemap`][200]?.base || dataContents[baseFile][lastDataBlockBaseFile][`${fromSymbol}-slippagemap`][250]?.base || 0;
     console.log(`last volume for file ${baseFile} is ${lastBiggestVolumeFor200BpsSlippage}`);
     for(let i = 1; i < selectedFiles.length; i++) {
         const selectedFile = selectedFiles[i];
         keys[selectedFile] = Object.keys(dataContents[selectedFile]);
         const lastDataBlock = keys[selectedFile].at(-1);
-        const lastVolumeFor200BpsSlippage = dataContents[selectedFile][lastDataBlock][`${fromSymbol}-slippagemap`][200]?.base || 0;
+        const lastVolumeFor200BpsSlippage = dataContents[selectedFile][lastDataBlock][`${fromSymbol}-slippagemap`][200]?.base || dataContents[selectedFile][lastDataBlock][`${fromSymbol}-slippagemap`][250]?.base || 0;
         console.log(`last volume for file ${selectedFile} is ${lastVolumeFor200BpsSlippage}`);
         if(lastVolumeFor200BpsSlippage > lastBiggestVolumeFor200BpsSlippage) {
             lastBiggestVolumeFor200BpsSlippage = lastVolumeFor200BpsSlippage;
