@@ -159,7 +159,14 @@ function computeAverageData(liquidityDataForInterval, fromBlock, toBlock) {
 function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock=DEFAULT_STEP_BLOCK) {
     const liquidityData = {};
     let data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
-    const pivotData = getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
+    
+    const pivots = [];
+    pivots.push(...PIVOTS);
+    if(fromSymbol == 'stETH') {
+        pivots.push('wstETH');
+    }
+
+    const pivotData = getPivotUnifiedData(pivots, platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock);
     if(!data) {
         // if no data and no pivot data, can return undefined: we don't have any liquidity even
         // from jump routes
@@ -174,12 +181,6 @@ function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toB
         else {
             data = getBlankUnifiedData(fromBlock, toBlock, stepBlock);
         }
-    }
-    
-    const pivots = [];
-    pivots.push(...PIVOTS);
-    if(fromSymbol == 'stETH') {
-        pivots.push('wstETH');
     }
 
     for(const [blockNumber, platformData] of Object.entries(data)) {
@@ -217,14 +218,16 @@ function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toB
 
 
             for(const slippageBps of Object.keys(aggregatedSlippageMap)) {
-                const aggregVolume = computeAggregatedVolumeFromPivot(segment1DataForBlock.slippageMap, segment1DataForBlock.price, segment2DataForBlock.slippageMap, slippageBps);
-                aggregatedSlippageMap[slippageBps] += aggregVolume;
+                const aggregVolume = computeAggregatedVolumeFromPivot(segment1DataForBlock.slippageMap, segment2DataForBlock.slippageMap, slippageBps);
+                aggregatedSlippageMap[slippageBps].base += aggregVolume.base;
+                aggregatedSlippageMap[slippageBps].quote += aggregVolume.quote;
             }
         }
 
         for(const slippageBps of Object.keys(aggregatedSlippageMap)) {
             const slippageToAdd = aggregatedSlippageMap[slippageBps];
-            liquidityData[blockNumber].slippageMap[slippageBps] += slippageToAdd;
+            liquidityData[blockNumber].slippageMap[slippageBps].base += slippageToAdd.base;
+            liquidityData[blockNumber].slippageMap[slippageBps].quote += slippageToAdd.quote;
         }
     }
 
@@ -251,14 +254,8 @@ function getPivotDataForBlock(pivotData, base, quote, blockNumber) {
     return pivotData[base][quote][blockNumber];
 }
 
-function getPivotUnifiedData(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock=DEFAULT_STEP_BLOCK) {
+function getPivotUnifiedData(pivots, platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock=DEFAULT_STEP_BLOCK) {
     const pivotData = {};
-
-    const pivots = [];
-    pivots.push(...PIVOTS);
-    if(fromSymbol == 'stETH') {
-        pivots.push('wstETH');
-    }
 
     for (const pivot of pivots) {
         if (fromSymbol == pivot) {

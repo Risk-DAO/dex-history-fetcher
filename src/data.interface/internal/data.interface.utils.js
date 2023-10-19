@@ -77,7 +77,7 @@ function getUnifiedDataForIntervalByFilename(fullFilename, fromBlock, toBlock, s
         }
 
         if(nextBlockNumber > blockToFill) {
-            const data = extractDataFromUnifiedLine(fileContent[i]);
+            const data = extractDataFromUnifiedLineWithQuote(fileContent[i]);
 
             while(nextBlockNumber > blockToFill) {
                 unifiedData[blockToFill] = {
@@ -142,7 +142,8 @@ function specificUnifiedDataForIntervalForstETHwstETH(fromBlock, toBlock, stepBl
 
     for(const data of Object.values(unifiedData)) {
         for(const slippageBps of Object.keys(data.slippageMap)) {
-            data.slippageMap[slippageBps] = 1e12;
+            data.slippageMap[slippageBps].base = 1e12;
+            data.slippageMap[slippageBps].quote = 1e12;
         }
     }
 
@@ -172,24 +173,27 @@ function getUnifiedDataForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBl
 
     const unifiedData = unifiedDataForPools[0];
     
-    for(const block of Object.keys(unifiedData)) {
-        let nonZeroPriceCounter = unifiedData[block].price == 0 ? 0 : 1;
-        for(let i = 1; i < unifiedDataForPools.length; i++) {
-            const unifiedDataToAdd = unifiedDataForPools[i];
-    
-            for(const slippageBps of Object.keys(unifiedData[block].slippageMap)) {
-                unifiedData[block].slippageMap[slippageBps] += unifiedDataToAdd[block].slippageMap[slippageBps];
-            }
-
-            if(unifiedDataToAdd[block].price > 0) {
-                nonZeroPriceCounter++;
-            }
-
-            unifiedData[block].price += unifiedDataToAdd[block].price;
-        }
+    if(unifiedDataForPools.length > 1) {
+        for(const block of Object.keys(unifiedData)) {
+            let nonZeroPriceCounter = unifiedData[block].price == 0 ? 0 : 1;
+            for(let i = 1; i < unifiedDataForPools.length; i++) {
+                const unifiedDataToAdd = unifiedDataForPools[i];
         
-        // save avg price for each pools
-        unifiedData[block].price = nonZeroPriceCounter == 0 ? 0 : unifiedData[block].price / nonZeroPriceCounter;
+                for(const slippageBps of Object.keys(unifiedData[block].slippageMap)) {
+                    unifiedData[block].slippageMap[slippageBps].base += unifiedDataToAdd[block].slippageMap[slippageBps].base;
+                    unifiedData[block].slippageMap[slippageBps].quote += unifiedDataToAdd[block].slippageMap[slippageBps].quote;
+                }
+
+                if(unifiedDataToAdd[block].price > 0) {
+                    nonZeroPriceCounter++;
+                }
+
+                unifiedData[block].price += unifiedDataToAdd[block].price;
+            }
+            
+            // save avg price for each pools
+            unifiedData[block].price = nonZeroPriceCounter == 0 ? 0 : unifiedData[block].price / nonZeroPriceCounter;
+        }
     }
 
     return unifiedData;
@@ -197,12 +201,15 @@ function getUnifiedDataForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBl
 
 /**
  * Instanciate a default slippage map: from 50 bps to 2000, containing only 0 volume
- * @returns {{[slippageBps: number]: number}}
+ * @returns {{[slippageBps: number]: {base: number, quote: number}}}
  */
 function getDefaultSlippageMap() {
     const slippageMap = {};
     for(let i = 50; i <= 2000; i+=50) {
-        slippageMap[i] = 0;
+        slippageMap[i] = {
+            base: 0,
+            quote: 0
+        };
     }
     return slippageMap;
 }
