@@ -43,9 +43,9 @@ function getNextLowerTick(currentTick, tickSpacing) {
 }
 
 function getSlippages(currentTick, tickSpacing, sqrtPriceX96, liquidity, token0Decimals, token1Decimals) {
-    const token0Slippage = GetAmountXDumpable(currentTick, tickSpacing, liquidity, token0Decimals, sqrtPriceX96);
+    const token0Slippage = GetAmountXDumpable(currentTick, tickSpacing, liquidity, token0Decimals, token1Decimals, sqrtPriceX96);
     // const token0Slippage = get_dumpable_amount_x(currentTick, tickSpacing, sqrtPriceX96, liquidity, token0Decimals); // GetXAmountForSlippages(currentTick, tickSpacing, liquidity, token0Decimals, sqrtPriceX96);
-    const token1Slippage = GetAmountYDumpable(currentTick, tickSpacing, liquidity, token1Decimals, sqrtPriceX96);
+    const token1Slippage = GetAmountYDumpable(currentTick, tickSpacing, liquidity, token0Decimals, token1Decimals, sqrtPriceX96);
     // const token1Slippage = get_dumpable_amount_y(currentTick, tickSpacing, sqrtPriceX96, liquidity, token1Decimals); // GetYAmountForSlippages(currentTick, tickSpacing, liquidity, token1Decimals, sqrtPriceX96);
 
     return {token0Slippage, token1Slippage};
@@ -143,12 +143,13 @@ function GetXAmountForSlippages(currentTick, tickSpacing, liquidities, tokenDeci
  * @param {string} sqrtPriceX96 
  * @returns {[slippageBps: number]: number}
  */
-function GetAmountXDumpable(currentTick, tickSpacing, liquidities, tokenDecimals, sqrtPriceX96) {
+function GetAmountXDumpable(currentTick, tickSpacing, liquidities, token0Decimals, token1Decimals, sqrtPriceX96) {
     const result = {};
     const _96bits = new BigNumber(2).pow(new BigNumber(96));
     const sqrtP = new BigNumber(sqrtPriceX96).div(_96bits);
     const P = sqrtP.times(sqrtP).toNumber();
-    const decimalFactor = new BigNumber(10).pow(tokenDecimals);
+    const decimal0Factor = new BigNumber(10).pow(token0Decimals);
+    const decimal1Factor = new BigNumber(10).pow(token1Decimals);
 
     let workingTick = getNextLowerTick(currentTick, tickSpacing);
     let totalY = 0;
@@ -178,7 +179,7 @@ function GetAmountXDumpable(currentTick, tickSpacing, liquidities, tokenDecimals
             const upperBoundTick = lowerBoundTick + tickSpacing;
             const pb = getTickPrice(upperBoundTick);
             const sqrtPb = Math.sqrt(pb);
-            let yLiquidityInTick = 0;
+            let yLiquidityInTick = new BigNumber(0);
 
             // Assuming P ≤ pa, the position is fully in X, so y = 0
             if(P <= pa) {
@@ -187,19 +188,19 @@ function GetAmountXDumpable(currentTick, tickSpacing, liquidities, tokenDecimals
             // Assuming P ≥ pb, the position is fully in Y , so x = 0:
             else if(P >= pb) {
                 const y = L.times(sqrtPb - sqrtPa);
-                yLiquidityInTick = y.div(decimalFactor).toNumber();
+                yLiquidityInTick = y;
             } 
             // If the current price is in the range: pa < P < pb. mix of x and y
             else {
                 const y = L.times(sqrtP - sqrtPa);
-                yLiquidityInTick = y.div(decimalFactor).toNumber();
+                yLiquidityInTick = y;
             }
 
             // here we have the amount of Y liquidity in the tick
             // we can compute how much X we have to sell to buy this liquidity
-            const xAmountToSell = yLiquidityInTick / pa;
+            const xAmountToSell = yLiquidityInTick.div(decimal0Factor).toNumber() / pa;
             totalX += xAmountToSell;
-            totalY += yLiquidityInTick;
+            totalY += yLiquidityInTick.div(decimal1Factor).toNumber();
             // console.log(`[${workingTick}]: liquidity at tick: ${yLiquidityInTick} y. Sold ${xAmountToSell} x to buy it all. New total sold: ${totalX}`);
             if(relevantTicks[workingTick]) {
                 result[relevantTicks[workingTick]] = {base: totalX, quote: totalY};
@@ -224,12 +225,13 @@ function GetAmountXDumpable(currentTick, tickSpacing, liquidities, tokenDecimals
  * @param {string} sqrtPriceX96 
  * @returns {[slippageBps: number]: number}
  */
-function GetAmountYDumpable(currentTick, tickSpacing, liquidities, tokenDecimals, sqrtPriceX96) {
+function GetAmountYDumpable(currentTick, tickSpacing, liquidities,  token0Decimals, token1Decimals, sqrtPriceX96) {
     const result = {};
     const _96bits = new BigNumber(2).pow(new BigNumber(96));
     const sqrtP = new BigNumber(sqrtPriceX96).div(_96bits); 
     const P = sqrtP.times(sqrtP).toNumber();
-    const decimalFactor = new BigNumber(10).pow(tokenDecimals);
+    const decimal0Factor = new BigNumber(10).pow(token0Decimals);
+    const decimal1Factor = new BigNumber(10).pow(token1Decimals);
 
     let workingTick = getNextLowerTick(currentTick, tickSpacing);
     let totalX = 0;
@@ -260,12 +262,12 @@ function GetAmountYDumpable(currentTick, tickSpacing, liquidities, tokenDecimals
             const upperBoundTick = lowerBoundTick + tickSpacing;
             const pb = getTickPrice(upperBoundTick);
             const sqrtPb = Math.sqrt(pb);
-            let xLiquidityInTick = 0;
+            let xLiquidityInTick = new BigNumber(0);
 
             // Assuming P ≤ pa, the position is fully in X, so y = 0
             if(P <= pa) {
                 const x = L.times(sqrtPb - sqrtPa).div(sqrtPa * sqrtPb);
-                xLiquidityInTick = x.div(decimalFactor).toNumber();
+                xLiquidityInTick = x;
             } 
             // Assuming P ≥ pb, the position is fully in Y , so x = 0:
             else if(P >= pb) {
@@ -274,13 +276,13 @@ function GetAmountYDumpable(currentTick, tickSpacing, liquidities, tokenDecimals
             // If the current price is in the range: pa < P < pb. mix of x and y
             else {
                 const x = L.times(sqrtPb - sqrtP).div(sqrtP * sqrtPb);
-                xLiquidityInTick = x.div(decimalFactor).toNumber();
+                xLiquidityInTick = x;
             }
 
             // here we have the amount of X liquidity in the tick
             // we can compute how much Y we have to sell to buy this liquidity
-            const yAmountToSell = xLiquidityInTick * pa;
-            totalX += xLiquidityInTick;
+            const yAmountToSell = xLiquidityInTick.div(decimal1Factor).toNumber() * pa;
+            totalX += xLiquidityInTick.div(decimal0Factor).toNumber();
             totalY += yAmountToSell;
             // console.log(`[${workingTick}]: liquidity at tick: ${xLiquidityInTick} x. Sold ${yAmountToSell} y to buy it all. New total sold: ${totalY}`);
 
@@ -581,7 +583,7 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
         const selectedFile = selectedFiles[i];
         keys[selectedFile] = Object.keys(dataContents[selectedFile]);
         const lastDataBlock = keys[selectedFile].at(-1);
-        const lastVolumeFor200BpsSlippage = dataContents[selectedFile][lastDataBlock][`${fromSymbol}-slippagemap`][200].base || 0;
+        const lastVolumeFor200BpsSlippage = dataContents[selectedFile][lastDataBlock][`${fromSymbol}-slippagemap`][200]?.base || 0;
         console.log(`last volume for file ${selectedFile} is ${lastVolumeFor200BpsSlippage}`);
         if(lastVolumeFor200BpsSlippage > lastBiggestVolumeFor200BpsSlippage) {
             lastBiggestVolumeFor200BpsSlippage = lastVolumeFor200BpsSlippage;
@@ -654,21 +656,29 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
 
             let slippageBps = 50;
             while (slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100) {
-                let volumeToAdd = slippageMap[slippageBps];
-                if(!volumeToAdd) {
+                let slippageObj = slippageMap[slippageBps];
+                if(!slippageObj) {
                     // find the closest value that is < slippageBps
                     const sortedAvailableSlippageBps = Object.keys(slippageMap).filter(_ => _ < slippageBps).sort((a,b) => b - a);
                     if(sortedAvailableSlippageBps.length == 0) {
-                        volumeToAdd = 0;
+                        slippageObj = {
+                            base: 0,
+                            quote: 0
+                        };
                     } else {
-                        volumeToAdd = slippageMap[sortedAvailableSlippageBps[0]];
+                        slippageObj = slippageMap[sortedAvailableSlippageBps[0]];
                     }
                 } 
 
-                if(volumeToAdd < 0) {
-                    volumeToAdd = 0;
+                if(slippageObj.base < 0) {
+                    slippageObj.base = 0;
                 }
-                results[targetBlock].slippageMap[slippageBps] += volumeToAdd;
+                if(slippageObj.quote < 0) {
+                    slippageObj.quote = 0;
+                }
+
+                results[targetBlock].slippageMap[slippageBps].base += slippageObj.base;
+                results[targetBlock].slippageMap[slippageBps].quote += slippageObj.quote;
                 slippageBps += 50;
             }
         }
