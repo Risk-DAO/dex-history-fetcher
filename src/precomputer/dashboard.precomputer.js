@@ -150,38 +150,31 @@ function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock
         const nearestBlockData = platformLiquidity[nearestBlockBefore];
         platformOutputResult[block].price = pricesAtBlock[nearestBlockBefore];
         platformOutputResult[block].slippageMap = nearestBlockData.slippageMap;
+        
+        // compute avg slippage based on trade price (amount of base sold vs amount of quote obtained)
+        for (const slippageBps of Object.keys(platformOutputResult[block].slippageMap)) {
+            if(platformOutputResult[block].price > 0) {
+                const tradePrice = platformOutputResult[block].slippageMap[slippageBps].quote / platformOutputResult[block].slippageMap[slippageBps].base;
+                platformOutputResult[block].slippageMap[slippageBps].avgSlippage =  1 - (tradePrice / platformOutputResult[block].price);
+            } else {
+                platformOutputResult[block].slippageMap[slippageBps].avgSlippage = 0;
+            }
+        }
 
         const startBlockForAvg = block - avgStep;
         // average for all blocks in interval [startBlockForAvg -> block]
         const blocksToAverage = liquidityBlocks.filter(_ => _ <= block && _ >= startBlockForAvg);
         const avgSlippage = getDefaultSlippageMap();
-        let avgPrice = 0;
-        let nonZeroPriceCount = 0;
         for (const blockToAvg of blocksToAverage) {
             for (const slippageBps of Object.keys(avgSlippage)) {
                 avgSlippage[slippageBps].base += platformLiquidity[blockToAvg].slippageMap[slippageBps].base;
                 avgSlippage[slippageBps].quote += platformLiquidity[blockToAvg].slippageMap[slippageBps].quote;
             }
-
-            if(platformLiquidity[blockToAvg].price > 0) {
-                avgPrice += platformLiquidity[blockToAvg].price;
-                nonZeroPriceCount++;
-            }
-        }
-
-        if(nonZeroPriceCount == 0) {
-            avgPrice = 0;
-        } else {
-            avgPrice = avgPrice / nonZeroPriceCount;
         }
 
         for (const slippageBps of Object.keys(avgSlippage)) {
             avgSlippage[slippageBps].base = avgSlippage[slippageBps].base / blocksToAverage.length;
             avgSlippage[slippageBps].quote = avgSlippage[slippageBps].quote / blocksToAverage.length;
-            if(avgPrice > 0) {
-                const tradePrice = avgSlippage[slippageBps].quote / avgSlippage[slippageBps].base;
-                avgSlippage[slippageBps].avgSlippage = 1 - (tradePrice / avgPrice);
-            }
         }
 
         const volatility = computeParkinsonVolatility(pricesAtBlock, pair.base, pair.quote, startBlockForAvg, block, NB_DAYS_AVG);
