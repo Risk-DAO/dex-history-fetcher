@@ -230,7 +230,7 @@ async function computeMarketCLF(assetParameters, collateral , baseAsset, fromBlo
                     volatilityToUse = parameters[spans[i+1]].volatility;
                 }
 
-                results[volatilitySpan][liquiditySpan] = findCLFFromParameters(volatilityToUse, parameters[liquiditySpan].liquidity, assetParameters.liquidationBonusBPS / 10000, assetParameters.LTV, assetParameters.supplyCap);
+                results[volatilitySpan][liquiditySpan] = findRiskLevelFromParameters(volatilityToUse, parameters[liquiditySpan].liquidity, assetParameters.liquidationBonusBPS / 10000, assetParameters.LTV, assetParameters.supplyCap);
             }
         }
     }
@@ -271,6 +271,22 @@ function findCLFFromParameters(volatility, liquidity, liquidationBonus, ltv, bor
     const lnLtvPlusBeta = Math.log(ltvPlusBeta);
     const c = -1 * lnLtvPlusBeta * sqrtBySigma;
     return c;
+}
+
+function findRiskLevelFromParameters(volatility, liquidity, liquidationBonus, ltv, borrowCap) {
+    const sigma = volatility;
+    const d = borrowCap;
+    const beta = liquidationBonus;
+    const l = liquidity;
+    ltv = Number(ltv) / 100;
+
+    const sigmaTimesSqrtOfD = sigma * Math.sqrt(d);
+    const ltvPlusBeta = ltv + beta;
+    const lnOneDividedByLtvPlusBeta = Math.log(ltvPlusBeta);
+    const lnOneDividedByLtvPlusBetaTimesSqrtOfL = lnOneDividedByLtvPlusBeta * Math.sqrt(l);
+    const r = sigmaTimesSqrtOfD / lnOneDividedByLtvPlusBetaTimesSqrtOfL;
+
+    return r;
 }
 
 /**
