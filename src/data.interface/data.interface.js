@@ -111,6 +111,7 @@ function getAverageLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock,
  * @param {string[] | undefined} platforms platforms (univ2, univ3...), default to PLATFORMS
  * @param {bool} withJumps default true. pivot route jump: from UNI to MKR, we will add "additional routes" using UNI->USDC->MKR + UNI->WETH->MKR + UNI->WBTC+MKR
  * @param {number} stepBlock default to 50. The amount of block between each data point
+ * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: {base: number, quote: number}}}}}
  */
 function getLiquidity(platform, fromSymbol, toSymbol, fromBlock, toBlock, withJumps = true, stepBlock = DEFAULT_STEP_BLOCK) {
     checkPlatform(platform);

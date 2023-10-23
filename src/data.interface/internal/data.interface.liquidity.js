@@ -66,7 +66,8 @@ function getLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBlock, to
             }
 
             for(const slippageBps of Object.keys(aggregData[blockNumber].slippageMap)) {
-                aggregData[blockNumber].slippageMap[slippageBps] += liquidityForBlock.slippageMap[slippageBps];
+                aggregData[blockNumber].slippageMap[slippageBps].base += liquidityForBlock.slippageMap[slippageBps].base;
+                aggregData[blockNumber].slippageMap[slippageBps].quote += liquidityForBlock.slippageMap[slippageBps].quote;
             }
         }
 
@@ -93,7 +94,6 @@ function getAverageLiquidityForPlatforms(platforms, fromSymbol, toSymbol, fromBl
  * @param {string} platform
  * @param {bool} withJumps 
  * @param {stepBlock} stepBlock 
- * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
  */
 function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, withJumps, stepBlock=DEFAULT_STEP_BLOCK) {
     if(platform == 'curve') {
