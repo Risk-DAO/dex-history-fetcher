@@ -116,7 +116,7 @@ function getSlippageMapForInterval(fromSymbol, toSymbol, fromBlock, toBlock, pla
  * @param {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}} liquidityDataForInterval 
  * @param {number} fromBlock 
  * @param {number} toBlock 
- * @returns {{avgPrice: number, avgSlippageMap: {[slippageBps: number]: number}}
+ * @returns {{avgPrice: number, avgSlippageMap: {[slippageBps: number]: {base: number, quote: number}}}
  */
 function computeAverageData(liquidityDataForInterval, fromBlock, toBlock) {
     let dataToUse = liquidityDataForInterval[fromBlock];
@@ -154,7 +154,7 @@ function computeAverageData(liquidityDataForInterval, fromBlock, toBlock) {
  * @param {number} fromBlock 
  * @param {number} toBlock 
  * @param {string}  
- * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
+ * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: {base: number, quote: number}}}}}
  */
 function getSlippageMapForIntervalWithJumps(fromSymbol, toSymbol, fromBlock, toBlock, platform, stepBlock=DEFAULT_STEP_BLOCK) {
     const liquidityData = {};

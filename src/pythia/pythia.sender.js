@@ -178,7 +178,7 @@ function generateLiquidityData(span, baseSymbol, startBlock, endBlock) {
                 const slippageBps = slippagePct * 100;
                 const sourceId = smartLTVSourceMap[platform];
                 const key = encodeLiquidityKey(tokenConf.address, usdcConf.address, sourceId, slippagePct, span);
-                const avgVolumeForSlippage = liquidityAverage.avgSlippageMap[slippageBps];
+                const avgVolumeForSlippage = liquidityAverage.avgSlippageMap[slippageBps].base;
                 const avgVolumeForSlippageValidDecimals = new BigNumber(avgVolumeForSlippage).times(BigNumber(10).pow(tokenConf.decimals)).toFixed(0);
                 results.push({
                     asset: tokenConf.address,
@@ -198,9 +198,10 @@ function generateLiquidityData(span, baseSymbol, startBlock, endBlock) {
     for(const slippageMapForPlatform of Object.values(avgValuesForPlatform)) {
 
         for(const slippageBps of Object.keys(sumSlippageMap)) {
-            sumSlippageMap[slippageBps] += slippageMapForPlatform[slippageBps];
+            sumSlippageMap[slippageBps] += slippageMapForPlatform[slippageBps].base;
         }
     }
+    
 
     for(const slippagePct of TARGET_SLIPPAGES) {
         const slippageBps = slippagePct * 100;

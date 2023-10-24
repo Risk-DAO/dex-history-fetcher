@@ -10,7 +10,7 @@ const { DATA_DIR, DEFAULT_STEP_BLOCK } = require('../../utils/constants');
  * @param {string} toSymbol
  * @param {number} fromBlock 
  * @param {number} toBlock 
- * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}}
+ * @returns {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: {base: number, quote: number}}}}}
  */
 function getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, stepBlock= DEFAULT_STEP_BLOCK) {
     if(fromSymbol == 'stETH' && toSymbol == 'wstETH') {
