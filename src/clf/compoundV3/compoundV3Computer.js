@@ -10,7 +10,7 @@ const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
 const { RecordMonitoring } = require('../../utils/monitoring');
 const { DATA_DIR, PLATFORMS } = require('../../utils/constants');
-const { getVolatility, getAverageLiquidity, getLiquidityAllPlatforms } = require('../../data.interface/data.interface');
+const { getVolatility, getAverageLiquidity } = require('../../data.interface/data.interface');
 const spans = [7, 30, 180];
 
 /**
@@ -201,7 +201,7 @@ async function computeMarketCLF(assetParameters, collateral , baseAsset, fromBlo
             avgVolatilityAcrossPlatforms += plaformVolatility;
 
             const platformLiquidity = getAverageLiquidity(platform, from, baseAsset, startBlock, endBlock);
-            sumLiquidityAcrossPlatforms += platformLiquidity.avgSlippageMap[assetParameters.liquidationBonusBPS];
+            sumLiquidityAcrossPlatforms += platformLiquidity.avgSlippageMap[assetParameters.liquidationBonusBPS].base;
         }
 
         avgVolatilityAcrossPlatforms = cptVolatility == 0 ? 0 : avgVolatilityAcrossPlatforms / cptVolatility;
