@@ -34,7 +34,7 @@ app.get('/api/getprecomputeddata', async (req, res, next) => {
         const cacheKey = `concat_${platform}_${span}`;
         if (!cache[cacheKey]
             || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
-            const filePath = path.join(DATA_DIR, 'precomputed', platform, fileName);
+            const filePath = path.join(DATA_DIR, 'precomputed', 'riskoracle', platform, fileName);
             console.log(`try reading file ${filePath}`);
             if (!fs.existsSync(filePath)) {
                 console.log(`${filePath} does not exists`);
@@ -75,7 +75,7 @@ app.get('/api/getaveragedata', async (req, res, next) => {
         const cacheKey = `averages_${platform}_${span}`;
         if (!cache[cacheKey]
             || cache[cacheKey].cachedDate < Date.now() - cacheDuration) {
-            const filePath = path.join(DATA_DIR, 'precomputed', platform, fileName);
+            const filePath = path.join(DATA_DIR, 'precomputed', 'riskoracle', platform, fileName);
             console.log(`try reading file ${filePath}`);
             if (!fs.existsSync(filePath)) {
                 console.log(`${filePath} does not exists`);

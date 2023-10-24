@@ -50,7 +50,7 @@ async function PrecomputeDashboardData() {
             console.log({avgStep});
             const dirPath = path.join(DATA_DIR, 'precomputed', 'dashboard');
             if(!fs.existsSync(path.join(DATA_DIR, 'precomputed', 'dashboard'))) {
-                fs.mkdirSync(dirPath);
+                fs.mkdirSync(dirPath, {recursive: true});
             }
 
             for(const pair of dashboardPairsToCompute) {
@@ -129,8 +129,6 @@ async function PrecomputeDashboardData() {
             console.log('sleeping 10 minutes');
             await sleep(10 * 60 * 1000);
         }
-
-        
     }
 
 }
