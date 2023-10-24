@@ -118,6 +118,33 @@ const dashboardPairsToCompute = [
         quote: 'USDC',
         volatilityPivot: 'WETH',
     },
+    {
+        base: 'USDC',
+        quote: 'COMP',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'USDC',
+        quote: 'WBTC',
+    },
+    {
+        base: 'USDC',
+        quote: 'UNI',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'USDC',
+        quote: 'LINK',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'WETH',
+        quote: 'cbETH',
+    },
+    {
+        base: 'WETH',
+        quote: 'wstETH',
+    },
 ];
 
 module.exports = { pairsToCompute, dashboardPairsToCompute };
