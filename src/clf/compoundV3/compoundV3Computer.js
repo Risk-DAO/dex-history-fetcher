@@ -282,7 +282,7 @@ function findRiskLevelFromParameters(volatility, liquidity, liquidationBonus, lt
 
     const sigmaTimesSqrtOfD = sigma * Math.sqrt(d);
     const ltvPlusBeta = ltv + beta;
-    const lnOneDividedByLtvPlusBeta = Math.log(ltvPlusBeta);
+    const lnOneDividedByLtvPlusBeta = Math.log(1/ltvPlusBeta);
     const lnOneDividedByLtvPlusBetaTimesSqrtOfL = lnOneDividedByLtvPlusBeta * Math.sqrt(l);
     const r = sigmaTimesSqrtOfD / lnOneDividedByLtvPlusBetaTimesSqrtOfL;
 
