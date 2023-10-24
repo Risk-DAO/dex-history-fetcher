@@ -10,6 +10,7 @@ async function backComputing() {
     console.log({maxThreads});
 
     const startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+    console.log(startDate.getTime());
 
     const endDate = new Date();
     const allChilds = [];
