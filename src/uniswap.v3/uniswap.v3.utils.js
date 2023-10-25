@@ -601,12 +601,13 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
 
             const nearestBlockNumbers = keys[filename].filter(_ => Number(_) <= targetBlock);
             if(nearestBlockNumbers.length == 0) {
-                continue; // no available data in source?
+                continue; // no available data in source
             }
 
             const nearestBlockNumber = nearestBlockNumbers.at(-1);
             // console.log(`[${targetBlock}] ${filename} nearest block value is ${nearestBlockNumber}. Distance: ${targetBlock-nearestBlockNumber}`);
             const slippageMap = dataContents[filename][nearestBlockNumber][`${fromSymbol}-slippagemap`];
+            
             // if the slippage map is empty, ignore completely
             if(Object.keys(slippageMap).length == 0) {
                 continue;
