@@ -10,18 +10,25 @@ async function backComputing() {
     console.log({maxThreads});
 
     const startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+    startDate.setHours(12, 0, 0, 0);
+    console.log(startDate.getTime());
 
     const endDate = new Date();
     const allChilds = [];
 
     while (startDate <= endDate) {
-        // wait for less than 10 scripts running
+        // wait for less than 'maxThreads' scripts running
         let nbThreadRunning = allChilds.filter(_ => _.exitCode == null).length;
         console.log(`subProcess running: ${nbThreadRunning}/${maxThreads}`);
+        let waitCpt = 0;
         while(nbThreadRunning >= maxThreads) {
-            await sleep(30000);
-            console.log(`Waiting for a subProcess to end. | Running: ${nbThreadRunning}/${maxThreads}`);
+            if(waitCpt % 12 == 0) {
+                // long only every 12 wait, which is 60 seconds
+                console.log(`Waiting for a subProcess to end. | Running: ${nbThreadRunning}/${maxThreads}`);
+            }
+            await sleep(5000);
             nbThreadRunning = allChilds.filter(_ => _.exitCode == null).length;
+            waitCpt++;
         }
 
         const currDay = getDay(startDate);
@@ -35,7 +42,7 @@ async function backComputing() {
             });
 
             allChilds.push(childProcess);
-            await sleep(15000);
+            await sleep(20000);
         }
         if (fs.existsSync(`${DATA_DIR}/clf/${currDay}`)) {
             console.log('data already fetched');

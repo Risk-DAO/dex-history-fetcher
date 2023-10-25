@@ -31,6 +31,8 @@ async function compoundV3Computer(fetchEveryMinutes, startDate=Date.now()) {
             throw new Error('Could not find RPC_URL env variable');
         }
 
+        console.log(new Date(startDate));
+
 
         if (!fs.existsSync(path.join(DATA_DIR, 'clf'))) {
             fs.mkdirSync(path.join(DATA_DIR, 'clf'));
@@ -62,7 +64,7 @@ async function compoundV3Computer(fetchEveryMinutes, startDate=Date.now()) {
             results[pool.baseAsset]['weightedCLF'] = averagePoolData.weightedCLF;
             results[pool.baseAsset]['totalCollateral'] = averagePoolData.totalCollateral;
             averagePerAsset[pool.baseAsset] = averagePoolData;
-            console.log(`results[${pool.baseAsset}]`, results[pool.baseAsset]);
+            // console.log(`results[${pool.baseAsset}]`, results[pool.baseAsset]);
         }
 
         let protocolWeightedCLF = undefined;
@@ -123,10 +125,11 @@ async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provi
     for (const collateral of collaterals) {
         try {
             console.log(`Computing CLFs for ${collateral.symbol}`);
-            const assetParameters = await getAssetParameters(cometContract, collateral);
+            const assetParameters = await getAssetParameters(cometContract, collateral, endBlock);
             console.log('assetParameters', assetParameters);
             resultsData.collateralsData[collateral.symbol] = {};
-            resultsData.collateralsData[collateral.symbol].collateral = await getCollateralAmount(collateral, cometContract, startDateUnixSec);
+            resultsData.collateralsData[collateral.symbol].collateral = await getCollateralAmount(collateral, cometContract, startDateUnixSec, endBlock);
+            console.log('collateral data', resultsData.collateralsData[collateral.symbol].collateral);
             resultsData.collateralsData[collateral.symbol].clfs = await computeMarketCLF(assetParameters, collateral, baseAsset, fromBlocks, endBlock);
             // resultsData.collateralsData[collateral.symbol].liquidityHistory = await computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAsset, assetParameters);
             console.log('resultsData', resultsData);
@@ -145,10 +148,9 @@ async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provi
  * @param {ethers.Contract} cometContract 
  * @returns 
  */
-async function getCollateralAmount(collateral, cometContract, priceDateUnixSeconds) {
-    const [totalSupplyAsset] = await cometContract.callStatic.totalsCollateral(collateral.address);
+async function getCollateralAmount(collateral, cometContract, priceDateUnixSeconds, currentBlock) {
+    const [totalSupplyAsset] = await cometContract.totalsCollateral(collateral.address, {blockTag: currentBlock});
     const decimals = getConfTokenBySymbol(collateral.symbol).decimals;
-    const results = {};
     let price = undefined;
     const apiUrl = `https://coins.llama.fi/prices/historical/${priceDateUnixSeconds}/ethereum:${collateral.address}?searchWidth=12h`;
 
@@ -160,8 +162,12 @@ async function getCollateralAmount(collateral, cometContract, priceDateUnixSecon
         console.error('error fetching price', error);
         price = 0;
     }
-    results['inKindSupply'] = normalize(totalSupplyAsset, decimals);
-    results['usdSupply'] = results['inKindSupply'] * price;
+
+    const totalSupplyNormalized = normalize(totalSupplyAsset, decimals);
+    const results = {
+        inKindSupply: totalSupplyNormalized,
+        usdSupply: totalSupplyNormalized * price
+    };
     return results;
 }
 
@@ -242,10 +248,11 @@ async function computeMarketCLF(assetParameters, collateral , baseAsset, fromBlo
  * 
  * @param {ethers.Contract} cometContract 
  * @param {{index: number, symbol: string, address: string, coinGeckoID: string}} collateral 
+ * @param {number} currentBlock 
  * @returns 
  */
-async function getAssetParameters(cometContract, collateral) {
-    const results = await cometContract.getAssetInfo(collateral.index);
+async function getAssetParameters(cometContract, collateral, currentBlock) {
+    const results = await cometContract.getAssetInfo(collateral.index, {blockTag: currentBlock});
     const liquidationBonusBPS = Math.round((1 - normalize(results.liquidationFactor, 18)) * 10000);
     const LTV = normalize(results.liquidateCollateralFactor, 18) * 100;
     const tokenConf = getConfTokenBySymbol(collateral.symbol);

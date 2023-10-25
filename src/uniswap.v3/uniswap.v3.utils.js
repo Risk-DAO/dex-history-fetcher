@@ -1,8 +1,9 @@
 
 const BigNumber = require('bignumber.js');
-const { fnName, roundTo } = require('../utils/utils');
+const { fnName } = require('../utils/utils');
 const fs = require('fs');
 const path = require('path');
+const { getDefaultSlippageMap } = require('../data.interface/internal/data.interface.utils');
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
 const CONSTANT_TARGET_SLIPPAGE = 20;
@@ -58,82 +59,6 @@ function getSlippages(currentTick, tickSpacing, sqrtPriceX96, liquidity, token0D
 // }
 
 // test();
-
-
-
-/**
- * Returns the amount available for X (token0) in a slippageMap from 50 bps to 2000 bps slippage
- * When possible, the notation are the same as https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
- * @param {number} currentTick 
- * @param {number} tickSpacing 
- * @param {{[tick: number]: number}} liquidities 
- * @param {number} tokenDecimals 
- * @param {string} sqrtPriceX96 
- * @returns {[slippageBps: number]: number}
- */
-function GetXAmountForSlippages(currentTick, tickSpacing, liquidities, tokenDecimals, sqrtPriceX96) {
-    const result = {};
-    const _96bits = new BigNumber(2).pow(new BigNumber(96));
-    const sqrtP = new BigNumber(sqrtPriceX96).div(_96bits); 
-    const P = sqrtP.times(sqrtP).toNumber();
-    const decimalFactor = new BigNumber(10).pow(tokenDecimals);
-
-    let workingTick = getNextLowerTick(currentTick, tickSpacing);
-    let totalX = 0;
-
-    // store tick [tickNumber]: slippageBps
-    const relevantTicks = {};
-    for(let slippageBps = 50; slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100; slippageBps += 50) {
-        const targetPrice = P * (10000 + slippageBps)/10000;
-        const targetPriceTick = getTickForPrice(targetPrice);
-        const spacingTargetPriceTick = getNextLowerTick(targetPriceTick, tickSpacing);
-        if(!relevantTicks[spacingTargetPriceTick] && spacingTargetPriceTick > workingTick ) {
-            relevantTicks[spacingTargetPriceTick] = slippageBps;
-        }
-    }
-
-    const maxTarget = Math.max(...Object.keys(relevantTicks).map(_ => Number(_)));
-    while(workingTick <= maxTarget) {
-        const L = new BigNumber(liquidities[workingTick]).times(CONSTANT_1e18);
-
-        if(!L.isNaN()) {
-            // pa = lower bound price range
-            const lowerBoundTick = getNextLowerTick(workingTick, tickSpacing);
-            const pa = getTickPrice(lowerBoundTick);
-            const sqrtPa = Math.sqrt(pa);
-            // pb = upper bound price range
-            const upperBoundTick = lowerBoundTick + tickSpacing;
-            const pb = getTickPrice(upperBoundTick);
-            const sqrtPb = Math.sqrt(pb);
-            let xLiquidityInTick = 0;
-
-            // Assuming P ≤ pa, the position is fully in X, so y = 0
-            if(P <= pa) {
-                const x = L.times(sqrtPb - sqrtPa).div(sqrtPa * sqrtPb);
-                xLiquidityInTick = x.div(decimalFactor).toNumber();
-            } 
-            // Assuming P ≥ pb, the position is fully in Y , so x = 0:
-            else if(P >= pb) {
-                // We want X so don't care for this case
-            } 
-            // If the current price is in the range: pa < P < pb. mix of x and y
-            else {
-                const x = L.times(sqrtPb - sqrtP).div(sqrtP * sqrtPb);
-                xLiquidityInTick = x.div(decimalFactor).toNumber();
-            }
-
-            totalX += xLiquidityInTick;
-            // console.log(`[${workingTick}]: xLiquidity ${xLiquidityInTick}. New Total: ${totalX}. sqrtPa: ${sqrtPa}`);
-            if(relevantTicks[workingTick]) {
-                result[relevantTicks[workingTick]] = totalX;
-            }
-        }
-        
-        workingTick += tickSpacing;
-    }
-
-    return result;
-}
 
 /**
  * @param {number} currentTick 
@@ -301,211 +226,6 @@ function GetAmountYDumpable(currentTick, tickSpacing, liquidities,  token0Decima
     return result;
 }
 
-function get_dumpable_amount_x(tick, tickSpacing, sqrtPriceX96, liquidity, tokenDecimals) {
-    const result = {};
-
-    const base = new BigNumber(1.0001);
-    const decimalFactor = new BigNumber(10).pow(tokenDecimals);
-
-    let dy = new BigNumber(0);
-    BigNumber.config({ POW_PRECISION: 10 });
-    const _96bits = new BigNumber(2).pow(new BigNumber(96));
-    let currSqrtPrice = new BigNumber(sqrtPriceX96).div(_96bits); 
-    const P = currSqrtPrice.times(currSqrtPrice).toNumber();
-    console.log(`tick ${tick} price: ${P}`);
-    let currTick = getNextLowerTick(Number(tick), tickSpacing);
-
-    // store tick [tickNumber]: slippageBps
-    const relevantTicks = {};
-    for(let slippageBps = 50; slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100; slippageBps += 50) {
-        const targetPrice = P * (10000 - slippageBps)/10000;
-        const targetPriceTick = getTickForPrice(targetPrice);
-        const spacingTargetPriceTick = getNextLowerTick(targetPriceTick, tickSpacing);
-        if(!relevantTicks[spacingTargetPriceTick] && spacingTargetPriceTick < currTick ) {
-            relevantTicks[spacingTargetPriceTick] = slippageBps;
-        }
-    }
-    
-    const minTarget = Math.min(...Object.keys(relevantTicks).map(_ => Number(_)));
-
-    let totalX = new BigNumber(0);
-    // when selling x, the price goes up
-    while(currTick >= minTarget) {
-        const nextTick = currTick - Number(tickSpacing);
-        //console.log({base},{nextTick})
-        const nextSqrtPrice = (base.pow(nextTick)).sqrt();
-
-        const L = new BigNumber(liquidity[currTick]).times(CONSTANT_1e18);
-
-        // dx = L/d(sqrt(p))
-        let maxDx = (L.div(nextSqrtPrice)).minus(L.div(currSqrtPrice));
-
-        if(maxDx.isNaN()) {
-            maxDx = new BigNumber(0);
-        }
-        totalX = totalX.plus(maxDx);
-        const dSqrtP = currSqrtPrice.minus(nextSqrtPrice);
-        dy = dy.plus(L.times(dSqrtP));
-
-        // console.log('dy', dy.toString(), remainingQty.toString(), currTick);
-
-        if(relevantTicks[currTick]) {
-            result[relevantTicks[currTick]] = totalX.div(decimalFactor); // save the amount dumped up to that tick
-            const currPrice = currSqrtPrice.times(currSqrtPrice).toNumber();
-            console.log(`tick ${currTick} price: ${currPrice}. ${roundTo((1-P/currPrice) * 100, 2)}% diff`);
-            console.log(`for ${relevantTicks[currTick]} bps slippage, x volume to be dumped: ${result[relevantTicks[currTick]]}`);
-            console.log(`for ${relevantTicks[currTick]} bps slippage, y amount received = ${dy.div(decimalFactor)}`);
-            console.log('--------------------------------');
-        }
-        // move to next tick
-        currSqrtPrice = nextSqrtPrice;
-        currTick = nextTick;
-    }
-
-    return result;
-}
-
-
-/**
- * Returns the amount available for X (token0) in a slippageMap from 50 bps to 2000 bps slippage
- * When possible, the notation are the same as https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
- * @param {number} currentTick 
- * @param {number} tickSpacing 
- * @param {{[tick: number]: number}} liquidities 
- * @param {number} tokenDecimals 
- * @param {string} sqrtPriceX96 
- * @returns {[slippageBps: number]: number}
- */
-function GetYAmountForSlippages(currentTick, tickSpacing, liquidities, tokenDecimals, sqrtPriceX96) {
-    const result = {};
-    const _96bits = new BigNumber(2).pow(new BigNumber(96));
-    const sqrtP = new BigNumber(sqrtPriceX96).div(_96bits);
-    const P = sqrtP.times(sqrtP).toNumber();
-    const decimalFactor = new BigNumber(10).pow(tokenDecimals);
-
-    let workingTick = getNextLowerTick(currentTick, tickSpacing);
-    
-    // store tick [tickNumber]: slippageBps
-    const relevantTicks = {};
-    for(let slippageBps = 50; slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100; slippageBps += 50) {
-        const targetPrice = P * (10000 - slippageBps)/10000;
-        const targetPriceTick = getTickForPrice(targetPrice);
-        const spacingTargetPriceTick = getNextLowerTick(targetPriceTick, tickSpacing);
-        if(!relevantTicks[spacingTargetPriceTick] && spacingTargetPriceTick < workingTick ) {
-            relevantTicks[spacingTargetPriceTick] = slippageBps;
-        }
-    }
-    
-    const minTarget = Math.min(...Object.keys(relevantTicks).map(_ => Number(_)));
-
-    let totalY = 0;
-    while(workingTick >= minTarget) {
-        const L = new BigNumber(liquidities[workingTick]).times(CONSTANT_1e18);
-        if(!L.isNaN()) {
-            // pa = lower bound price range
-            const lowerBoundTick = getNextLowerTick(workingTick, tickSpacing);
-            const pa = getTickPrice(lowerBoundTick);
-            const sqrtPa = Math.sqrt(pa);
-            // pb = upper bound price range
-            const upperBoundTick = lowerBoundTick + tickSpacing;
-            const pb = getTickPrice(upperBoundTick);
-            const sqrtPb = Math.sqrt(pb);
-            let yLiquidityInTick = 0;
-
-            // Assuming P ≤ pa, the position is fully in X, so y = 0
-            if(P <= pa) {
-            // We want X so don't care for this case
-            } 
-            // Assuming P ≥ pb, the position is fully in Y , so x = 0:
-            else if(P >= pb) {
-                const y = L.times(sqrtPb - sqrtPa);
-                yLiquidityInTick = y.div(decimalFactor).toNumber();
-            } 
-            // If the current price is in the range: pa < P < pb. mix of x and y
-            else {
-                const y = L.times(sqrtP - sqrtPa);
-                yLiquidityInTick = y.div(decimalFactor).toNumber();
-            }
-
-            totalY += yLiquidityInTick;
-            // console.log(`[${workingTick}]: xLiquidity ${yLiquidityInTick}. New Total: ${totalY}`);
-            if(relevantTicks[workingTick]) {
-                result[relevantTicks[workingTick]] = totalY;
-            }
-        }
-
-        workingTick -= tickSpacing;
-    }
-
-    return result;
-}
-
-function get_dumpable_amount_y(tick, tickSpacing, sqrtPriceX96, liquidity, tokenDecimals) {
-    const result = {};
-    const base = new BigNumber(1.0001);
-    const decimalFactor = new BigNumber(10).pow(tokenDecimals);
-
-    let dx = new BigNumber(0);
-    BigNumber.config({ POW_PRECISION: 10 });
-    const _96bits = new BigNumber(2).pow(new BigNumber(96));
-    let currSqrtPrice = new BigNumber(sqrtPriceX96).div(_96bits); 
-    const P = currSqrtPrice.times(currSqrtPrice).toNumber();
-    // console.log(`tick ${tick} price: ${P}`);
-    let currTick = getNextLowerTick(Number(tick), tickSpacing);
-
-    
-    const relevantTicks = {};
-    for(let slippageBps = 50; slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100; slippageBps += 50) {
-        const targetPrice = P * (10000 + slippageBps)/10000;
-        const targetPriceTick = getTickForPrice(targetPrice);
-        const spacingTargetPriceTick = getNextLowerTick(targetPriceTick, tickSpacing);
-        if(!relevantTicks[spacingTargetPriceTick] && spacingTargetPriceTick > currTick ) {
-            relevantTicks[spacingTargetPriceTick] = slippageBps;
-        }
-    }
-
-    const maxTarget = Math.max(...Object.keys(relevantTicks).map(_ => Number(_)));
-
-    let totalY = new BigNumber(0);
-    // when selling y, the price goes down
-    while(currTick <= maxTarget) {
-        const nextTick = currTick + Number(tickSpacing);
-        //console.log({base},{nextTick})
-        const nextSqrtPrice = (base.pow(nextTick)).sqrt();
-
-        const L = new BigNumber(liquidity[currTick]).times(CONSTANT_1e18);
-
-        // dx = L/d(sqrt(p))
-        let maxDy = L.times(nextSqrtPrice.minus(currSqrtPrice));
-        if(maxDy.isNaN()) {
-            maxDy = new BigNumber(0);
-        }
-
-        totalY = totalY.plus(maxDy);
-
-        //console.log(currSqrtPrice.toString(), nextSqrtPrice.toString())
-
-        const nextP = nextSqrtPrice;
-
-        // dx = L/pcurrent - L/pnext
-        dx = dx.plus(L.div(currSqrtPrice).minus(L.div(nextP)));
-
-        if(relevantTicks[currTick]) {
-            result[relevantTicks[currTick]] = totalY.div(decimalFactor); // save the amount dumped up to that tick
-            const currPrice = currSqrtPrice.times(currSqrtPrice).toNumber();
-            console.log(`tick ${currTick} price: ${currPrice}. ${(1-P/currPrice) * 100}% diff`);
-            console.log(`for ${relevantTicks[currTick]} bps slippage, y volume to be dumped: ${result[relevantTicks[currTick]]}`);
-            console.log(`for ${relevantTicks[currTick]} bps slippage, x amount received = ${dx.div(decimalFactor)}`);
-        }
-
-        // move to next tick
-        currSqrtPrice = nextSqrtPrice;
-        currTick = nextTick;
-    }
-
-    return result;
-}
-
 function getAvailableUniswapV3(dataDir) {
     const available = {};
     const files = fs.readdirSync(`${dataDir}/uniswapv3/`).filter(_ => _.endsWith('.csv'));
@@ -572,87 +292,55 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
 
     const dataContents = getUniV3DataContents(selectedFiles, dataDir, sinceBlock);
 
-    // select base file = the file with the most available slippage in its last block for 0.5% slippage
-    let baseFile = selectedFiles[0];
+    // get all blocks with data from all selected files
+    let allBlocks = new Set();
     const keys = {};
-    keys[baseFile] = Object.keys(dataContents[baseFile]);
-    const lastDataBlockBaseFile = keys[baseFile].at(-1);
-    let lastBiggestVolumeFor200BpsSlippage = dataContents[baseFile][lastDataBlockBaseFile][`${fromSymbol}-slippagemap`][200]?.base || dataContents[baseFile][lastDataBlockBaseFile][`${fromSymbol}-slippagemap`][250]?.base || 0;
-    console.log(`last volume for file ${baseFile} is ${lastBiggestVolumeFor200BpsSlippage}`);
-    for(let i = 1; i < selectedFiles.length; i++) {
-        const selectedFile = selectedFiles[i];
-        keys[selectedFile] = Object.keys(dataContents[selectedFile]);
-        const lastDataBlock = keys[selectedFile].at(-1);
-        const lastVolumeFor200BpsSlippage = dataContents[selectedFile][lastDataBlock][`${fromSymbol}-slippagemap`][200]?.base || dataContents[selectedFile][lastDataBlock][`${fromSymbol}-slippagemap`][250]?.base || 0;
-        console.log(`last volume for file ${selectedFile} is ${lastVolumeFor200BpsSlippage}`);
-        if(lastVolumeFor200BpsSlippage > lastBiggestVolumeFor200BpsSlippage) {
-            lastBiggestVolumeFor200BpsSlippage = lastVolumeFor200BpsSlippage;
-            baseFile = selectedFile;
+    for(const filename of selectedFiles) {
+        keys[filename] = Object.keys(dataContents[filename]).map(_ => Number(_));
+        for(const key of keys[filename]) {
+            allBlocks.add(key);
         }
     }
 
-    console.log(`selected base file: ${baseFile}`);
-    for(const targetBlock of keys[baseFile]) {
+    // sort them
+    allBlocks = Array.from(allBlocks).sort((a,b) => a-b);
+
+    // console.log(`selected base file: ${baseFile}`);
+    for(const targetBlock of allBlocks) {
+        if(targetBlock < sinceBlock) {
+            continue;
+        }
         if(targetBlock > toBlock) {
             break;
         }
-        // find the closest value from the basefile and init the result with the data
-        const nearestBlockNumbers = keys[baseFile].filter(_ => Number(_) <= targetBlock);
-        if(nearestBlockNumbers.length == 0) {
-            // if no data, ignore block
-            continue;
-        }
 
-        const nearestBlockNumber = Number(nearestBlockNumbers.at(-1));
-        // console.log(`[${targetBlock}] ${baseFile} nearest block value is ${nearestBlockNumber}. Distance: ${targetBlock-nearestBlockNumber}`);
-        results[targetBlock] = {
-            blockNumber: nearestBlockNumber,
-            price: reverse ? dataContents[baseFile][nearestBlockNumber].p1vs0 : dataContents[baseFile][nearestBlockNumber].p0vs1,
-        };
-
-        // clone the data because we need to modify it without modifying the source
-        const baseSlippageMap = {};
-        const baseFileSlippageMap = dataContents[baseFile][nearestBlockNumber][`${fromSymbol}-slippagemap`];
-        let slippageBps = 50;
-        while (slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100) {
-            let slippageValue = baseFileSlippageMap[slippageBps];
-            
-            if(!slippageValue) {
-                // find the closest value that is < slippageBps
-                const sortedAvailableSlippageBps = Object.keys(baseFileSlippageMap).filter(_ => _ < slippageBps).sort((a,b) => b - a);
-                if(sortedAvailableSlippageBps.length == 0) {
-                    slippageValue = {
-                        base: 0,
-                        quote: 0
-                    };
-                } else {
-                    slippageValue = baseFileSlippageMap[sortedAvailableSlippageBps[0]];
-                } 
-            }
-            if(slippageValue.base < 0) {
-                slippageValue.base = 0;
-                slippageValue.quote = 0;
-            }
-            baseSlippageMap[slippageBps] = slippageValue;
-            slippageBps += 50;
-        }
-
-        results[targetBlock].slippageMap = baseSlippageMap;
-
-        // do the same for every other data contents, but only summing the slippagemap
+        let minBlockDistance = Number.MAX_SAFE_INTEGER;
+        let selectedNearestBlockNumber = 0;
+        let selectedPrice = 0;
+        const blockSlippageMap = getDefaultSlippageMap();
         for(const filename of selectedFiles) {
-            if(filename == baseFile) {
-                continue; // base file already done
-            }
 
             const nearestBlockNumbers = keys[filename].filter(_ => Number(_) <= targetBlock);
             if(nearestBlockNumbers.length == 0) {
-                continue; // no available data in source?
+                continue; // no available data in source
             }
 
             const nearestBlockNumber = nearestBlockNumbers.at(-1);
             // console.log(`[${targetBlock}] ${filename} nearest block value is ${nearestBlockNumber}. Distance: ${targetBlock-nearestBlockNumber}`);
             const slippageMap = dataContents[filename][nearestBlockNumber][`${fromSymbol}-slippagemap`];
+            
+            // if the slippage map is empty, ignore completely
+            if(Object.keys(slippageMap).length == 0) {
+                continue;
+            }
+
+            const blockDistance = Math.abs(targetBlock - nearestBlockNumber);
+            if(blockDistance < minBlockDistance) {
+                // console.log(`min distance updated with ${blockDistance} from file ${filename}`);
+                minBlockDistance = blockDistance;
+                selectedPrice = reverse ? dataContents[filename][nearestBlockNumber].p1vs0 : dataContents[filename][nearestBlockNumber].p0vs1;
+                selectedNearestBlockNumber = nearestBlockNumber;
+            }
 
             let slippageBps = 50;
             while (slippageBps <= CONSTANT_TARGET_SLIPPAGE * 100) {
@@ -681,6 +369,14 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
                 results[targetBlock].slippageMap[slippageBps].quote += slippageObj.quote;
                 slippageBps += 50;
             }
+        }
+
+        if(selectedPrice > 0 ) {
+            results[targetBlock] = {
+                blockNumber: selectedNearestBlockNumber,
+                price: selectedPrice,
+                slippageMap: blockSlippageMap
+            };
         }
     }
 
