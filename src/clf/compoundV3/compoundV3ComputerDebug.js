@@ -1,10 +1,17 @@
 const { compoundV3Computer } = require('./compoundV3Computer');
 
 async function compoundV3ComputerDebug() {
-    const startDate = new Date(2023, 4, 31, 12, 0, 0);
+    const startDates = [];
+    startDates.push(new Date(2023, 5, 14, 12, 43, 15));
+    startDates.push(new Date(2023, 5, 15, 12, 43, 15));
+    // const startDate = new Date(2023, 7, 22, 12, 43, 15);
+    // const startDate = new Date(2023, 7, 23, 12, 43, 15);
 
     try {
-        await compoundV3Computer(0, startDate.getTime());
+
+        for(const startDate of startDates) {
+            await compoundV3Computer(0, startDate.getTime());
+        }
     } catch(e) {
         console.error(e);
         process.exitCode = 1;

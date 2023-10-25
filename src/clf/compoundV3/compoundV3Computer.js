@@ -64,7 +64,7 @@ async function compoundV3Computer(fetchEveryMinutes, startDate=Date.now()) {
             results[pool.baseAsset]['weightedCLF'] = averagePoolData.weightedCLF;
             results[pool.baseAsset]['totalCollateral'] = averagePoolData.totalCollateral;
             averagePerAsset[pool.baseAsset] = averagePoolData;
-            console.log(`results[${pool.baseAsset}]`, results[pool.baseAsset]);
+            // console.log(`results[${pool.baseAsset}]`, results[pool.baseAsset]);
         }
 
         let protocolWeightedCLF = undefined;
@@ -129,6 +129,7 @@ async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provi
             console.log('assetParameters', assetParameters);
             resultsData.collateralsData[collateral.symbol] = {};
             resultsData.collateralsData[collateral.symbol].collateral = await getCollateralAmount(collateral, cometContract, startDateUnixSec, endBlock);
+            console.log('collateral data', resultsData.collateralsData[collateral.symbol].collateral);
             resultsData.collateralsData[collateral.symbol].clfs = await computeMarketCLF(assetParameters, collateral, baseAsset, fromBlocks, endBlock);
             // resultsData.collateralsData[collateral.symbol].liquidityHistory = await computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAsset, assetParameters);
             console.log('resultsData', resultsData);

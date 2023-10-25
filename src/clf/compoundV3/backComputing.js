@@ -10,13 +10,14 @@ async function backComputing() {
     console.log({maxThreads});
 
     const startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+    startDate.setHours(12, 0, 0, 0);
     console.log(startDate.getTime());
 
     const endDate = new Date();
     const allChilds = [];
 
     while (startDate <= endDate) {
-        // wait for less than 10 scripts running
+        // wait for less than 'maxThreads' scripts running
         let nbThreadRunning = allChilds.filter(_ => _.exitCode == null).length;
         console.log(`subProcess running: ${nbThreadRunning}/${maxThreads}`);
         let waitCpt = 0;

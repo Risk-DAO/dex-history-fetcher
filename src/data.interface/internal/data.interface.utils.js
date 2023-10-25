@@ -4,6 +4,95 @@ const fs = require('fs');
 const { DATA_DIR, DEFAULT_STEP_BLOCK } = require('../../utils/constants');
 
 /**
+ * Gets the prices at block from file, just by reading all data and returning all the values
+ * @param {string} platform
+ * @param {string} fromSymbol
+ * @param {string} toSymbol
+ * @param {number} fromBlock 
+ * @param {number} toBlock 
+ * @returns {{[blocknumber: number]: number}}
+ */
+function getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock) {
+    if(platform == 'curve') {
+        return getPricesAtBlockForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBlock);
+    }
+
+    const filename = `${fromSymbol}-${toSymbol}-unified-data.csv`;
+    const fullFilename = path.join(DATA_DIR, 'precomputed', platform, filename);
+
+    const pricesAtBlock = readAllPricesFromFilename(fullFilename, fromBlock, toBlock);
+    return pricesAtBlock;
+}
+
+/**
+ * 
+ * @param {*} fullFilename 
+ * @param {*} fromBlock 
+ * @param {*} toBlock 
+ * @returns {{[blocknumber: number]: number}}
+ */
+function readAllPricesFromFilename(fullFilename, fromBlock, toBlock) {
+    if(!fs.existsSync(fullFilename)) {
+        return undefined;
+    }
+
+    const pricesAtBlock = {};
+    const fileContent = readDataFromFile(fullFilename);
+    for (let i = 1; i < fileContent.length - 1; i++) {
+        const lineContent = fileContent[i];
+        const blockNumber = Number(lineContent.split(',')[0]);
+
+        if (blockNumber < fromBlock) {
+            continue;
+        }
+
+        if (blockNumber > toBlock) {
+            break;
+        }
+
+        const data = extractDataFromUnifiedLine(lineContent);
+
+        pricesAtBlock[blockNumber] = data.price;
+    }
+
+    return pricesAtBlock;
+}
+
+function getPricesAtBlockForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBlock) {
+// for curve, find all files in the precomputed/curve directory that math the fromSymbol-toSymbol.*.csv
+    const searchString = `${fromSymbol}-${toSymbol}`;
+    const directory = path.join(DATA_DIR, 'precomputed', 'curve');
+    const matchingFiles = fs.readdirSync(directory).filter(_ => _.startsWith(searchString) && _.endsWith('.csv'));
+    console.log(`found ${matchingFiles.length} matching files for ${searchString}`);
+
+    const allPricesForPools = [];
+    for(const matchingFile of matchingFiles) {
+        const fullFilename = path.join(directory, matchingFile);
+        const pricesAtBlock = readAllPricesFromFilename(fullFilename, fromBlock, toBlock);
+        if(pricesAtBlock) {
+            console.log(`adding price data from file ${matchingFile} to allPricesForPools`);
+            allPricesForPools.push(pricesAtBlock);
+        }
+    }
+
+    if(allPricesForPools.length == 0) {
+        return undefined;
+    }
+
+    // return the one with the most data ?
+    let mostData = allPricesForPools[0];
+    for(let i = 1; i < allPricesForPools.length; i++) {
+        const currentMostKey = Object.keys(mostData).length;
+        const keys = Object.keys(allPricesForPools[i]).length;
+        if(currentMostKey < keys) {
+            mostData = allPricesForPools[i];
+        }
+    }
+
+    return mostData;
+}
+
+/**
  * Gets the unified data from csv files
  * @param {string} platform
  * @param {string} fromSymbol
@@ -45,7 +134,7 @@ function getUnifiedDataForIntervalByFilename(fullFilename, fromBlock, toBlock, s
 
     // console.log(`${fnName()}: ${fullFilename} found! Extracting data since ${fromBlock} to ${toBlock}`);
 
-    const fileContent = fs.readFileSync(fullFilename, 'utf-8').split('\n');
+    const fileContent = readDataFromFile(fullFilename);
     const unifiedData = getBlankUnifiedData(fromBlock, toBlock, stepBlock);
     const blocksToFill = Object.keys(unifiedData).map(_ => Number(_));
     let currentIndexToFill = 0;
@@ -125,6 +214,11 @@ function getUnifiedDataForIntervalByFilename(fullFilename, fromBlock, toBlock, s
     }
 
     return unifiedData;
+}
+
+
+function readDataFromFile(fullFilename) {
+    return fs.readFileSync(fullFilename, 'utf-8').split('\n');
 }
 
 /**
@@ -247,4 +341,4 @@ function extractDataFromUnifiedLine(line) {
 // const toto = getUnifiedDataForIntervalByFilename('./data/precomputed/curve/USDC-WETH-tricryptoUSDCPool-unified-data.csv', 17_038_000, 17_838_000, 300);
 // console.log(toto);
 
-module.exports = { getUnifiedDataForInterval, getBlankUnifiedData, getDefaultSlippageMap };
+module.exports = { getUnifiedDataForInterval, getBlankUnifiedData, getDefaultSlippageMap, getPricesAtBlockForInterval };

@@ -4,7 +4,7 @@ const { DEFAULT_STEP_BLOCK, PLATFORMS } = require('../../utils/constants');
 const { arrayAverage, fnName, roundTo } = require('../../utils/utils');
 const { computeParkinsonVolatility } = require('../../utils/volatility');
 const { getLiquidityForPlatforms } = require('./data.interface.liquidity');
-const { getUnifiedDataForInterval } = require('./data.interface.utils');
+const { getUnifiedDataForInterval, getPricesAtBlockForInterval } = require('./data.interface.utils');
 
 /**
  * Compute the average price from each platform then re-average for all platforms
@@ -46,18 +46,11 @@ function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBl
 
     // console.log(`${label}: getting data and compute volatility`);
 
-    const data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, DEFAULT_STEP_BLOCK);
+    const priceAtBlock = getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock);
 
-    if(!data || Object.keys(data).length == 0) {
+    if(!priceAtBlock || Object.keys(priceAtBlock).length == 0) {
         console.log(`${label}: Cannot find volatility, returning 0`);
         return 0;
-    }
-
-    // console.log(`${label}: computing parkinson volatility`);
-    // generate the priceAtBlock object
-    const priceAtBlock = {};
-    for(const [blockNumber, unifiedData] of Object.entries(data)) {
-        priceAtBlock[blockNumber] = unifiedData.price;
     }
 
     const volatility = computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, fromBlock, toBlock, daysToAvg);
