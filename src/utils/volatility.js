@@ -75,6 +75,10 @@ function computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, startBlo
         sumOfLn += lnHtltRatioSquare;
     }
 
+    if(daysCountWithValue == 0) {
+        return 0;
+    }
+    
     const prefix = 1 / ((4 * daysCountWithValue) * Math.log(2));
 
     const insideSqrt = prefix * sumOfLn;

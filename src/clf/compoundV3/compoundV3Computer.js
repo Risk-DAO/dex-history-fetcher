@@ -31,6 +31,8 @@ async function compoundV3Computer(fetchEveryMinutes, startDate=Date.now()) {
             throw new Error('Could not find RPC_URL env variable');
         }
 
+        console.log(new Date(startDate));
+
 
         if (!fs.existsSync(path.join(DATA_DIR, 'clf'))) {
             fs.mkdirSync(path.join(DATA_DIR, 'clf'));
