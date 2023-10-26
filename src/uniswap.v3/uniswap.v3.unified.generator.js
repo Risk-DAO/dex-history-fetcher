@@ -49,7 +49,6 @@ async function createUnifiedFileForPair(endBlock, fromSymbol, toSymbol, blockLas
         }
 
         toWrite.push(`${blockNumber},${data.price},${JSON.stringify(data.slippageMap)}\n`);
-
     }
 
     if(toWrite.length == 0) {

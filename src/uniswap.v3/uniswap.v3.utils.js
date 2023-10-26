@@ -319,7 +319,6 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
         let selectedPrice = 0;
         const blockSlippageMap = getDefaultSlippageMap();
         for(const filename of selectedFiles) {
-
             const nearestBlockNumbers = keys[filename].filter(_ => Number(_) <= targetBlock);
             if(nearestBlockNumbers.length == 0) {
                 continue; // no available data in source
@@ -335,6 +334,8 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
             }
 
             const blockDistance = Math.abs(targetBlock - nearestBlockNumber);
+            // this select the data from the file with the closest block
+            // normally, it select the file from which the block comes from
             if(blockDistance < minBlockDistance) {
                 // console.log(`min distance updated with ${blockDistance} from file ${filename}`);
                 minBlockDistance = blockDistance;
@@ -365,8 +366,8 @@ function getUniV3DataforBlockInterval(dataDir, fromSymbol, toSymbol, sinceBlock,
                     slippageObj.quote = 0;
                 }
 
-                results[targetBlock].slippageMap[slippageBps].base += slippageObj.base;
-                results[targetBlock].slippageMap[slippageBps].quote += slippageObj.quote;
+                blockSlippageMap[slippageBps].base += slippageObj.base;
+                blockSlippageMap[slippageBps].quote += slippageObj.quote;
                 slippageBps += 50;
             }
         }
