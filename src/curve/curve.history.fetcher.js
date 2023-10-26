@@ -15,7 +15,7 @@ const { runCurveUnifiedMultiThread } = require('../../scripts/runCurveUnifiedMul
 const { generateUnifiedFileCurve } = require('./curve.unified.generator');
 
 dotenv.config();
-const SAVE_BLOCK_STEP = 300;
+const SAVE_BLOCK_STEP = 50;
 const RPC_URL = process.env.RPC_URL;
 
 const runnerName = 'Curve Fetcher';
@@ -46,22 +46,29 @@ async function CurveHistoryFetcher() {
 
             const currentBlock = await web3Provider.getBlockNumber() - 10;
             const poolsData = [];
+            const fetchPromises = [];
             for(const fetchConfig of curveConfig.curvePairs) {
-                console.log(`Start fetching history for ${fetchConfig.poolName}`);
-                const lastData = await FetchHistory(fetchConfig, currentBlock, web3Provider);
+                fetchPromises.push(FetchHistory(fetchConfig, currentBlock, web3Provider));
+                await sleep(1000);
+            }
+
+            const lastDataResults = await Promise.all(fetchPromises);
+
+            let cpt = 0;
+            for(const fetchConfig of curveConfig.curvePairs) {
+                const lastData = lastDataResults[cpt];
                 lastResults[`${fetchConfig.poolName}`] = lastData;
-                
                 const poolData = {
                     tokens: [],
                     address: fetchConfig.poolAddress,
                     label: fetchConfig.poolName
                 };
-
                 for(const token of fetchConfig.tokens) {
                     poolData.tokens.push(token.symbol);
                 }
 
                 poolsData.push(poolData);
+                cpt++;
             }
 
             const poolSummaryFullname = path.join(DATA_DIR, 'curve', 'curve_pools_summary.json');
@@ -239,6 +246,7 @@ function getCurveTopics(curveContract, fetchConfig) {
  * @param {StaticJsonRpcProvider} web3Provider 
  */
 async function FetchHistory(fetchConfig, currentBlock, web3Provider) {
+    console.log(`[${fetchConfig.poolName}]: Start fetching history`);
     const historyFileName = path.join(DATA_DIR, 'curve', `${fetchConfig.poolName}_curve.csv`);
     // by default, fetch for the last 380 days (a bit more than 1 year)
 
@@ -264,8 +272,7 @@ async function FetchHistory(fetchConfig, currentBlock, web3Provider) {
     const topics = getCurveTopics(curveContract, fetchConfig);
 
     const allBlocksWithEvents = await getAllBlocksWithEventsForContractAndTopics(fetchConfig, startBlock, currentBlock, curveContract, topics);
-
-    console.log(`found ${allBlocksWithEvents.length} blocks with events since ${startBlock}`);
+    console.log(`[${fetchConfig.poolName}]: found ${allBlocksWithEvents.length} blocks with events since ${startBlock}`);
     
     if(fetchConfig.isCryptoV2) {
         await fetchReservesDataCryptoV2(fetchConfig, historyFileName, startBlock, web3Provider, allBlocksWithEvents);
@@ -279,6 +286,7 @@ async function FetchHistory(fetchConfig, currentBlock, web3Provider) {
             lastData[tokenSymbol] = tokenReserve;
         }
 
+        console.log(`[${fetchConfig.poolName}]: ending mode curve v2`);
         return lastData;
     } else {
         await fetchReservesData(fetchConfig, historyFileName, startBlock, web3Provider, allBlocksWithEvents);
@@ -292,6 +300,7 @@ async function FetchHistory(fetchConfig, currentBlock, web3Provider) {
             lastData[tokenSymbol] = tokenReserve;
         }
 
+        console.log(`[${fetchConfig.poolName}]: ending mode curve v1`);
         return lastData;
     }
 
