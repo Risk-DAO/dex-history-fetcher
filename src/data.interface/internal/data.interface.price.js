@@ -51,14 +51,14 @@ function getParkinsonVolatilityForIntervalViaPivot(fromSymbol, toSymbol, fromBlo
     const label = `${fnName()}[${fromSymbol}->${pivotSymbol}->${toSymbol}] [${fromBlock}-${toBlock}] [${platform}]`;
     // console.log(`${label}: getting data and compute volatility`);
 
-    const dataSegment1 = getUnifiedDataForInterval(platform, fromSymbol, pivotSymbol, fromBlock, toBlock, DEFAULT_STEP_BLOCK);
+    const dataSegment1 = getPricesAtBlockForInterval(platform, fromSymbol, pivotSymbol, fromBlock, toBlock);
 
     if(!dataSegment1 || Object.keys(dataSegment1).length == 0) {
         console.log(`${label}: Cannot find data for ${fromSymbol}/${pivotSymbol}, returning 0`);
         return 0;
     }
 
-    const dataSegment2 = getUnifiedDataForInterval(platform, pivotSymbol, toSymbol, fromBlock, toBlock, DEFAULT_STEP_BLOCK);
+    const dataSegment2 = getPricesAtBlockForInterval(platform, pivotSymbol, toSymbol, fromBlock, toBlock);
 
     if(!dataSegment2 || Object.keys(dataSegment2).length == 0) {
         console.log(`${label}: Cannot find data for ${pivotSymbol}/${toSymbol}, returning 0`);
@@ -67,9 +67,17 @@ function getParkinsonVolatilityForIntervalViaPivot(fromSymbol, toSymbol, fromBlo
 
     // generate the priceAtBlock object
     const priceAtBlock = {};
+    const keysSegment2 = Object.keys(dataSegment2).map(_ => Number(_));
     for(const [blockNumber, unifiedData] of Object.entries(dataSegment1)) {
         const priceSegment1 = unifiedData.price;
-        const priceSegment2 = dataSegment2[blockNumber].price;
+        const blocksBeforeSegment2 = keysSegment2.filter(_ => _ <= Number(blockNumber));
+        if(blocksBeforeSegment2.length == 0) {
+            continue;
+        }
+
+        // take the last, meaning it's the closest to 'blockNumber' from segment1
+        const nearestBlockNumberSegment2 = blocksBeforeSegment2.at(-1);
+        const priceSegment2 = dataSegment2[nearestBlockNumberSegment2].price;
         const computedPrice = priceSegment1 * priceSegment2;
         priceAtBlock[blockNumber] = computedPrice;
     }
