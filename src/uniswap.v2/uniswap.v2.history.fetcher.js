@@ -5,7 +5,7 @@ dotenv.config();
 
 const univ2Config = require('./uniswap.v2.config');
 const { tokens } = require('../global.config');
-const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
+const { GetContractCreationBlockNumber, getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { sleep, fnName, roundTo, readLastLine, retry } = require('../utils/utils');
 const { RecordMonitoring } = require('../utils/monitoring');
 const { generateUnifiedFileUniv2 } = require('./uniswap.v2.unified.generator');
@@ -43,11 +43,13 @@ async function UniswapV2HistoryFetcher() {
             console.log(`${fnName()}: starting`);
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
             const currentBlock = await web3Provider.getBlockNumber() - 10;
+            const minStartDate = Math.round(Date.now()/1000) - 380 * 24 * 60 * 60; // min start block is 380 days ago
+            const minStartBlock = await getBlocknumberForTimestamp(minStartDate);
             const stalePools = [];
             const poolsData = [];
             for(const pairKey of univ2Config.uniswapV2Pairs) {
                 console.log(`${fnName()}: Start fetching pair ` + pairKey);
-                const fetchResult = await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`, currentBlock);
+                const fetchResult = await FetchHistoryForPair(web3Provider, pairKey, `${DATA_DIR}/uniswapv2/${pairKey}_uniswapv2.csv`, currentBlock, minStartBlock);
                 console.log(`${fnName()}: End fetching pair ` + pairKey);
                 if(fetchResult.isStale) {
                     stalePools.push(pairKey);
@@ -116,7 +118,7 @@ async function UniswapV2HistoryFetcher() {
  * @param {string} pairKey
  * @returns {bool} if the pool is stale (no new data since 500k blocks)
  */
-async function FetchHistoryForPair(web3Provider, pairKey, historyFileName, currentBlock) {
+async function FetchHistoryForPair(web3Provider, pairKey, historyFileName, currentBlock, minStartBlock) {
     const token0Symbol = pairKey.split('-')[0];
     const token0Address = tokens[token0Symbol].address;
     const token1Symbol = pairKey.split('-')[1];
@@ -154,6 +156,10 @@ async function FetchHistoryForPair(web3Provider, pairKey, historyFileName, curre
     if(!startBlock) {
         const deployBlockNumber = await GetContractCreationBlockNumber(web3Provider, pairAddress);
         startBlock = deployBlockNumber;
+    }
+
+    if(startBlock < minStartBlock) {
+        startBlock = minStartBlock;
     }
 
     console.log(`${fnName()}[${pairKey}]: start fetching data for ${currentBlock - startBlock} blocks to reach current block: ${currentBlock}`);
