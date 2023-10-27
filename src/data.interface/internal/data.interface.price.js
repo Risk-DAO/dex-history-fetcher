@@ -68,8 +68,7 @@ function getParkinsonVolatilityForIntervalViaPivot(fromSymbol, toSymbol, fromBlo
     // generate the priceAtBlock object
     const priceAtBlock = {};
     const keysSegment2 = Object.keys(dataSegment2).map(_ => Number(_));
-    for(const [blockNumber, unifiedData] of Object.entries(dataSegment1)) {
-        const priceSegment1 = unifiedData.price;
+    for(const [blockNumber, priceSegment1] of Object.entries(dataSegment1)) {
         const blocksBeforeSegment2 = keysSegment2.filter(_ => _ <= Number(blockNumber));
         if(blocksBeforeSegment2.length == 0) {
             continue;
@@ -77,7 +76,7 @@ function getParkinsonVolatilityForIntervalViaPivot(fromSymbol, toSymbol, fromBlo
 
         // take the last, meaning it's the closest to 'blockNumber' from segment1
         const nearestBlockNumberSegment2 = blocksBeforeSegment2.at(-1);
-        const priceSegment2 = dataSegment2[nearestBlockNumberSegment2].price;
+        const priceSegment2 = dataSegment2[nearestBlockNumberSegment2];
         const computedPrice = priceSegment1 * priceSegment2;
         priceAtBlock[blockNumber] = computedPrice;
     }
