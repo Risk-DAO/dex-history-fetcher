@@ -1,6 +1,6 @@
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { ethers } = require('ethers');
-const { sleep, fnName, roundTo, logFnDurationWithLabel } = require('../utils/utils');
+const { sleep, fnName, roundTo, logFnDurationWithLabel, retry } = require('../utils/utils');
 const { default: axios } = require('axios');
 const { RecordMonitoring } = require('../utils/monitoring');
 const { pairsToCompute } = require('./precomputer.config');
@@ -80,7 +80,7 @@ async function precomputeDataV2() {
                 const blockTimeStamps = {};
                 console.log(`${fnName()}: getting all block timestamps`);
                 for(const blockNumber of allBlocksForSpan) {
-                    const blockTimestampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockNumber}`);
+                    const blockTimestampResp = await retry(axios.get, [BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockNumber}`], 0, 100);
                     blockTimeStamps[blockNumber] = blockTimestampResp.data.timestamp;
                 }
                 
