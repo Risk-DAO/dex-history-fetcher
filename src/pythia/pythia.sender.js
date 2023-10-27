@@ -12,7 +12,7 @@ const { BN_1e18, TARGET_SLIPPAGES, smartLTVSourceMap } = require('../utils/const
 
 const SPANS = [7, 30, 180, 365]; // we dont use constants.js span because we don't generate 1d data
 const MONITORING_NAME = 'Pythia Sender';
-const RUN_EVERY_MINUTES = process.env.RUN_EVERY || 6 * 60; // in minutes
+const RUN_EVERY_MINUTES = process.env.RUN_EVERY || 24 * 60; // in minutes
 const PLATFORMS_TO_USE = ['uniswapv2', 'uniswapv3', 'curve'];
 
 async function SendToPythia() {
