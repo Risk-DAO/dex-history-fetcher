@@ -132,14 +132,16 @@ function computeAverageData(liquidityDataForInterval, fromBlock, toBlock) {
 
         avgPrice += dataToUse.price;
         for (const slippageBps of Object.keys(avgSlippageMap)) {
-            avgSlippageMap[slippageBps] += dataToUse.slippageMap[slippageBps];
+            avgSlippageMap[slippageBps].base += dataToUse.slippageMap[slippageBps].base;
+            avgSlippageMap[slippageBps].quote += dataToUse.slippageMap[slippageBps].quote;
         }
     }
 
     avgPrice = avgPrice / cptValues;
 
     for (const slippageBps of Object.keys(avgSlippageMap)) {
-        avgSlippageMap[slippageBps] = avgSlippageMap[slippageBps] / cptValues;
+        avgSlippageMap[slippageBps].base = avgSlippageMap[slippageBps].base / cptValues;
+        avgSlippageMap[slippageBps].quote = avgSlippageMap[slippageBps].quote / cptValues;
     }
 
     return {avgPrice: avgPrice, avgSlippageMap: avgSlippageMap};

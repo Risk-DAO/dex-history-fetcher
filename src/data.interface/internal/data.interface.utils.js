@@ -50,9 +50,10 @@ function readAllPricesFromFilename(fullFilename, fromBlock, toBlock) {
             break;
         }
 
-        const data = extractDataFromUnifiedLine(lineContent);
+        const splt = lineContent.split(',');
+        const price = Number(splt[1]);
 
-        pricesAtBlock[blockNumber] = data.price;
+        pricesAtBlock[blockNumber] = price;
     }
 
     return pricesAtBlock;
@@ -222,8 +223,7 @@ function readDataFromFile(fullFilename) {
 }
 
 /**
- * specific case for stETH/wstETH = always return infinite liquidity
- * with price taken from uniswapv3 WETH/wstETH pair
+ * specific case for stETH/wstETH = always return infinite liquidity based on WETH/wstETH from uniswapv3
  * @param {number} fromBlock 
  * @param {number} toBlock 
  * @param {number} stepBlock 
@@ -236,8 +236,8 @@ function specificUnifiedDataForIntervalForstETHwstETH(fromBlock, toBlock, stepBl
 
     for(const data of Object.values(unifiedData)) {
         for(const slippageBps of Object.keys(data.slippageMap)) {
-            data.slippageMap[slippageBps].base = 1e12;
-            data.slippageMap[slippageBps].quote = 1e12;
+            data.slippageMap[slippageBps].base = 1e9 * data.slippageMap[slippageBps].base;
+            data.slippageMap[slippageBps].quote = 1e9 * data.slippageMap[slippageBps].quote;
         }
     }
 

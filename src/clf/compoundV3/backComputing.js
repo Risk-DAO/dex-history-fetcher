@@ -4,7 +4,7 @@ const fs = require('fs');
 const { exec } = require('child_process');
 const os = require('os');
 
-const maxThreads = os.availableParallelism();
+const maxThreads = 8; // os.availableParallelism();
 
 async function backComputing() {
     console.log({maxThreads});
