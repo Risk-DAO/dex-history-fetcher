@@ -10,7 +10,8 @@ const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
 const { RecordMonitoring } = require('../../utils/monitoring');
 const { DATA_DIR, PLATFORMS } = require('../../utils/constants');
-const { getVolatility, getAverageLiquidity } = require('../../data.interface/data.interface');
+const { getVolatility, getAverageLiquidity, getLiquidity } = require('../../data.interface/data.interface');
+const { computeParkinsonVolatility } = require('../../utils/volatility');
 const spans = [7, 30, 180];
 
 /**
@@ -171,6 +172,7 @@ async function getCollateralAmount(collateral, cometContract, priceDateUnixSecon
     return results;
 }
 
+
 /**
  * 
  * @param {{liquidationBonusBPS: number, supplyCap: number, LTV: number}} assetParameters 
@@ -185,41 +187,58 @@ async function computeMarketCLF(assetParameters, collateral , baseAsset, fromBlo
 
     const parameters = {};
 
-    ///Get liquidities and volatilities for all spans
-    for (const span of spans) {
-        // find block for 'daysToAvg' days ago
-        const startBlock = fromBlocks[span];
-        console.log(`${fnName()}: Will avg liquidity since block ${startBlock}`);
+    // for each platform, compute the volatility and the avg liquidity
+    // only request one data (the biggest span) and recompute the avg for each spans
+    const maxSpan = Math.max(...spans);
 
-        let avgVolatilityAcrossPlatforms = 0;
-        let sumLiquidityAcrossPlatforms = 0;
-        let cptVolatility = 0;
+    for(const platform of PLATFORMS) {
+        const oldestBlock = fromBlocks[maxSpan];
+        const fullLiquidityDataForPlatform = getLiquidity(platform, from, baseAsset, oldestBlock, endBlock);
+        if(!fullLiquidityDataForPlatform) {
+            continue;
+        }
 
-        for (const platform of PLATFORMS) {
-            const plaformVolatility = getVolatility(platform, from, baseAsset, startBlock, endBlock, span, collateral.volatilityPivot);
+        const allBlockNumbers = Object.keys(fullLiquidityDataForPlatform).map(_ => Number(_));
+        // compute the data for each spans
+        for (const span of spans) {
+            const fromBlock = fromBlocks[span];
+            const blockNumberForSpan = allBlockNumbers.filter(_ => _ >= fromBlock); 
 
-            // count platform volatility only if not 0, otherwise we would divide too much
-            // example the curve volatility of WETH/USDC is 0 because we don't have data for WETH/USDC on curve
-            if (plaformVolatility != 0) {
-                cptVolatility++;
+            let volatilityToAdd = 0;
+            let liquidityToAdd = 0;
+            if(blockNumberForSpan.length > 0) {
+                const pricesAtBlock = {};
+                let sumLiquidityForTargetSlippageBps = 0;
+                for(const blockNumber of blockNumberForSpan) {
+                    pricesAtBlock[blockNumber] = fullLiquidityDataForPlatform[blockNumber].price;
+    
+                    sumLiquidityForTargetSlippageBps += fullLiquidityDataForPlatform[blockNumber].slippageMap[assetParameters.liquidationBonusBPS].base;
+                }
+    
+                volatilityToAdd = computeParkinsonVolatility(pricesAtBlock, from, baseAsset, fromBlock, endBlock, span);
+                liquidityToAdd = sumLiquidityForTargetSlippageBps / blockNumberForSpan.length;
             }
 
-            avgVolatilityAcrossPlatforms += plaformVolatility;
+            if(!parameters[span]) {
+                parameters[span] = {
+                    volatility: 0,
+                    liquidity: 0,
+                    cptVolatility: 0
+                };
+            }
 
-            const platformLiquidity = getAverageLiquidity(platform, from, baseAsset, startBlock, endBlock);
-            sumLiquidityAcrossPlatforms += platformLiquidity.avgSlippageMap[assetParameters.liquidationBonusBPS].base;
+            parameters[span].volatility += volatilityToAdd;
+            parameters[span].liquidity += liquidityToAdd;
+            if(volatilityToAdd > 0) {
+                parameters[span].cptVolatility += 1;
+            }
+
         }
+    }
 
-        avgVolatilityAcrossPlatforms = cptVolatility == 0 ? 0 : avgVolatilityAcrossPlatforms / cptVolatility;
-
-        if (sumLiquidityAcrossPlatforms == 0) {
-            throw new Error(`No data for ${from}/${baseAsset} for span ${span}`);
-        }
-
-        parameters[span] = {
-            volatility: avgVolatilityAcrossPlatforms,
-            liquidity: sumLiquidityAcrossPlatforms
-        };
+    // at the end, avg the volatility
+    for(const span of spans) {
+        parameters[span].volatility = parameters[span].volatility / parameters[span].cptVolatility;
     }
 
     console.log('parameters', parameters);
