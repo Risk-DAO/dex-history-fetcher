@@ -1,6 +1,6 @@
 const { RecordMonitoring } = require('../utils/monitoring');
 const { ethers } = require('ethers');
-const { fnName, roundTo, sleep } = require('../utils/utils');
+const { fnName, roundTo, sleep, logFnDurationWithLabel } = require('../utils/utils');
 const { dashboardPairsToCompute } = require('./precomputer.config');
 const { DATA_DIR, PLATFORMS } = require('../utils/constants');
 const RUN_EVERY_MINUTES = 3 * 60; // in minutes
@@ -78,28 +78,41 @@ async function PrecomputeDashboardData() {
                             }
                         }
 
+                        const startDate = Date.now();
                         const platformOutput = generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock, displayBlocks, avgStep, pair, dirPath, platform);                        
+                        logFnDurationWithLabel(startDate, 'generateDashboardDataFromLiquidityData');
                         if(!allPlatformsOutput) {
                             allPlatformsOutput = platformOutput;
                         } else {
                             // sum price and volatility (will be avg after)
                             for(const block of Object.keys(allPlatformsOutput)) {
-                                if(!allPlatformsOutput[block].cptVolatility) {
-                                    allPlatformsOutput[block].cptVolatility = allPlatformsOutput[block].volatility > 0 ? 1 : 0;
+                                // do this only the first time for allPlatformsOutput
+                                if(!allPlatformsOutput[block].totalVolatilityWeight) {
+                                    const volatilityWeight = allPlatformsOutput[block].slippageMap[100].base;
+                                    allPlatformsOutput[block].totalVolatilityWeight = allPlatformsOutput[block].volatility > 0 ? volatilityWeight : 0;
+                                    allPlatformsOutput[block].volatility = allPlatformsOutput[block].volatility * volatilityWeight;
                                 }
-                                if(!allPlatformsOutput[block].cptPrice) {
-                                    allPlatformsOutput[block].cptPrice = allPlatformsOutput[block].price > 0 ? 1 : 0;
+
+                                if(!allPlatformsOutput[block].totalPriceWeight) {
+                                    const priceWeight = allPlatformsOutput[block].slippageMap[100].base;
+                                    allPlatformsOutput[block].totalPriceWeight = allPlatformsOutput[block].price > 0 ? priceWeight : 0;
+                                    allPlatformsOutput[block].price = allPlatformsOutput[block].price * priceWeight;
+                                }
+
+                                // for each new platformOutput, compute the new weight and add price and volatility
+                                // according to the weight
+                                const newWeight = platformOutput[block].slippageMap[100].base;
+
+                                const newVolatility = platformOutput[block].volatility;
+                                if(newVolatility > 0) {
+                                    allPlatformsOutput[block].totalVolatilityWeight += newWeight;
+                                    allPlatformsOutput[block].volatility += (newVolatility * newWeight);
                                 }
 
                                 const newPrice = platformOutput[block].price;
                                 if(newPrice > 0) {
-                                    allPlatformsOutput[block].cptPrice = allPlatformsOutput[block].cptPrice + 1;
-                                    allPlatformsOutput[block].price = allPlatformsOutput[block].price + newPrice;
-                                }
-                                const newVolatility = platformOutput[block].volatility;
-                                if(newVolatility > 0) {
-                                    allPlatformsOutput[block].cptVolatility = allPlatformsOutput[block].cptVolatility + 1;
-                                    allPlatformsOutput[block].volatility = allPlatformsOutput[block].volatility + newVolatility;
+                                    allPlatformsOutput[block].totalPriceWeight += newWeight;
+                                    allPlatformsOutput[block].price += (newPrice * newWeight);
                                 }
 
                                 // sum liquidities
@@ -116,11 +129,15 @@ async function PrecomputeDashboardData() {
 
                 // here, need to compute avg price and volatility for each block
                 for(const block of Object.keys(allPlatformsOutput)) {
-                    const cptVolatilityForBlock = allPlatformsOutput[block].cptVolatility;
-                    const cptPriceForBlock = allPlatformsOutput[block].cptPrice;
+                    const totalVolatilityWeightForBlock = allPlatformsOutput[block].totalVolatilityWeight || 1;
+                    const totalPriceWeightForBlock = allPlatformsOutput[block].totalPriceWeight || 1;
 
-                    allPlatformsOutput[block].volatility = allPlatformsOutput[block].volatility / cptVolatilityForBlock;
-                    allPlatformsOutput[block].price = allPlatformsOutput[block].price / cptPriceForBlock;
+                    allPlatformsOutput[block].volatility = allPlatformsOutput[block].volatility / totalVolatilityWeightForBlock;
+                    allPlatformsOutput[block].price = allPlatformsOutput[block].price / totalPriceWeightForBlock;
+
+                    // remove from object to use less place in the json
+                    delete allPlatformsOutput[block].totalVolatilityWeight;
+                    delete allPlatformsOutput[block].totalPriceWeight;
                 }
 
                 // then write the data
@@ -159,6 +176,7 @@ async function PrecomputeDashboardData() {
 }
 
 function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock, displayBlocks, avgStep, pair, dirPath, platform) {
+    console.log(`generateDashboardDataFromLiquidityData: starting for ${pair.base}/${pair.quote}`);
     const platformOutputResult = {};
     // compute average liquidity over ~= 30 days for all the display blocks
     const liquidityBlocks = Object.keys(platformLiquidity).map(_ => Number(_));

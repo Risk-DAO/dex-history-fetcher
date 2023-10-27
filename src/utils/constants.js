@@ -41,6 +41,6 @@ const smartLTVSourceMap = {
     'curve': 3
 };
 
-const DEFAULT_STEP_BLOCK = 50;
+const DEFAULT_STEP_BLOCK = 100;
 
 module.exports = { DATA_DIR, PLATFORMS, TARGET_SLIPPAGES, SPANS, BN_1e18, smartLTVSourceMap, DEFAULT_STEP_BLOCK};
