@@ -35,7 +35,7 @@ function computeAggregatedVolumeFromPivot(segment1Data, segment2Data, targetSlip
         if(segment1LiquidityForSlippage.quote <= segment2LiquidityForSlippage.base) {
 
             // check if the maxBaseAmount is not higher, if not, consider this route the best route
-            if(maxBaseAmount < segment1LiquidityForSlippage) {
+            if(maxBaseAmount < segment1LiquidityForSlippage.base) {
                 maxBaseAmount = segment1LiquidityForSlippage.base;
                 quoteAmount = amountOfQuoteFromSegment1;
             }
