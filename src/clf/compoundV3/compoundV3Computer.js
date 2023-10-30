@@ -223,22 +223,27 @@ async function computeMarketCLF(assetParameters, collateral , baseAsset, fromBlo
                 parameters[span] = {
                     volatility: 0,
                     liquidity: 0,
-                    cptVolatility: 0
+                    // the weight will be calculated as the avg liquidity available
+                    volatilityWeight: 0
+
                 };
             }
 
-            parameters[span].volatility += volatilityToAdd;
+            // here the volatility is stored weighted by the available liquidity
+            parameters[span].volatility += volatilityToAdd * liquidityToAdd;
             parameters[span].liquidity += liquidityToAdd;
             if(volatilityToAdd > 0) {
-                parameters[span].cptVolatility += 1;
+                parameters[span].volatilityWeight += liquidityToAdd;
             }
 
+            console.log(`[${from}-${baseAsset}] [${span}d] [${platform}] volatility: ${roundTo(volatilityToAdd*100, 2)}%`);
+            console.log(`[${from}-${baseAsset}] [${span}d] [${platform}] liquidity: ${liquidityToAdd}`);
         }
     }
 
     // at the end, avg the volatility
     for(const span of spans) {
-        parameters[span].volatility = parameters[span].volatility / parameters[span].cptVolatility;
+        parameters[span].volatility = parameters[span].volatility / parameters[span].volatilityWeight;
     }
 
     console.log('parameters', parameters);

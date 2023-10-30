@@ -42,7 +42,7 @@ async function backComputing() {
             });
 
             allChilds.push(childProcess);
-            await sleep(20000);
+            await sleep(10000);
         }
         if (fs.existsSync(`${DATA_DIR}/clf/${currDay}`)) {
             console.log('data already fetched');
