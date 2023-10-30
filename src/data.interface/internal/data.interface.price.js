@@ -2,7 +2,7 @@
 
 const { fnName, roundTo } = require('../../utils/utils');
 const { computeParkinsonVolatility } = require('../../utils/volatility');
-const { getPricesAtBlockForInterval } = require('./data.interface.utils');
+const { getPricesAtBlockForInterval, getPricesAtBlockForIntervalViaPivot } = require('./data.interface.utils');
 
 
 /**
@@ -49,34 +49,11 @@ function getParkinsonVolatilityForIntervalViaPivot(fromSymbol, toSymbol, fromBlo
     const label = `${fnName()}[${fromSymbol}->${pivotSymbol}->${toSymbol}] [${fromBlock}-${toBlock}] [${platform}]`;
     // console.log(`${label}: getting data and compute volatility`);
 
-    const dataSegment1 = getPricesAtBlockForInterval(platform, fromSymbol, pivotSymbol, fromBlock, toBlock);
+    const priceAtBlock = getPricesAtBlockForIntervalViaPivot(platform, fromSymbol, pivotSymbol, fromBlock, toBlock, pivotSymbol);
 
-    if(!dataSegment1 || Object.keys(dataSegment1).length == 0) {
-        console.log(`${label}: Cannot find data for ${fromSymbol}/${pivotSymbol}, returning 0`);
+    if(!priceAtBlock || Object.keys(priceAtBlock).length == 0) {
+        console.log(`${label}: Cannot find data for [${fromSymbol}->${pivotSymbol}->${toSymbol}], returning 0`);
         return 0;
-    }
-
-    const dataSegment2 = getPricesAtBlockForInterval(platform, pivotSymbol, toSymbol, fromBlock, toBlock);
-
-    if(!dataSegment2 || Object.keys(dataSegment2).length == 0) {
-        console.log(`${label}: Cannot find data for ${pivotSymbol}/${toSymbol}, returning 0`);
-        return 0;
-    }
-
-    // generate the priceAtBlock object
-    const priceAtBlock = {};
-    const keysSegment2 = Object.keys(dataSegment2).map(_ => Number(_));
-    for(const [blockNumber, priceSegment1] of Object.entries(dataSegment1)) {
-        const blocksBeforeSegment2 = keysSegment2.filter(_ => _ <= Number(blockNumber));
-        if(blocksBeforeSegment2.length == 0) {
-            continue;
-        }
-
-        // take the last, meaning it's the closest to 'blockNumber' from segment1
-        const nearestBlockNumberSegment2 = blocksBeforeSegment2.at(-1);
-        const priceSegment2 = dataSegment2[nearestBlockNumberSegment2];
-        const computedPrice = priceSegment1 * priceSegment2;
-        priceAtBlock[blockNumber] = computedPrice;
     }
 
     const volatility = computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, fromBlock, toBlock, daysToAvg);

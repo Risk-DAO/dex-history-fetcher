@@ -12,6 +12,7 @@ const { RecordMonitoring } = require('../../utils/monitoring');
 const { DATA_DIR, PLATFORMS } = require('../../utils/constants');
 const { getVolatility, getAverageLiquidity, getLiquidity } = require('../../data.interface/data.interface');
 const { computeParkinsonVolatility } = require('../../utils/volatility');
+const { getPricesAtBlockForInterval, getPricesAtBlockForIntervalViaPivot } = require('../../data.interface/internal/data.interface.utils');
 const spans = [7, 30, 180];
 
 /**
@@ -194,29 +195,42 @@ async function computeMarketCLF(assetParameters, collateral , baseAsset, fromBlo
     for(const platform of PLATFORMS) {
         const oldestBlock = fromBlocks[maxSpan];
         const fullLiquidityDataForPlatform = getLiquidity(platform, from, baseAsset, oldestBlock, endBlock);
+        const fullPricesAtBlock = getPricesAtBlockForIntervalViaPivot(platform, from, baseAsset, oldestBlock, endBlock, collateral.volatilityPivot);
         if(!fullLiquidityDataForPlatform) {
+            continue;
+        } 
+        
+        if(!fullPricesAtBlock) {
             continue;
         }
 
         const allBlockNumbers = Object.keys(fullLiquidityDataForPlatform).map(_ => Number(_));
+        const allPricesBlockNumbers = Object.keys(fullPricesAtBlock).map(_ => Number(_));
         // compute the data for each spans
         for (const span of spans) {
             const fromBlock = fromBlocks[span];
             const blockNumberForSpan = allBlockNumbers.filter(_ => _ >= fromBlock); 
+            const priceBlockNumberForSpan = allPricesBlockNumbers.filter(_ => _ >= fromBlock); 
 
             let volatilityToAdd = 0;
             let liquidityToAdd = 0;
             if(blockNumberForSpan.length > 0) {
-                const pricesAtBlock = {};
                 let sumLiquidityForTargetSlippageBps = 0;
                 for(const blockNumber of blockNumberForSpan) {
-                    pricesAtBlock[blockNumber] = fullLiquidityDataForPlatform[blockNumber].price;
     
                     sumLiquidityForTargetSlippageBps += fullLiquidityDataForPlatform[blockNumber].slippageMap[assetParameters.liquidationBonusBPS].base;
                 }
     
-                volatilityToAdd = computeParkinsonVolatility(pricesAtBlock, from, baseAsset, fromBlock, endBlock, span);
                 liquidityToAdd = sumLiquidityForTargetSlippageBps / blockNumberForSpan.length;
+            }
+
+            if(priceBlockNumberForSpan.length > 0) {
+                const pricesAtBlock = {};
+                for(const blockNumber of priceBlockNumberForSpan) {
+                    pricesAtBlock[blockNumber] = fullPricesAtBlock[blockNumber];
+                }
+
+                volatilityToAdd = computeParkinsonVolatility(pricesAtBlock, from, baseAsset, fromBlock, endBlock, span);
             }
 
             if(!parameters[span]) {

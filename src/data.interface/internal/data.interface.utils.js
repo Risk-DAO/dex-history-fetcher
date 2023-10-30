@@ -2,6 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 const { DATA_DIR, DEFAULT_STEP_BLOCK } = require('../../utils/constants');
+const { fnName, logFnDurationWithLabel } = require('../../utils/utils');
 
 /**
  * Gets the prices at block from file, just by reading all data and returning all the values
@@ -22,6 +23,65 @@ function getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, 
 
     const pricesAtBlock = readAllPricesFromFilename(fullFilename, fromBlock, toBlock);
     return pricesAtBlock;
+}
+
+function getPricesAtBlockForIntervalViaPivot(platform, fromSymbol, toSymbol, fromBlock, toBlock, pivotSymbol) {
+    const start = Date.now();
+    if(!pivotSymbol) {
+        return getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock);
+    }
+
+    const label = `${fnName()}[${fromSymbol}->${pivotSymbol}->${toSymbol}] [${fromBlock}-${toBlock}] [${platform}]`;
+    
+    const dataSegment1 = getPricesAtBlockForInterval(platform, fromSymbol, pivotSymbol, fromBlock, toBlock);
+
+    if(!dataSegment1 || Object.keys(dataSegment1).length == 0) {
+        console.log(`${label}: Cannot find data for ${fromSymbol}/${pivotSymbol}, returning 0`);
+        return undefined;
+    }
+
+    const dataSegment2 = getPricesAtBlockForInterval(platform, pivotSymbol, toSymbol, fromBlock, toBlock);
+
+    if(!dataSegment2 || Object.keys(dataSegment2).length == 0) {
+        console.log(`${label}: Cannot find data for ${pivotSymbol}/${toSymbol}, returning 0`);
+        return undefined;
+    }
+
+    const keysSegment1 = Object.keys(dataSegment1).map(_ => Number(_));
+    const keysSegment2 = Object.keys(dataSegment2).map(_ => Number(_));
+
+    const priceAtBlock = {};
+
+    // compute all the prices with blocks from segment1
+    for(const [blockNumber, priceSegment1] of Object.entries(dataSegment1)) {
+        const blocksBeforeSegment2 = keysSegment2.filter(_ => _ <= Number(blockNumber));
+        if(blocksBeforeSegment2.length == 0) {
+            continue;
+        }
+
+        // take the last, meaning it's the closest to 'blockNumber' from segment1
+        const nearestBlockNumberSegment2 = blocksBeforeSegment2.at(-1);
+        const priceSegment2 = dataSegment2[nearestBlockNumberSegment2];
+        const computedPrice = priceSegment1 * priceSegment2;
+        priceAtBlock[blockNumber] = computedPrice;
+    }
+
+    // compute all the prices with blocks from segment2
+    for(const [blockNumber, priceSegment2] of Object.entries(dataSegment2)) {
+        const blocksBeforeSegment1 = keysSegment1.filter(_ => _ <= Number(blockNumber));
+        if(blocksBeforeSegment1.length == 0) {
+            continue;
+        }
+
+        // take the last, meaning it's the closest to 'blockNumber' from segment1
+        const nearestBlockNumberSegment1 = blocksBeforeSegment1.at(-1);
+        const priceSegment1 = dataSegment1[nearestBlockNumberSegment1];
+        const computedPrice = priceSegment1 * priceSegment2;
+        priceAtBlock[blockNumber] = computedPrice;
+    }
+
+    logFnDurationWithLabel(start, `p: ${platform}, ${label}`);
+    return priceAtBlock;
 }
 
 /**
@@ -374,4 +434,4 @@ function extractDataFromUnifiedLineWithQuote(line) {
 // const toto = getUnifiedDataForIntervalByFilename('./data/precomputed/uniswapv3/USDC-WETH-unified-data.csv', 17_038_000, 17_838_000, 300);
 // console.log(toto);
 
-module.exports = { getUnifiedDataForInterval, getBlankUnifiedData, getDefaultSlippageMap, getPricesAtBlockForInterval };
+module.exports = { getUnifiedDataForInterval, getBlankUnifiedData, getDefaultSlippageMap, getPricesAtBlockForInterval, getPricesAtBlockForIntervalViaPivot };
