@@ -66,6 +66,8 @@ async function PrecomputeDashboardData() {
             }
 
             // AVG step is the amount of blocks to be used when computing average liquidity
+            // meaning that if we want the average liquidity at block X since 30 days
+            // we will take the data from 'X - avgStep' to 'X'
             const avgStep = BLOCK_PER_DAY * NB_DAYS_AVG;
             console.log({avgStep});
             const dirPath = path.join(DATA_DIR, 'precomputed', 'dashboard');
@@ -238,25 +240,25 @@ function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock
         const volatility = computeParkinsonVolatility(pricesAtBlock, pair.base, pair.quote, startBlockForAvg, block, NB_DAYS_AVG);
         platformOutputResult[block].volatility = volatility;
         platformOutputResult[block].avgSlippageMap = avgSlippage;
-
-        // compute biggest daily change over the last 3 months
-        const nbBlocksToCompute = BLOCK_PER_DAY * BIGGEST_DAILY_CHANGE_OVER_DAYS;
-        platformOutputResult[block].biggestDailyChange = computeBiggestDailyChange(pricesAtBlock, block - nbBlocksToCompute, block);
     }
+
+    // compute biggest daily change over the last 3 months
+    // for each blocks of the platformOutputResult
+    computeBiggestDailyChange(pricesAtBlock, platformOutputResult);
 
     const fullFilename = path.join(dirPath, `${pair.base}-${pair.quote}-${platform}.json`);
     fs.writeFileSync(fullFilename, JSON.stringify({ updated: Date.now(), liquidity: platformOutputResult }));
     return platformOutputResult;
 }
 
-function computeBiggestDailyChange(pricesAtBlock, fromBlock, toBlock) {
+function computeBiggestDailyChange(pricesAtBlock, platformOutputResult) {
     // first we will median the data for every 'BIGGEST_DAILY_CHANGE_MEDIAN_OVER_BLOCK'
     const pricesBlockNumbers = Object.keys(pricesAtBlock).map(_ => Number(_));
     const medianPricesAtBlock = [];
-    let currBlock = fromBlock;
-
+    let currBlock = pricesBlockNumbers[0];
+    
     // compute the median prices for each 'BIGGEST_DAILY_CHANGE_MEDIAN_OVER_BLOCK' blocks
-    while(currBlock < toBlock) {
+    while(currBlock <= pricesBlockNumbers.at(-1)) {
         const stepTargetBlock = currBlock + BIGGEST_DAILY_CHANGE_MEDIAN_OVER_BLOCK;
         const blocksToMedian = pricesBlockNumbers.filter(_ => _ >= currBlock && _ < stepTargetBlock);
         if(blocksToMedian.length > 0) {
@@ -266,45 +268,49 @@ function computeBiggestDailyChange(pricesAtBlock, fromBlock, toBlock) {
             }
 
             const medianPrice = median(pricesToMedian);
-            medianPricesAtBlock.push({
-                block: currBlock,
-                price: medianPrice,
-            });
+            if(medianPrice > 0) {
+                medianPricesAtBlock.push({
+                    block: currBlock,
+                    price: medianPrice,
+                });
+            }
         }
         
         currBlock = stepTargetBlock;
     }
 
     // here, in 'medianPricesAtBlock', we have all the median prices for every 300 blocks
-    // we will now find the biggest daily change over the interval fromBlock/toBlock
-
-    currBlock = fromBlock;
-    let biggestPriceChangePct = 0;
-    let cptDay = 0;
-    let label = '';
-    while(currBlock < toBlock) {
-        cptDay++;
-        const stepTargetBlock = currBlock + BLOCK_PER_DAY;
-        const medianPricesForDay = medianPricesAtBlock.filter(_ => _.block >= currBlock && _.block < stepTargetBlock).map(_ => _.price);
-        if(medianPricesForDay.length > 0) {
-            const minPriceForDay = Math.min(...medianPricesForDay);
-            const maxPriceForDay = Math.max(...medianPricesForDay);
-    
-            let priceChangePctForDay = (maxPriceForDay - minPriceForDay) / minPriceForDay;
-            if(priceChangePctForDay > biggestPriceChangePct) {
-                label = `Biggest price change on day ${cptDay} for interval [${currBlock}-${stepTargetBlock}]: ${roundTo(priceChangePctForDay*100)}%. [${minPriceForDay} <> ${maxPriceForDay}]`;
-                biggestPriceChangePct = priceChangePctForDay;
+    // we will now find the biggest daily change over the interval for each blocks of the platform output
+    for(const block of Object.keys(platformOutputResult).map(_ => Number(_))) {
+        const fromBlock = block - (BLOCK_PER_DAY * BIGGEST_DAILY_CHANGE_OVER_DAYS);
+        currBlock = fromBlock;
+        let biggestPriceChangePct = 0;
+        let cptDay = 0;
+        let label = '';
+        while(currBlock <= block) {
+            cptDay++;
+            const stepTargetBlock = currBlock + BLOCK_PER_DAY;
+            const medianPricesForDay = medianPricesAtBlock.filter(_ => _.block >= currBlock && _.block < stepTargetBlock).map(_ => _.price);
+            if(medianPricesForDay.length > 0) {
+                const minPriceForDay = Math.min(...medianPricesForDay);
+                const maxPriceForDay = Math.max(...medianPricesForDay);
+        
+                let priceChangePctForDay = (maxPriceForDay - minPriceForDay) / minPriceForDay;
+                if(priceChangePctForDay > biggestPriceChangePct) {
+                    label = `Biggest price change on day ${cptDay} for interval [${currBlock}-${stepTargetBlock}]: ${roundTo(priceChangePctForDay*100)}%. [${minPriceForDay} <> ${maxPriceForDay}]`;
+                    biggestPriceChangePct = priceChangePctForDay;
+                }
             }
+
+            currBlock = stepTargetBlock;
         }
 
-        currBlock = stepTargetBlock;
-    }
+        if(label) {
+            console.log(label);
+        }
 
-    if(label) {
-        console.log(label);
+        platformOutputResult[block].biggestDailyChange = biggestPriceChangePct;
     }
-    
-    return biggestPriceChangePct;
 }
 
 PrecomputeDashboardData();
