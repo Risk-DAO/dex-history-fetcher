@@ -18,10 +18,27 @@ function getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, 
         return getPricesAtBlockForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBlock);
     }
 
+    if(platform == 'uniswapv3' 
+        && ((fromSymbol == 'stETH' && toSymbol == 'WETH') 
+            || (fromSymbol == 'WETH' && toSymbol == 'stETH'))) {
+        return generateFakePriceForStETHWETHUniswapV3(fromBlock, toBlock);
+    }
+
     const filename = `${fromSymbol}-${toSymbol}-unified-data.csv`;
     const fullFilename = path.join(DATA_DIR, 'precomputed', platform, filename);
 
     const pricesAtBlock = readAllPricesFromFilename(fullFilename, fromBlock, toBlock);
+    return pricesAtBlock;
+}
+
+function generateFakePriceForStETHWETHUniswapV3(fromBlock, toBlock) {
+    const pricesAtBlock = {};
+    let currBlock = fromBlock;
+    while(currBlock <= toBlock) {
+        pricesAtBlock[currBlock] = 1;
+        currBlock += DEFAULT_STEP_BLOCK;
+    }
+
     return pricesAtBlock;
 }
 
@@ -80,7 +97,7 @@ function getPricesAtBlockForIntervalViaPivot(platform, fromSymbol, toSymbol, fro
         priceAtBlock[blockNumber] = computedPrice;
     }
 
-    logFnDurationWithLabel(start, `p: ${platform}, ${label}`);
+    logFnDurationWithLabel(start, `[${fromSymbol}->${pivotSymbol}->${toSymbol}] [${fromBlock}-${toBlock}] [${platform}]`);
     return priceAtBlock;
 }
 

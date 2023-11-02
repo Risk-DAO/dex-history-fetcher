@@ -11,13 +11,17 @@ const path = require('path');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { getLiquidity } = require('../data.interface/data.interface');
 const { computeParkinsonVolatility } = require('../utils/volatility');
-const { getDefaultSlippageMap } = require('../data.interface/internal/data.interface.utils');
+const { getDefaultSlippageMap, getPricesAtBlockForIntervalViaPivot } = require('../data.interface/internal/data.interface.utils');
+const { median } = require('simple-statistics');
 
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-const TARGET_DATA_POINTS = 200;
 const NB_DAYS = 180;
+const TARGET_DATA_POINTS = NB_DAYS;
 const NB_DAYS_AVG = 30;
-const NB_AVG_POINTS = Math.round(NB_DAYS / NB_DAYS_AVG); // have an average every 30 days
+
+const BIGGEST_DAILY_CHANGE_MEDIAN_OVER_BLOCK = 300; // amount of blocks to median the price over
+const BIGGEST_DAILY_CHANGE_OVER_DAYS = 90; // amount of days to compute the biggest daily change
+let BLOCK_PER_DAY = 0;
 
 async function PrecomputeDashboardData() {
 // eslint-disable-next-line no-constant-condition
@@ -26,7 +30,6 @@ async function PrecomputeDashboardData() {
         console.log({TARGET_DATA_POINTS});
         console.log({NB_DAYS});
         console.log({NB_DAYS_AVG});
-        console.log({NB_AVG_POINTS});
         try {
             await RecordMonitoring({
                 'name': MONITORING_NAME,
@@ -37,8 +40,24 @@ async function PrecomputeDashboardData() {
 
             const currentBlock = await web3Provider.getBlockNumber() - 100;
 
+            // this will be the start of the graph
             const daysAgo = Math.round(Date.now()/1000) - NB_DAYS * 24 * 60 * 60;
+            console.log('daysAgo:', new Date(daysAgo*1000));
             const startBlock =  await getBlocknumberForTimestamp(daysAgo);
+            console.log({startBlock});
+
+            BLOCK_PER_DAY = Math.round((currentBlock - startBlock) / NB_DAYS);
+            console.log({BLOCK_PER_DAY});
+
+            // this is the real amount of day we will get from our files
+            // example: if the first displayed data point is 180 days ago and we need to compute avg for 3 months even for the first point
+            // then we need to get the data from 180 days + 90 days (3 month)
+            const realDaysAgo = Math.round(Date.now()/1000) - (NB_DAYS + BIGGEST_DAILY_CHANGE_OVER_DAYS) * 24 * 60 * 60;
+            console.log('realDaysAgo:', new Date(realDaysAgo*1000));
+            const realStartBlock =  await getBlocknumberForTimestamp(realDaysAgo);
+            console.log({realStartBlock});
+
+            // block step is the amount of blocks between each displayed points
             const blockStep = Math.round((currentBlock - startBlock) / TARGET_DATA_POINTS);
             console.log({blockStep});
             const displayBlocks = [];
@@ -46,7 +65,8 @@ async function PrecomputeDashboardData() {
                 displayBlocks.push(b);
             }
 
-            const avgStep = Math.round((currentBlock - startBlock) / NB_AVG_POINTS);
+            // AVG step is the amount of blocks to be used when computing average liquidity
+            const avgStep = BLOCK_PER_DAY * NB_DAYS_AVG;
             console.log({avgStep});
             const dirPath = path.join(DATA_DIR, 'precomputed', 'dashboard');
             if(!fs.existsSync(path.join(DATA_DIR, 'precomputed', 'dashboard'))) {
@@ -59,23 +79,11 @@ async function PrecomputeDashboardData() {
                 for(const platform of PLATFORMS) {
                     console.log(`${fnName()}[${pair.base}/${pair.quote}]: precomputing for platform ${platform}`);
                     // get the liquidity since startBlock - avgStep because, for the first block (= startBlock), we will compute the avg liquidity and volatility also
-                    const platformLiquidity = getLiquidity(platform, pair.base, pair.quote, startBlock - avgStep, currentBlock, true);
+                    const platformLiquidity = getLiquidity(platform, pair.base, pair.quote, realStartBlock, currentBlock, true);
                     if(platformLiquidity) {
-                        // if volatilitypivot is set, fetch the block prices for segment1 and segment2
-                        // example for APE/USDC, we go through WETH for the price: 
-                        // APE/WETH * WETH/USDC
-                        const pricesAtBlock = {};
-                        if(pair.volatilityPivot) {
-                            const segment1Prices = Object.entries(getLiquidity(platform, pair.base, pair.volatilityPivot, startBlock - avgStep, currentBlock, false)).reduce((d, v) => (d[v[0]] = v[1].price, d), {});
-                            const segment2Prices = Object.entries(getLiquidity(platform, pair.volatilityPivot, pair.quote, startBlock - avgStep, currentBlock, false)).reduce((d, v) => (d[v[0]] = v[1].price, d), {});
-                            for(const block of Object.keys(segment1Prices)) {
-                                pricesAtBlock[block] = segment1Prices[block] * segment2Prices[block];
-                            }
-                        // else, fill the pricesAtBlock from the platform liquidity data
-                        } else {
-                            for(const block of Object.keys(platformLiquidity)) {
-                                pricesAtBlock[block] = platformLiquidity[block].price;
-                            }
+                        const pricesAtBlock = getPricesAtBlockForIntervalViaPivot(platform, pair.base, pair.quote, realStartBlock, currentBlock, pair.volatilityPivot);
+                        if(!pricesAtBlock) {
+                            throw new Error(`Could not get price at block for ${platform} ${pair.base} ${pair.quote} ${pair.volatilityPivot}`);
                         }
 
                         const startDate = Date.now();
@@ -97,6 +105,7 @@ async function PrecomputeDashboardData() {
                                     const priceWeight = allPlatformsOutput[block].slippageMap[100].base;
                                     allPlatformsOutput[block].totalPriceWeight = allPlatformsOutput[block].price > 0 ? priceWeight : 0;
                                     allPlatformsOutput[block].price = allPlatformsOutput[block].price * priceWeight;
+                                    allPlatformsOutput[block].biggestDailyChange = allPlatformsOutput[block].biggestDailyChange * priceWeight;
                                 }
 
                                 // for each new platformOutput, compute the new weight and add price and volatility
@@ -113,6 +122,7 @@ async function PrecomputeDashboardData() {
                                 if(newPrice > 0) {
                                     allPlatformsOutput[block].totalPriceWeight += newWeight;
                                     allPlatformsOutput[block].price += (newPrice * newWeight);
+                                    allPlatformsOutput[block].biggestDailyChange += platformOutput[block].biggestDailyChange * newWeight;
                                 }
 
                                 // sum liquidities
@@ -134,6 +144,7 @@ async function PrecomputeDashboardData() {
 
                     allPlatformsOutput[block].volatility = allPlatformsOutput[block].volatility / totalVolatilityWeightForBlock;
                     allPlatformsOutput[block].price = allPlatformsOutput[block].price / totalPriceWeightForBlock;
+                    allPlatformsOutput[block].biggestDailyChange = allPlatformsOutput[block].biggestDailyChange / totalPriceWeightForBlock;
 
                     // remove from object to use less place in the json
                     delete allPlatformsOutput[block].totalVolatilityWeight;
@@ -180,6 +191,7 @@ function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock
     const platformOutputResult = {};
     // compute average liquidity over ~= 30 days for all the display blocks
     const liquidityBlocks = Object.keys(platformLiquidity).map(_ => Number(_));
+    const pricesBlocks = Object.keys(pricesAtBlock).map(_ => Number(_));
 
     for (const block of displayBlocks) {
         platformOutputResult[block] = {};
@@ -188,9 +200,14 @@ function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock
             throw new Error(`Could not find blocks <= ${block} in liquidity data`);
         }
 
-        const nearestBlockData = platformLiquidity[nearestBlockBefore];
-        platformOutputResult[block].price = pricesAtBlock[nearestBlockBefore];
-        platformOutputResult[block].slippageMap = nearestBlockData.slippageMap;
+        platformOutputResult[block].slippageMap = platformLiquidity[nearestBlockBefore].slippageMap;
+
+        const nearestPriceBlockBefore = pricesBlocks.filter(_ => _ <= block).at(-1);
+        if (!nearestPriceBlockBefore) {
+            platformOutputResult[block].price = 0;
+        } else {
+            platformOutputResult[block].price = pricesAtBlock[nearestPriceBlockBefore];
+        }
         
         // compute avg slippage based on trade price (amount of base sold vs amount of quote obtained)
         // for (const slippageBps of Object.keys(platformOutputResult[block].slippageMap)) {
@@ -221,11 +238,73 @@ function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock
         const volatility = computeParkinsonVolatility(pricesAtBlock, pair.base, pair.quote, startBlockForAvg, block, NB_DAYS_AVG);
         platformOutputResult[block].volatility = volatility;
         platformOutputResult[block].avgSlippageMap = avgSlippage;
+
+        // compute biggest daily change over the last 3 months
+        const nbBlocksToCompute = BLOCK_PER_DAY * BIGGEST_DAILY_CHANGE_OVER_DAYS;
+        platformOutputResult[block].biggestDailyChange = computeBiggestDailyChange(pricesAtBlock, block - nbBlocksToCompute, block);
     }
 
     const fullFilename = path.join(dirPath, `${pair.base}-${pair.quote}-${platform}.json`);
     fs.writeFileSync(fullFilename, JSON.stringify({ updated: Date.now(), liquidity: platformOutputResult }));
     return platformOutputResult;
+}
+
+function computeBiggestDailyChange(pricesAtBlock, fromBlock, toBlock) {
+    // first we will median the data for every 'BIGGEST_DAILY_CHANGE_MEDIAN_OVER_BLOCK'
+    const pricesBlockNumbers = Object.keys(pricesAtBlock).map(_ => Number(_));
+    const medianPricesAtBlock = [];
+    let currBlock = fromBlock;
+
+    // compute the median prices for each 'BIGGEST_DAILY_CHANGE_MEDIAN_OVER_BLOCK' blocks
+    while(currBlock < toBlock) {
+        const stepTargetBlock = currBlock + BIGGEST_DAILY_CHANGE_MEDIAN_OVER_BLOCK;
+        const blocksToMedian = pricesBlockNumbers.filter(_ => _ >= currBlock && _ < stepTargetBlock);
+        if(blocksToMedian.length > 0) {
+            const pricesToMedian = [];
+            for(const blockToMedian of blocksToMedian) {
+                pricesToMedian.push(pricesAtBlock[blockToMedian]);
+            }
+
+            const medianPrice = median(pricesToMedian);
+            medianPricesAtBlock.push({
+                block: currBlock,
+                price: medianPrice,
+            });
+        }
+        
+        currBlock = stepTargetBlock;
+    }
+
+    // here, in 'medianPricesAtBlock', we have all the median prices for every 300 blocks
+    // we will now find the biggest daily change over the interval fromBlock/toBlock
+
+    currBlock = fromBlock;
+    let biggestPriceChangePct = 0;
+    let cptDay = 0;
+    let label = '';
+    while(currBlock < toBlock) {
+        cptDay++;
+        const stepTargetBlock = currBlock + BLOCK_PER_DAY;
+        const medianPricesForDay = medianPricesAtBlock.filter(_ => _.block >= currBlock && _.block < stepTargetBlock).map(_ => _.price);
+        if(medianPricesForDay.length > 0) {
+            const minPriceForDay = Math.min(...medianPricesForDay);
+            const maxPriceForDay = Math.max(...medianPricesForDay);
+    
+            let priceChangePctForDay = (maxPriceForDay - minPriceForDay) / minPriceForDay;
+            if(priceChangePctForDay > biggestPriceChangePct) {
+                label = `Biggest price change on day ${cptDay} for interval [${currBlock}-${stepTargetBlock}]: ${roundTo(priceChangePctForDay*100)}%. [${minPriceForDay} <> ${maxPriceForDay}]`;
+                biggestPriceChangePct = priceChangePctForDay;
+            }
+        }
+
+        currBlock = stepTargetBlock;
+    }
+
+    if(label) {
+        console.log(label);
+    }
+    
+    return biggestPriceChangePct;
 }
 
 PrecomputeDashboardData();
