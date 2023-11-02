@@ -274,7 +274,7 @@ async function computeMarketCLF(assetParameters, collateral , baseAsset, fromBlo
                     volatilityToUse = parameters[spans[i+1]].volatility;
                 }
 
-                results[volatilitySpan][liquiditySpan] = findRiskLevelFromParameters(volatilityToUse, parameters[liquiditySpan].liquidity, assetParameters.liquidationBonusBPS / 10000, assetParameters.LTV, assetParameters.supplyCap);
+                results[volatilitySpan][liquiditySpan] = findRiskLevelFromParameters(volatilityToUse, parameters[liquiditySpan].liquidity, assetParameters.liquidationBonusBPS / 10000, assetParameters.LTV, assetParameters.supplyCap * assetParameters.LTV / 100);
             }
         }
     }
