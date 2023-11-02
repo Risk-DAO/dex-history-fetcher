@@ -6,10 +6,14 @@ const { fnName, logFnDurationWithLabel } = require('../../utils/utils');
 
 let cache = {};
 
-const cachedPairs = ['WETH-USDC'];
+const cachedPairs = ['WETH-USDC', 'USDC-WETH'];
+
+setTimeout(() => cleanPriceCache(), 30 * 60 * 1000);
 
 function cleanPriceCache() {
+    console.log('cleanPriceCache starting');
     cache = {};
+    console.log('cleanPriceCache ending');
 }
 
 /**
@@ -476,4 +480,4 @@ function extractDataFromUnifiedLineWithQuote(line) {
 // const toto = getUnifiedDataForIntervalByFilename('./data/precomputed/uniswapv3/USDC-WETH-unified-data.csv', 17_038_000, 17_838_000, 300);
 // console.log(toto);
 
-module.exports = { getUnifiedDataForInterval, getBlankUnifiedData, getDefaultSlippageMap, getPricesAtBlockForInterval, getPricesAtBlockForIntervalViaPivot, cleanPriceCache };
+module.exports = { getUnifiedDataForInterval, getBlankUnifiedData, getDefaultSlippageMap, getPricesAtBlockForInterval, getPricesAtBlockForIntervalViaPivot };

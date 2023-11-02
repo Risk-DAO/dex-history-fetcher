@@ -11,8 +11,8 @@ const path = require('path');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { getLiquidity } = require('../data.interface/data.interface');
 const { computeParkinsonVolatility } = require('../utils/volatility');
-const { getDefaultSlippageMap, getPricesAtBlockForIntervalViaPivot, cleanPriceCache } = require('../data.interface/internal/data.interface.utils');
-const { median } = require('simple-statistics');
+const { getDefaultSlippageMap, getPricesAtBlockForIntervalViaPivot } = require('../data.interface/internal/data.interface.utils');
+const { median, average, quantile } = require('simple-statistics');
 
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 const NB_DAYS = 180;
@@ -37,9 +37,6 @@ async function PrecomputeDashboardData() {
                 'lastStart': Math.round(runStartDate/1000),
                 'runEvery': RUN_EVERY_MINUTES * 60
             });
-
-            // clean the price cache
-            cleanPriceCache();
 
             const currentBlock = await web3Provider.getBlockNumber() - 100;
 
@@ -208,11 +205,20 @@ function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock
 
         platformOutputResult[block].slippageMap = platformLiquidity[nearestBlockBefore].slippageMap;
 
-        const nearestPriceBlockBefore = pricesBlocks.filter(_ => _ <= block).at(-1);
-        if (!nearestPriceBlockBefore) {
+        const priceBlocksBefore = pricesBlocks.filter(_ => _ >= block - BLOCK_PER_DAY && _ <= block);
+        if (priceBlocksBefore.length == 0) {
             platformOutputResult[block].price = 0;
         } else {
-            platformOutputResult[block].price = pricesAtBlock[nearestPriceBlockBefore];
+            const prices = [];
+            for(const priceBlock of priceBlocksBefore) {
+                prices.push(pricesAtBlock[priceBlock]);
+            }
+
+            platformOutputResult[block].price = prices.at(-1);
+            platformOutputResult[block].priceMean = average(prices);
+            platformOutputResult[block].priceMedian = median(prices);
+            platformOutputResult[block].priceQ10 = quantile(prices, 0.1);
+            platformOutputResult[block].priceQ90 = quantile(prices, 0.9);
         }
         
         // compute avg slippage based on trade price (amount of base sold vs amount of quote obtained)
