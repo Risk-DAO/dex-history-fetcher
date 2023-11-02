@@ -1,6 +1,6 @@
 const { RecordMonitoring } = require('../utils/monitoring');
 const { ethers } = require('ethers');
-const { fnName, roundTo, sleep, logFnDurationWithLabel } = require('../utils/utils');
+const { fnName, roundTo, sleep, logFnDurationWithLabel, logFnDuration } = require('../utils/utils');
 const { dashboardPairsToCompute } = require('./precomputer.config');
 const { DATA_DIR, PLATFORMS } = require('../utils/constants');
 const RUN_EVERY_MINUTES = 3 * 60; // in minutes
@@ -11,7 +11,7 @@ const path = require('path');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { getLiquidity } = require('../data.interface/data.interface');
 const { computeParkinsonVolatility } = require('../utils/volatility');
-const { getDefaultSlippageMap, getPricesAtBlockForIntervalViaPivot } = require('../data.interface/internal/data.interface.utils');
+const { getDefaultSlippageMap, getPricesAtBlockForIntervalViaPivot, cleanPriceCache } = require('../data.interface/internal/data.interface.utils');
 const { median } = require('simple-statistics');
 
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
@@ -37,6 +37,9 @@ async function PrecomputeDashboardData() {
                 'lastStart': Math.round(runStartDate/1000),
                 'runEvery': RUN_EVERY_MINUTES * 60
             });
+
+            // clean the price cache
+            cleanPriceCache();
 
             const currentBlock = await web3Provider.getBlockNumber() - 100;
 
@@ -166,6 +169,7 @@ async function PrecomputeDashboardData() {
                 'lastDuration': runEndDate - Math.round(runStartDate / 1000)
             });
     
+            logFnDuration(runStartDate, dashboardPairsToCompute.length, 'pairs to compute');
             const sleepTime = RUN_EVERY_MINUTES * 60 * 1000 - (Date.now() - runStartDate);
             if(sleepTime > 0) {
                 console.log(`${fnName()}: sleeping ${roundTo(sleepTime/1000/60)} minutes`);
@@ -306,7 +310,7 @@ function computeBiggestDailyChange(pricesAtBlock, platformOutputResult) {
         }
 
         if(label) {
-            console.log(label);
+            // console.log(label);
         }
 
         platformOutputResult[block].biggestDailyChange = biggestPriceChangePct;
