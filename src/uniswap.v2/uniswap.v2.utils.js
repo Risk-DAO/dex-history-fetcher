@@ -101,7 +101,7 @@ function getUniV2DataFile(dataDir, fromSymbol, toSymbol) {
  * @param {string} toSymbol 
  * @param {number} toReserve must be normalized with correct decimal place
  * @param {number} targetSlippage 
- * @returns {number} amount of token exchangeable for defined slippage
+ * @returns {{base: number, quote: number}} base amount of token exchangeable for defined slippage, quote amount obtained
  */
 function computeLiquidityUniV2Pool(fromReserve, toReserve, targetSlippage) {
     if(fromReserve == 0) {
@@ -111,7 +111,7 @@ function computeLiquidityUniV2Pool(fromReserve, toReserve, targetSlippage) {
     const initPrice = toReserve / fromReserve;
     const targetPrice = initPrice - (initPrice * targetSlippage);
     const amountOfFromToSell = Math.sqrt(targetPrice * fromReserve * toReserve)/targetPrice - fromReserve;
-    
+    const amountOfToObtained = calculateYReceived(fromReserve, toReserve, amountOfFromToSell);
     // const yReceived = calculateYReceived(fromReserve, toReserve, amountOfFromToExchange);
     // const newFromReserve = fromReserve + amountOfFromToExchange;
     // const newToReserve = toReserve - yReceived;
@@ -122,10 +122,9 @@ function computeLiquidityUniV2Pool(fromReserve, toReserve, targetSlippage) {
     // console.log(`diff wanted: ${targetSlippage * 100}%`);
     // const priceDiff = (initPrice - newPrice) / initPrice;
     // console.log(`real diff for the new price: ${priceDiff*100}%`);
-    return amountOfFromToSell;
+    return {base: amountOfFromToSell, quote: amountOfToObtained};
 }
 
-// used for verifications
 function calculateYReceived(x0, y0, xSell) {
     // Initial state of the liquidity pool
     const k0 = x0 * y0;

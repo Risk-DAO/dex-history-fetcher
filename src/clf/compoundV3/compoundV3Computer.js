@@ -10,7 +10,9 @@ const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
 const { RecordMonitoring } = require('../../utils/monitoring');
 const { DATA_DIR, PLATFORMS } = require('../../utils/constants');
-const { getVolatility, getAverageLiquidity, getLiquidityAllPlatforms } = require('../../data.interface/data.interface');
+const { getVolatility, getAverageLiquidity, getLiquidity } = require('../../data.interface/data.interface');
+const { computeParkinsonVolatility } = require('../../utils/volatility');
+const { getPricesAtBlockForInterval, getPricesAtBlockForIntervalViaPivot } = require('../../data.interface/internal/data.interface.utils');
 const spans = [7, 30, 180];
 
 /**
@@ -30,6 +32,8 @@ async function compoundV3Computer(fetchEveryMinutes, startDate=Date.now()) {
         if (!process.env.RPC_URL) {
             throw new Error('Could not find RPC_URL env variable');
         }
+
+        console.log(new Date(startDate));
 
 
         if (!fs.existsSync(path.join(DATA_DIR, 'clf'))) {
@@ -62,7 +66,7 @@ async function compoundV3Computer(fetchEveryMinutes, startDate=Date.now()) {
             results[pool.baseAsset]['weightedCLF'] = averagePoolData.weightedCLF;
             results[pool.baseAsset]['totalCollateral'] = averagePoolData.totalCollateral;
             averagePerAsset[pool.baseAsset] = averagePoolData;
-            console.log(`results[${pool.baseAsset}]`, results[pool.baseAsset]);
+            // console.log(`results[${pool.baseAsset}]`, results[pool.baseAsset]);
         }
 
         let protocolWeightedCLF = undefined;
@@ -123,10 +127,11 @@ async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provi
     for (const collateral of collaterals) {
         try {
             console.log(`Computing CLFs for ${collateral.symbol}`);
-            const assetParameters = await getAssetParameters(cometContract, collateral);
+            const assetParameters = await getAssetParameters(cometContract, collateral, endBlock);
             console.log('assetParameters', assetParameters);
             resultsData.collateralsData[collateral.symbol] = {};
-            resultsData.collateralsData[collateral.symbol].collateral = await getCollateralAmount(collateral, cometContract, startDateUnixSec);
+            resultsData.collateralsData[collateral.symbol].collateral = await getCollateralAmount(collateral, cometContract, startDateUnixSec, endBlock);
+            console.log('collateral data', resultsData.collateralsData[collateral.symbol].collateral);
             resultsData.collateralsData[collateral.symbol].clfs = await computeMarketCLF(assetParameters, collateral, baseAsset, fromBlocks, endBlock);
             // resultsData.collateralsData[collateral.symbol].liquidityHistory = await computeLiquidityHistory(collateral, fromBlocks, endBlock, baseAsset, assetParameters);
             console.log('resultsData', resultsData);
@@ -145,10 +150,9 @@ async function computeCLFForPool(cometAddress, baseAsset, collaterals, web3Provi
  * @param {ethers.Contract} cometContract 
  * @returns 
  */
-async function getCollateralAmount(collateral, cometContract, priceDateUnixSeconds) {
-    const [totalSupplyAsset] = await cometContract.callStatic.totalsCollateral(collateral.address);
+async function getCollateralAmount(collateral, cometContract, priceDateUnixSeconds, currentBlock) {
+    const [totalSupplyAsset] = await cometContract.totalsCollateral(collateral.address, {blockTag: currentBlock});
     const decimals = getConfTokenBySymbol(collateral.symbol).decimals;
-    const results = {};
     let price = undefined;
     const apiUrl = `https://coins.llama.fi/prices/historical/${priceDateUnixSeconds}/ethereum:${collateral.address}?searchWidth=12h`;
 
@@ -160,10 +164,15 @@ async function getCollateralAmount(collateral, cometContract, priceDateUnixSecon
         console.error('error fetching price', error);
         price = 0;
     }
-    results['inKindSupply'] = normalize(totalSupplyAsset, decimals);
-    results['usdSupply'] = results['inKindSupply'] * price;
+
+    const totalSupplyNormalized = normalize(totalSupplyAsset, decimals);
+    const results = {
+        inKindSupply: totalSupplyNormalized,
+        usdSupply: totalSupplyNormalized * price
+    };
     return results;
 }
+
 
 /**
  * 
@@ -179,41 +188,76 @@ async function computeMarketCLF(assetParameters, collateral , baseAsset, fromBlo
 
     const parameters = {};
 
-    ///Get liquidities and volatilities for all spans
-    for (const span of spans) {
-        // find block for 'daysToAvg' days ago
-        const startBlock = fromBlocks[span];
-        console.log(`${fnName()}: Will avg liquidity since block ${startBlock}`);
+    // for each platform, compute the volatility and the avg liquidity
+    // only request one data (the biggest span) and recompute the avg for each spans
+    const maxSpan = Math.max(...spans);
 
-        let avgVolatilityAcrossPlatforms = 0;
-        let sumLiquidityAcrossPlatforms = 0;
-        let cptVolatility = 0;
+    for(const platform of PLATFORMS) {
+        const oldestBlock = fromBlocks[maxSpan];
+        const fullLiquidityDataForPlatform = getLiquidity(platform, from, baseAsset, oldestBlock, endBlock);
+        const fullPricesAtBlock = getPricesAtBlockForIntervalViaPivot(platform, from, baseAsset, oldestBlock, endBlock, collateral.volatilityPivot);
+        if(!fullLiquidityDataForPlatform) {
+            continue;
+        } 
+        
+        if(!fullPricesAtBlock) {
+            continue;
+        }
 
-        for (const platform of PLATFORMS) {
-            const plaformVolatility = getVolatility(platform, from, baseAsset, startBlock, endBlock, span, collateral.volatilityPivot);
+        const allBlockNumbers = Object.keys(fullLiquidityDataForPlatform).map(_ => Number(_));
+        const allPricesBlockNumbers = Object.keys(fullPricesAtBlock).map(_ => Number(_));
+        // compute the data for each spans
+        for (const span of spans) {
+            const fromBlock = fromBlocks[span];
+            const blockNumberForSpan = allBlockNumbers.filter(_ => _ >= fromBlock); 
+            const priceBlockNumberForSpan = allPricesBlockNumbers.filter(_ => _ >= fromBlock); 
 
-            // count platform volatility only if not 0, otherwise we would divide too much
-            // example the curve volatility of WETH/USDC is 0 because we don't have data for WETH/USDC on curve
-            if (plaformVolatility != 0) {
-                cptVolatility++;
+            let volatilityToAdd = 0;
+            let liquidityToAdd = 0;
+            if(blockNumberForSpan.length > 0) {
+                let sumLiquidityForTargetSlippageBps = 0;
+                for(const blockNumber of blockNumberForSpan) {
+    
+                    sumLiquidityForTargetSlippageBps += fullLiquidityDataForPlatform[blockNumber].slippageMap[assetParameters.liquidationBonusBPS].base;
+                }
+    
+                liquidityToAdd = sumLiquidityForTargetSlippageBps / blockNumberForSpan.length;
             }
 
-            avgVolatilityAcrossPlatforms += plaformVolatility;
+            if(priceBlockNumberForSpan.length > 0) {
+                const pricesAtBlock = {};
+                for(const blockNumber of priceBlockNumberForSpan) {
+                    pricesAtBlock[blockNumber] = fullPricesAtBlock[blockNumber];
+                }
 
-            const platformLiquidity = getAverageLiquidity(platform, from, baseAsset, startBlock, endBlock);
-            sumLiquidityAcrossPlatforms += platformLiquidity.avgSlippageMap[assetParameters.liquidationBonusBPS];
+                volatilityToAdd = computeParkinsonVolatility(pricesAtBlock, from, baseAsset, fromBlock, endBlock, span);
+            }
+
+            if(!parameters[span]) {
+                parameters[span] = {
+                    volatility: 0,
+                    liquidity: 0,
+                    // the weight will be calculated as the avg liquidity available
+                    volatilityWeight: 0
+
+                };
+            }
+
+            // here the volatility is stored weighted by the available liquidity
+            parameters[span].volatility += volatilityToAdd * liquidityToAdd;
+            parameters[span].liquidity += liquidityToAdd;
+            if(volatilityToAdd > 0) {
+                parameters[span].volatilityWeight += liquidityToAdd;
+            }
+
+            console.log(`[${from}-${baseAsset}] [${span}d] [${platform}] volatility: ${roundTo(volatilityToAdd*100, 2)}%`);
+            console.log(`[${from}-${baseAsset}] [${span}d] [${platform}] liquidity: ${liquidityToAdd}`);
         }
+    }
 
-        avgVolatilityAcrossPlatforms = cptVolatility == 0 ? 0 : avgVolatilityAcrossPlatforms / cptVolatility;
-
-        if (sumLiquidityAcrossPlatforms == 0) {
-            throw new Error(`No data for ${from}/${baseAsset} for span ${span}`);
-        }
-
-        parameters[span] = {
-            volatility: avgVolatilityAcrossPlatforms,
-            liquidity: sumLiquidityAcrossPlatforms
-        };
+    // at the end, avg the volatility
+    for(const span of spans) {
+        parameters[span].volatility = parameters[span].volatility / parameters[span].volatilityWeight;
     }
 
     console.log('parameters', parameters);
@@ -230,7 +274,7 @@ async function computeMarketCLF(assetParameters, collateral , baseAsset, fromBlo
                     volatilityToUse = parameters[spans[i+1]].volatility;
                 }
 
-                results[volatilitySpan][liquiditySpan] = findCLFFromParameters(volatilityToUse, parameters[liquiditySpan].liquidity, assetParameters.liquidationBonusBPS / 10000, assetParameters.LTV, assetParameters.supplyCap);
+                results[volatilitySpan][liquiditySpan] = findRiskLevelFromParameters(volatilityToUse, parameters[liquiditySpan].liquidity, assetParameters.liquidationBonusBPS / 10000, assetParameters.LTV, assetParameters.supplyCap);
             }
         }
     }
@@ -242,10 +286,11 @@ async function computeMarketCLF(assetParameters, collateral , baseAsset, fromBlo
  * 
  * @param {ethers.Contract} cometContract 
  * @param {{index: number, symbol: string, address: string, coinGeckoID: string}} collateral 
+ * @param {number} currentBlock 
  * @returns 
  */
-async function getAssetParameters(cometContract, collateral) {
-    const results = await cometContract.getAssetInfo(collateral.index);
+async function getAssetParameters(cometContract, collateral, currentBlock) {
+    const results = await cometContract.getAssetInfo(collateral.index, {blockTag: currentBlock});
     const liquidationBonusBPS = Math.round((1 - normalize(results.liquidationFactor, 18)) * 10000);
     const LTV = normalize(results.liquidateCollateralFactor, 18) * 100;
     const tokenConf = getConfTokenBySymbol(collateral.symbol);
@@ -271,6 +316,22 @@ function findCLFFromParameters(volatility, liquidity, liquidationBonus, ltv, bor
     const lnLtvPlusBeta = Math.log(ltvPlusBeta);
     const c = -1 * lnLtvPlusBeta * sqrtBySigma;
     return c;
+}
+
+function findRiskLevelFromParameters(volatility, liquidity, liquidationBonus, ltv, borrowCap) {
+    const sigma = volatility;
+    const d = borrowCap;
+    const beta = liquidationBonus;
+    const l = liquidity;
+    ltv = Number(ltv) / 100;
+
+    const sigmaTimesSqrtOfD = sigma * Math.sqrt(d);
+    const ltvPlusBeta = ltv + beta;
+    const lnOneDividedByLtvPlusBeta = Math.log(1/ltvPlusBeta);
+    const lnOneDividedByLtvPlusBetaTimesSqrtOfL = lnOneDividedByLtvPlusBeta * Math.sqrt(l);
+    const r = sigmaTimesSqrtOfD / lnOneDividedByLtvPlusBetaTimesSqrtOfL;
+
+    return r;
 }
 
 /**

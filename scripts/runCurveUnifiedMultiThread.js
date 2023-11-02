@@ -2,10 +2,16 @@ const { exec } = require('child_process');
 const { getAvailableCurve } = require('../src/curve/curve.utils');
 const { sleep } = require('../src/utils/utils');
 const { ethers } = require('ethers');
+const fs = require('fs');
+const path = require('path');
+const { DATA_DIR } = require('../src/utils/constants');
 
 async function runCurveUnifiedMultiThread() {
     const available = getAvailableCurve('./data');
 
+    if(!fs.existsSync(path.join(DATA_DIR, 'precomputed', 'curve'))) {
+        fs.mkdirSync(path.join(DATA_DIR, 'precomputed', 'curve'), {recursive: true});
+    }
     // get most recent block by rpc
     const web3Provider = new ethers.providers.StaticJsonRpcProvider('https://eth.llamarpc.com');
     const currentBlock = await web3Provider.getBlockNumber();

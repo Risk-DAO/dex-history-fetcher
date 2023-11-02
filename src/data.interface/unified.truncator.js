@@ -1,7 +1,6 @@
 const path = require('path');
 const fs = require('fs');
 const { DATA_DIR } = require('../utils/constants');
-const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { retrySync } = require('../utils/utils');
 
 /**

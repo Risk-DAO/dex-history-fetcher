@@ -5,7 +5,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const univ3Config = require('./uniswap.v3.config');
-const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
+const { GetContractCreationBlockNumber, getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { fnName, logFnDuration, sleep, roundTo } = require('../utils/utils');
 const { getConfTokenBySymbol } = require('../utils/token.utils');
 const { getPriceNormalized, getSlippages } = require('./uniswap.v3.utils');
@@ -14,10 +14,11 @@ const { RecordMonitoring } = require('../utils/monitoring');
 const { generateUnifiedFileUniv3 } = require('./uniswap.v3.unified.generator');
 const { DATA_DIR } = require('../utils/constants');
 const path = require('path');
+const { providers } = require('@0xsequence/multicall');
 
 const CONSTANT_1e18 = new BigNumber(10).pow(18);
 // save liquidity data every 'CONSTANT_BLOCK_INTERVAL' blocks
-const CONSTANT_BLOCK_INTERVAL = 300;
+const CONSTANT_BLOCK_INTERVAL = 50;
 
 const RPC_URL = process.env.RPC_URL;
 
@@ -47,30 +48,36 @@ async function UniswapV3HistoryFetcher() {
                 throw new Error('Could not find RPC_URL env variable');
             }
 
-            if(!fs.existsSync(DATA_DIR)) {
-                fs.mkdirSync(DATA_DIR);
-            }
-
             if(!fs.existsSync(path.join(DATA_DIR, 'uniswapv3'))) {
-                fs.mkdirSync(path.join(DATA_DIR, 'uniswapv3'));
+                fs.mkdirSync(path.join(DATA_DIR, 'uniswapv3'), {recursive: true});
             }
 
             console.log(`${fnName()}: starting`);
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
-            const univ3Factory = new Contract(univ3Config.uniswapFactoryV3Address, univ3Config.uniswapFactoryV3Abi, web3Provider);
+            const multicallProvider = new providers.MulticallProvider(web3Provider);
+            const univ3Factory = new Contract(univ3Config.uniswapFactoryV3Address, univ3Config.uniswapFactoryV3Abi, multicallProvider);
             const currentBlock = await web3Provider.getBlockNumber() - 10;
-            const poolsData = [];
 
-            for(const pairToFetch of univ3Config.pairsToFetch) {
-                for(const fee of UNISWAPV3_FEES) {
-                    const pairAddress = await FetchUniswapV3HistoryForPair(pairToFetch, fee, web3Provider, univ3Factory, currentBlock);
-                    if(pairAddress) {
-                        poolsData.push({
-                            tokens: [pairToFetch.token0, pairToFetch.token1],
-                            address: pairAddress,
-                            label: `${pairToFetch.token0}-${pairToFetch.token1}-${fee}`
-                        });
-                    }
+            // this is used to only keep 380 days of data, but still need to fetch trade data since the pool initialize block
+            // computing the data is CPU heavy so this avoid computing too old data that we don't use
+            // fetching events is not
+            const minStartDate = Math.round(Date.now()/1000) - 380 * 24 * 60 * 60; // min start block is 380 days ago
+            const minStartBlock = await getBlocknumberForTimestamp(minStartDate);
+            console.log(`minStartBlock is ${minStartBlock}`);
+
+            console.log(`${fnName()}: getting pools to fetch`);
+            const poolsToFetch = await getAllPoolsToFetch(univ3Factory);
+            console.log(`${fnName()}: found ${poolsToFetch.length} pools to fetch from ${univ3Config.pairsToFetch.length} pairs in config`);
+
+            const poolsData = [];
+            for(const fetchConfig of poolsToFetch) {
+                const pairAddress = await FetchUniswapV3HistoryForPair(fetchConfig.pairToFetch, fetchConfig.fee, web3Provider, fetchConfig.poolAddress, currentBlock, minStartBlock);
+                if(pairAddress) {
+                    poolsData.push({
+                        tokens: [fetchConfig.pairToFetch.token0, fetchConfig.pairToFetch.token1],
+                        address: pairAddress,
+                        label: `${fetchConfig.pairToFetch.token0}-${fetchConfig.pairToFetch.token1}-${fetchConfig.fee}`
+                    });
                 }
             }
 
@@ -112,7 +119,47 @@ async function UniswapV3HistoryFetcher() {
     }
 }
 
-async function FetchUniswapV3HistoryForPair(pairConfig, fee, web3Provider, univ3Factory, currentBlock) {
+async function getAllPoolsToFetch(univ3Factory) {
+    const poolsToFetch = [];
+    // find existing pools via multicall
+    const promises = [];
+    for (const pairToFetch of univ3Config.pairsToFetch) {
+        for (const fee of UNISWAPV3_FEES) {
+            const token0 = getConfTokenBySymbol(pairToFetch.token0);
+            if (!token0) {
+                throw new Error('Cannot find token in global config with symbol: ' + pairToFetch.token0);
+            }
+            const token1 = getConfTokenBySymbol(pairToFetch.token1);
+            if (!token1) {
+                throw new Error('Cannot find token in global config with symbol: ' + pairToFetch.token1);
+            }
+
+            promises.push(univ3Factory.getPool(token0.address, token1.address, fee));
+        }
+    }
+
+    await Promise.all(promises);
+    let promiseIndex = 0;
+    for (const pairToFetch of univ3Config.pairsToFetch) {
+        for (const fee of UNISWAPV3_FEES) {
+            const poolAddress = await promises[promiseIndex];
+            if (poolAddress == ethers.constants.AddressZero) {
+                console.log(`${fnName()}[${pairToFetch.token0}-${pairToFetch.token1}-${fee}]: pool does not exist`);
+            } else {
+                poolsToFetch.push({
+                    pairToFetch,
+                    fee,
+                    poolAddress
+                });
+            }
+
+            promiseIndex++;
+        }
+    }
+    return poolsToFetch;
+}
+
+async function FetchUniswapV3HistoryForPair(pairConfig, fee, web3Provider, poolAddress, currentBlock, minStartBlock) {
     console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}]: start for pair ${pairConfig.token0}-${pairConfig.token1} and fees: ${fee}`);
     const token0 = getConfTokenBySymbol(pairConfig.token0);
     if(!token0) {
@@ -126,28 +173,15 @@ async function FetchUniswapV3HistoryForPair(pairConfig, fee, web3Provider, univ3
     // try to find the json file representation of the pool latest value already fetched
     const latestDataFilePath = `${DATA_DIR}/uniswapv3/${pairConfig.token0}-${pairConfig.token1}-${fee}-latestdata.json`;
     let latestData = undefined;
-    let poolAddress = undefined;
     let univ3PairContract = undefined;
 
     if(fs.existsSync(latestDataFilePath)) {
         // if the file exists, set its value to latestData
         latestData = JSON.parse(fs.readFileSync(latestDataFilePath));
-        poolAddress = latestData.poolAddress;
-        if(!poolAddress) {
-            console.log(`Could not find pool address in latest data file ${latestDataFilePath}`);
-            poolAddress = await univ3Factory.getPool(token0.address, token1.address, fee);
-            latestData.poolAddress = poolAddress;
-        }
-
         univ3PairContract = new Contract(poolAddress, univ3Config.uniswapV3PairAbi, web3Provider);
         console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${fee}]: data file found ${latestDataFilePath}, last block fetched: ${latestData.blockNumber}`);
     } else {
         console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${fee}]: data file not found, starting from scratch`);
-        poolAddress = await univ3Factory.getPool(token0.address, token1.address, fee);
-        if(poolAddress == ethers.constants.AddressZero) {
-            console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${fee}]: pool does not exist`);
-            return undefined;
-        }
         univ3PairContract = new Contract(poolAddress, univ3Config.uniswapV3PairAbi, web3Provider);
 
         // verify that the token0 in config is the token0 of the pool
@@ -213,7 +247,7 @@ async function FetchUniswapV3HistoryForPair(pairConfig, fee, web3Provider, univ3
         console.log(`${fnName()}[${pairConfig.token0}-${pairConfig.token1}-${fee}]: [${fromBlock} - ${toBlock}] found ${events.length} Mint/Burn/Swap events after ${cptError} errors (fetched ${toBlock-fromBlock+1} blocks)`);
         
         if(events.length != 0) {
-            processEvents(events, iface, latestData, token0, token1, latestDataFilePath, dataFileName);
+            processEvents(events, iface, latestData, token0, token1, latestDataFilePath, dataFileName, minStartBlock);
 
             // try to find the blockstep to reach 9000 events per call as the RPC limit is 10 000, 
             // this try to change the blockstep by increasing it when the pool is not very used
@@ -274,7 +308,7 @@ async function fetchInitializeData(web3Provider, poolAddress, univ3PairContract)
     return latestData;
 }
 
-function processEvents(events, iface, latestData, token0, token1, latestDataFilePath, dataFileName) {
+function processEvents(events, iface, latestData, token0, token1, latestDataFilePath, dataFileName, minStartBlock) {
     const dtStart = Date.now();
     const saveData = [];
     // const priceData = [];
@@ -284,7 +318,7 @@ function processEvents(events, iface, latestData, token0, token1, latestDataFile
         const parsedEvent = iface.parseLog(event);
 
         // this checks that we are crossing a new block, so we will save the price and maybe checkpoint data
-        if(lastBlock != event.blockNumber && lastBlock >= latestData.lastDataSave + CONSTANT_BLOCK_INTERVAL) {
+        if(lastBlock != event.blockNumber && lastBlock >= latestData.lastDataSave + CONSTANT_BLOCK_INTERVAL && event.blockNumber >= minStartBlock) {
             const newSaveData = getSaveData(token0, token1, latestData);
             saveData.push(newSaveData);
         }
@@ -313,12 +347,16 @@ function processEvents(events, iface, latestData, token0, token1, latestDataFile
     }
     
     // at the end, write the last data if not already saved
-    if(latestData.blockNumber != latestData.lastDataSave && latestData.blockNumber >= latestData.lastDataSave + CONSTANT_BLOCK_INTERVAL) {
+    if(latestData.blockNumber != latestData.lastDataSave 
+        && latestData.blockNumber >= latestData.lastDataSave + CONSTANT_BLOCK_INTERVAL 
+        && latestData.blockNumber >= minStartBlock) {
         const newSaveData = getSaveData(token0, token1, latestData);
         saveData.push(newSaveData);
     }
 
-    fs.appendFileSync(dataFileName, saveData.join(''));
+    if(saveData.length > 0) {
+        fs.appendFileSync(dataFileName, saveData.join(''));
+    }
     
     fs.writeFileSync(latestDataFilePath, JSON.stringify(latestData));
     logFnDuration(dtStart, events.length, 'event');

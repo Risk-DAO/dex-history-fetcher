@@ -1,5 +1,6 @@
 const axios = require('axios');
 const dotenv = require('dotenv');
+const { retry } = require('./utils');
 dotenv.config();
 
 const uri = process.env.API_URI;
@@ -21,7 +22,7 @@ async function RecordMonitoring(monitoringData) {
     try {
         monitoringData['type'] = 'Dex History';
         monitoringData['lastUpdate'] = Math.round(Date.now() / 1000);
-        const resp = await axios.post(uri, monitoringData);
+        const resp = await retry(axios.post, [uri, monitoringData]);
         console.log(resp.data);
     } catch (error) {
         console.log('error when pushing monitoring', error);

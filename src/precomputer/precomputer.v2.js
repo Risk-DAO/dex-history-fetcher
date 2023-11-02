@@ -1,13 +1,13 @@
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { ethers } = require('ethers');
-const { sleep, fnName, roundTo, logFnDurationWithLabel } = require('../utils/utils');
+const { sleep, fnName, roundTo, logFnDurationWithLabel, retry } = require('../utils/utils');
 const { default: axios } = require('axios');
 const { RecordMonitoring } = require('../utils/monitoring');
 const { pairsToCompute } = require('./precomputer.config');
 const { getLiquidity, getVolatility } = require('../data.interface/data.interface');
 const path = require('path');
-const { writeFileSync } = require('fs');
 const { SPANS, PLATFORMS, DATA_DIR, TARGET_SLIPPAGES } = require('../utils/constants');
+const fs = require('fs');
 
 const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
@@ -30,6 +30,11 @@ async function precomputeDataV2() {
                 'lastStart': Math.round(runStartDate/1000),
                 'runEvery': RUN_EVERY_MINUTES * 60
             });
+            
+            const dirPath = path.join(DATA_DIR, 'precomputed', 'riskoracle');
+            if(!fs.existsSync(dirPath)) {
+                fs.mkdirSync(dirPath, {recursive: true});
+            }
 
             const currentBlock = await web3Provider.getBlockNumber() - 100;
 
@@ -75,20 +80,25 @@ async function precomputeDataV2() {
                 const blockTimeStamps = {};
                 console.log(`${fnName()}: getting all block timestamps`);
                 for(const blockNumber of allBlocksForSpan) {
-                    const blockTimestampResp = await axios.get(BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockNumber}`);
+                    const blockTimestampResp = await retry(axios.get, [BLOCKINFO_URL + `/api/getblocktimestamp?blocknumber=${blockNumber}`], 0, 100);
                     blockTimeStamps[blockNumber] = blockTimestampResp.data.timestamp;
                 }
                 
                 for(const platform of PLATFORMS) {
-                    const averageFullFilename = path.join(DATA_DIR, 'precomputed', platform, `averages-${span}d.json`);
-                    writeFileSync(averageFullFilename, JSON.stringify(averagesForPlatform[platform]));
-                    const concatFullFilename = path.join(DATA_DIR, 'precomputed', platform, `concat-${span}d.json`);
+                    const platformPath = path.join(dirPath, platform);
+                    if(!fs.existsSync(platformPath)) {
+                        fs.mkdirSync(platformPath, {recursive: true});
+                    }
+
+                    const averageFullFilename = path.join(platformPath, `averages-${span}d.json`);
+                    fs.writeFileSync(averageFullFilename, JSON.stringify(averagesForPlatform[platform]));
+                    const concatFullFilename = path.join(platformPath, `concat-${span}d.json`);
                     const concatObj = {
                         lastUpdate: Date.now(),
                         concatData: precomputedForPlatform[platform],
                         blockTimestamps: blockTimeStamps
                     };
-                    writeFileSync(concatFullFilename, JSON.stringify(concatObj));
+                    fs.writeFileSync(concatFullFilename, JSON.stringify(concatObj));
                 }
                 logFnDurationWithLabel(start, `Precomputer for span ${span}`);
             }
@@ -124,7 +134,7 @@ async function precomputeDataV2() {
  * @param {string} base 
  * @param {string} quote 
  * @param {number} blockStep 
- * @param {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}} liquidityDataAggreg 
+ * @param {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: {base: number, quote: number}}}}} liquidityDataAggreg 
  * @param {number} volatility 
  */
 function toPrecomputed(base, quote, blockStep, liquidityDataAggreg, volatility) {
@@ -155,8 +165,8 @@ function toPrecomputed(base, quote, blockStep, liquidityDataAggreg, volatility) 
         };
 
         for(const slippagePct of TARGET_SLIPPAGES) {
-            volumeForSlippageObj[slippagePct] = liquidityData.slippageMap[slippagePct*100];
-            volumeForSlippageObj.aggregated[slippagePct] = liquidityData.slippageMap[slippagePct*100];
+            volumeForSlippageObj[slippagePct] = liquidityData.slippageMap[slippagePct*100].base;
+            volumeForSlippageObj.aggregated[slippagePct] = liquidityData.slippageMap[slippagePct*100].base;
         }
 
         precomputedObj.volumeForSlippage.push(volumeForSlippageObj);
@@ -195,7 +205,7 @@ function addToAverages(averages, base, quote, blockStep, liquidityAverageAggreg,
 
 /**
  * Compute average slippage map and price
- * @param {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: number}}}} liquidityDataForInterval 
+ * @param {{[blocknumber: number]: {price: number, slippageMap: {[slippageBps: number]: {base: number, quote: number}}}} liquidityDataForInterval 
  * @returns {{avgPrice: number, avgSlippageMap: {[slippageBps: number]: number}}
  */
 function computeAverageData(liquidityDataForInterval) {
@@ -209,7 +219,7 @@ function computeAverageData(liquidityDataForInterval) {
     for(const data of Object.values(liquidityDataForInterval)) {
         avgPrice += data.price;
         for (const slippageBps of Object.keys(avgSlippageMap)) {
-            avgSlippageMap[slippageBps] += data.slippageMap[slippageBps];
+            avgSlippageMap[slippageBps] += data.slippageMap[slippageBps].base;
         }
     }
     
