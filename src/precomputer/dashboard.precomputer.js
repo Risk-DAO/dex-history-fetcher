@@ -146,6 +146,10 @@ async function PrecomputeDashboardData() {
 
                     allPlatformsOutput[block].volatility = allPlatformsOutput[block].volatility / totalVolatilityWeightForBlock;
                     allPlatformsOutput[block].price = allPlatformsOutput[block].price / totalPriceWeightForBlock;
+                    allPlatformsOutput[block].priceAvg = allPlatformsOutput[block].priceAvg / totalPriceWeightForBlock;
+                    allPlatformsOutput[block].priceMedian = allPlatformsOutput[block].priceMedian / totalPriceWeightForBlock;
+                    allPlatformsOutput[block].priceQ10 = allPlatformsOutput[block].priceQ10 / totalPriceWeightForBlock;
+                    allPlatformsOutput[block].priceQ90 = allPlatformsOutput[block].priceQ90 / totalPriceWeightForBlock;
                     allPlatformsOutput[block].biggestDailyChange = allPlatformsOutput[block].biggestDailyChange / totalPriceWeightForBlock;
 
                     // remove from object to use less place in the json
@@ -208,6 +212,10 @@ function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock
         const priceBlocksBefore = pricesBlocks.filter(_ => _ >= block - BLOCK_PER_DAY && _ <= block);
         if (priceBlocksBefore.length == 0) {
             platformOutputResult[block].price = 0;
+            platformOutputResult[block].priceAvg = 0;
+            platformOutputResult[block].priceMedian = 0;
+            platformOutputResult[block].priceQ10 = 0;
+            platformOutputResult[block].priceQ90 = 0;
         } else {
             const prices = [];
             for(const priceBlock of priceBlocksBefore) {
@@ -215,7 +223,7 @@ function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock
             }
 
             platformOutputResult[block].price = prices.at(-1);
-            platformOutputResult[block].priceMean = average(prices);
+            platformOutputResult[block].priceAvg = average(prices);
             platformOutputResult[block].priceMedian = median(prices);
             platformOutputResult[block].priceQ10 = quantile(prices, 0.1);
             platformOutputResult[block].priceQ90 = quantile(prices, 0.9);
