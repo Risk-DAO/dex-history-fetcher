@@ -20,7 +20,6 @@ async function compoundV3ComputerDebug() {
     } finally {
         process.exit();
     }
-    
 }
 
 compoundV3ComputerDebug();

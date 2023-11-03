@@ -10,9 +10,9 @@ const { normalize, getConfTokenBySymbol } = require('../../utils/token.utils');
 const { compoundV3Pools, cometABI } = require('./compoundV3Computer.config');
 const { RecordMonitoring } = require('../../utils/monitoring');
 const { DATA_DIR, PLATFORMS } = require('../../utils/constants');
-const { getVolatility, getAverageLiquidity, getLiquidity } = require('../../data.interface/data.interface');
+const { getLiquidity } = require('../../data.interface/data.interface');
 const { computeParkinsonVolatility } = require('../../utils/volatility');
-const { getPricesAtBlockForInterval, getPricesAtBlockForIntervalViaPivot } = require('../../data.interface/internal/data.interface.utils');
+const { getPricesAtBlockForIntervalViaPivot } = require('../../data.interface/internal/data.interface.utils');
 const spans = [7, 30, 180];
 
 /**

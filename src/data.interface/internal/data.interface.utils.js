@@ -4,6 +4,18 @@ const fs = require('fs');
 const { DATA_DIR, DEFAULT_STEP_BLOCK } = require('../../utils/constants');
 const { fnName, logFnDurationWithLabel } = require('../../utils/utils');
 
+let cache = {};
+
+const cachedPairs = ['WETH-USDC', 'USDC-WETH'];
+
+setTimeout(() => cleanPriceCache(), 30 * 60 * 1000);
+
+function cleanPriceCache() {
+    console.log('cleanPriceCache starting');
+    cache = {};
+    console.log('cleanPriceCache ending');
+}
+
 /**
  * Gets the prices at block from file, just by reading all data and returning all the values
  * @param {string} platform
@@ -14,14 +26,48 @@ const { fnName, logFnDurationWithLabel } = require('../../utils/utils');
  * @returns {{[blocknumber: number]: number}}
  */
 function getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock) {
-    if(platform == 'curve') {
-        return getPricesAtBlockForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBlock);
+
+    if(cache[`${platform}-${fromSymbol}-${toSymbol}`] && cache[`${platform}-${fromSymbol}-${toSymbol}`].expirationDate > Date.now()) {
+        console.log(`getPricesAtBlockForInterval: using cache for ${platform}-${fromSymbol}-${toSymbol}`);
+        return cache[`${platform}-${fromSymbol}-${toSymbol}`];
     }
 
-    const filename = `${fromSymbol}-${toSymbol}-unified-data.csv`;
-    const fullFilename = path.join(DATA_DIR, 'precomputed', platform, filename);
+    let pricesAtBlock = {};
+    if(platform == 'curve') {
+        pricesAtBlock = getPricesAtBlockForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBlock);
+    } else {
+        if(platform == 'uniswapv3' 
+        && ((fromSymbol == 'stETH' && toSymbol == 'WETH') 
+            || (fromSymbol == 'WETH' && toSymbol == 'stETH'))) {
+            pricesAtBlock = generateFakePriceForStETHWETHUniswapV3(fromBlock, toBlock);
+        } else {
+            const filename = `${fromSymbol}-${toSymbol}-unified-data.csv`;
+            const fullFilename = path.join(DATA_DIR, 'precomputed', platform, filename);
+    
+            pricesAtBlock = readAllPricesFromFilename(fullFilename, fromBlock, toBlock);
+        }
+    }
+    
+    // cache result if the pair is on the cached pairs
+    if(cachedPairs.includes(`${fromSymbol}-${toSymbol}`)) {
+        cache[`${platform}-${fromSymbol}-${toSymbol}`] = {
+            pricesAtBlock,
+            expirationDate: Date.now() + 30 * 60 * 1000, // cache for 30 min
+        };
+    }
 
-    const pricesAtBlock = readAllPricesFromFilename(fullFilename, fromBlock, toBlock);
+    return pricesAtBlock;
+}
+
+
+function generateFakePriceForStETHWETHUniswapV3(fromBlock, toBlock) {
+    const pricesAtBlock = {};
+    let currBlock = fromBlock;
+    while(currBlock <= toBlock) {
+        pricesAtBlock[currBlock] = 1;
+        currBlock += DEFAULT_STEP_BLOCK;
+    }
+
     return pricesAtBlock;
 }
 
@@ -80,7 +126,7 @@ function getPricesAtBlockForIntervalViaPivot(platform, fromSymbol, toSymbol, fro
         priceAtBlock[blockNumber] = computedPrice;
     }
 
-    logFnDurationWithLabel(start, `p: ${platform}, ${label}`);
+    logFnDurationWithLabel(start, `[${fromSymbol}->${pivotSymbol}->${toSymbol}] [${fromBlock}-${toBlock}] [${platform}]`);
     return priceAtBlock;
 }
 

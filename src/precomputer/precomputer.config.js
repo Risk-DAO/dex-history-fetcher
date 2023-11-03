@@ -126,6 +126,7 @@ const dashboardPairsToCompute = [
     {
         base: 'USDC',
         quote: 'WBTC',
+        volatilityPivot: 'WETH',
     },
     {
         base: 'USDC',
