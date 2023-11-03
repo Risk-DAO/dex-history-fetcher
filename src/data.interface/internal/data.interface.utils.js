@@ -26,7 +26,6 @@ function cleanPriceCache() {
  * @returns {{[blocknumber: number]: number}}
  */
 function getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock) {
-
     if(cache[`${platform}-${fromSymbol}-${toSymbol}`] && cache[`${platform}-${fromSymbol}-${toSymbol}`].expirationDate > Date.now()) {
         console.log(`getPricesAtBlockForInterval: using cache for ${platform}-${fromSymbol}-${toSymbol}`);
         return cache[`${platform}-${fromSymbol}-${toSymbol}`].data;
@@ -98,32 +97,38 @@ function getPricesAtBlockForIntervalViaPivot(platform, fromSymbol, toSymbol, fro
 
     const priceAtBlock = {};
 
-    // compute all the prices with blocks from segment1
-    for(const [blockNumber, priceSegment1] of Object.entries(dataSegment1)) {
-        const blocksBeforeSegment2 = keysSegment2.filter(_ => _ <= Number(blockNumber));
-        if(blocksBeforeSegment2.length == 0) {
-            continue;
+    // check whether to compute the price with base data from segment1 or 2
+    // based on the number of prices in each segments
+    // example if the segment1 has 1000 prices and segment2 has 500 prices
+    // we will use segment1 as the base for the blocknumbers in the returned object
+    if(keysSegment1.length > keysSegment2.length) {
+        // compute all the prices with blocks from segment1
+        for(const [blockNumber, priceSegment1] of Object.entries(dataSegment1)) {
+            const blocksBeforeSegment2 = keysSegment2.filter(_ => _ <= Number(blockNumber));
+            if(blocksBeforeSegment2.length == 0) {
+                continue;
+            }
+
+            // take the last, meaning it's the closest to 'blockNumber' from segment1
+            const nearestBlockNumberSegment2 = blocksBeforeSegment2.at(-1);
+            const priceSegment2 = dataSegment2[nearestBlockNumberSegment2];
+            const computedPrice = priceSegment1 * priceSegment2;
+            priceAtBlock[blockNumber] = computedPrice;
         }
+    } else {
+        // compute all the prices with blocks from segment2
+        for(const [blockNumber, priceSegment2] of Object.entries(dataSegment2)) {
+            const blocksBeforeSegment1 = keysSegment1.filter(_ => _ <= Number(blockNumber));
+            if(blocksBeforeSegment1.length == 0) {
+                continue;
+            }
 
-        // take the last, meaning it's the closest to 'blockNumber' from segment1
-        const nearestBlockNumberSegment2 = blocksBeforeSegment2.at(-1);
-        const priceSegment2 = dataSegment2[nearestBlockNumberSegment2];
-        const computedPrice = priceSegment1 * priceSegment2;
-        priceAtBlock[blockNumber] = computedPrice;
-    }
-
-    // compute all the prices with blocks from segment2
-    for(const [blockNumber, priceSegment2] of Object.entries(dataSegment2)) {
-        const blocksBeforeSegment1 = keysSegment1.filter(_ => _ <= Number(blockNumber));
-        if(blocksBeforeSegment1.length == 0) {
-            continue;
+            // take the last, meaning it's the closest to 'blockNumber' from segment1
+            const nearestBlockNumberSegment1 = blocksBeforeSegment1.at(-1);
+            const priceSegment1 = dataSegment1[nearestBlockNumberSegment1];
+            const computedPrice = priceSegment1 * priceSegment2;
+            priceAtBlock[blockNumber] = computedPrice;
         }
-
-        // take the last, meaning it's the closest to 'blockNumber' from segment1
-        const nearestBlockNumberSegment1 = blocksBeforeSegment1.at(-1);
-        const priceSegment1 = dataSegment1[nearestBlockNumberSegment1];
-        const computedPrice = priceSegment1 * priceSegment2;
-        priceAtBlock[blockNumber] = computedPrice;
     }
 
     logFnDurationWithLabel(start, `[${fromSymbol}->${pivotSymbol}->${toSymbol}] [${fromBlock}-${toBlock}] [${platform}]`);

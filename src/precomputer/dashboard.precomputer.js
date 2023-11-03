@@ -99,25 +99,27 @@ async function PrecomputeDashboardData() {
                             for(const block of Object.keys(allPlatformsOutput)) {
                                 // do this only the first time for allPlatformsOutput
                                 if(!allPlatformsOutput[block].totalVolatilityWeight) {
-                                    const volatilityWeight = allPlatformsOutput[block].slippageMap[100].base;
+                                    const volatilityWeight = allPlatformsOutput[block].slippageMap[500].base;
                                     allPlatformsOutput[block].totalVolatilityWeight = allPlatformsOutput[block].volatility > 0 ? volatilityWeight : 0;
-                                    allPlatformsOutput[block].volatility = allPlatformsOutput[block].volatility * volatilityWeight;
+                                    allPlatformsOutput[block].volatility *= volatilityWeight;
                                 }
 
                                 if(!allPlatformsOutput[block].totalPriceWeight) {
-                                    const priceWeight = allPlatformsOutput[block].slippageMap[100].base;
+                                    const priceWeight = allPlatformsOutput[block].slippageMap[500].base;
                                     allPlatformsOutput[block].totalPriceWeight = allPlatformsOutput[block].price > 0 ? priceWeight : 0;
-                                    allPlatformsOutput[block].price = allPlatformsOutput[block].price * priceWeight;
-                                    allPlatformsOutput[block].priceAvg = allPlatformsOutput[block].priceAvg * priceWeight;
-                                    allPlatformsOutput[block].priceMedian = allPlatformsOutput[block].priceMedian * priceWeight;
-                                    allPlatformsOutput[block].priceQ10 = allPlatformsOutput[block].priceQ10 * priceWeight;
-                                    allPlatformsOutput[block].priceQ90 = allPlatformsOutput[block].priceQ90 * priceWeight;
-                                    allPlatformsOutput[block].biggestDailyChange = allPlatformsOutput[block].biggestDailyChange * priceWeight;
+                                    allPlatformsOutput[block].price *= priceWeight;
+                                    allPlatformsOutput[block].priceAvg *= priceWeight;
+                                    allPlatformsOutput[block].priceMedian *= priceWeight;
+                                    allPlatformsOutput[block].priceQ10 *= priceWeight;
+                                    allPlatformsOutput[block].priceQ90 *= priceWeight;
+                                    allPlatformsOutput[block].priceMin *= priceWeight;
+                                    allPlatformsOutput[block].priceMax *= priceWeight;
+                                    allPlatformsOutput[block].biggestDailyChange *= priceWeight;
                                 }
 
                                 // for each new platformOutput, compute the new weight and add price and volatility
                                 // according to the weight
-                                const newWeight = platformOutput[block].slippageMap[100].base;
+                                const newWeight = platformOutput[block].slippageMap[500].base;
 
                                 const newVolatility = platformOutput[block].volatility;
                                 if(newVolatility > 0) {
@@ -134,6 +136,8 @@ async function PrecomputeDashboardData() {
                                     allPlatformsOutput[block].priceMedian += (platformOutput[block].priceMedian * newWeight);
                                     allPlatformsOutput[block].priceQ10 += (platformOutput[block].priceQ10 * newWeight);
                                     allPlatformsOutput[block].priceQ90 += (platformOutput[block].priceQ90 * newWeight);
+                                    allPlatformsOutput[block].priceMin += (platformOutput[block].priceMin * newWeight);
+                                    allPlatformsOutput[block].priceMax += (platformOutput[block].priceMax * newWeight);
                                 }
 
                                 // sum liquidities
@@ -159,6 +163,8 @@ async function PrecomputeDashboardData() {
                     allPlatformsOutput[block].priceMedian = allPlatformsOutput[block].priceMedian / totalPriceWeightForBlock;
                     allPlatformsOutput[block].priceQ10 = allPlatformsOutput[block].priceQ10 / totalPriceWeightForBlock;
                     allPlatformsOutput[block].priceQ90 = allPlatformsOutput[block].priceQ90 / totalPriceWeightForBlock;
+                    allPlatformsOutput[block].priceMin = allPlatformsOutput[block].priceMin / totalPriceWeightForBlock;
+                    allPlatformsOutput[block].priceMax = allPlatformsOutput[block].priceMax / totalPriceWeightForBlock;
                     allPlatformsOutput[block].biggestDailyChange = allPlatformsOutput[block].biggestDailyChange / totalPriceWeightForBlock;
 
                     // remove from object to use less place in the json
@@ -225,6 +231,8 @@ function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock
             platformOutputResult[block].priceMedian = 0;
             platformOutputResult[block].priceQ10 = 0;
             platformOutputResult[block].priceQ90 = 0;
+            platformOutputResult[block].priceMin = 0;
+            platformOutputResult[block].priceMax = 0;
         } else {
             const prices = [];
             for(const priceBlock of priceBlocksBefore) {
@@ -241,6 +249,8 @@ function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock
             platformOutputResult[block].priceMedian = median(prices);
             platformOutputResult[block].priceQ10 = quantile(prices, 0.1);
             platformOutputResult[block].priceQ90 = quantile(prices, 0.9);
+            platformOutputResult[block].priceMin = Math.min(...prices);
+            platformOutputResult[block].priceMax = Math.max(...prices);
         }
         
         // compute avg slippage based on trade price (amount of base sold vs amount of quote obtained)
