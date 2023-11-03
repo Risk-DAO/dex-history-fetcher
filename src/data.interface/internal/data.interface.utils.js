@@ -29,7 +29,7 @@ function getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, 
 
     if(cache[`${platform}-${fromSymbol}-${toSymbol}`] && cache[`${platform}-${fromSymbol}-${toSymbol}`].expirationDate > Date.now()) {
         console.log(`getPricesAtBlockForInterval: using cache for ${platform}-${fromSymbol}-${toSymbol}`);
-        return cache[`${platform}-${fromSymbol}-${toSymbol}`];
+        return cache[`${platform}-${fromSymbol}-${toSymbol}`].data;
     }
 
     let pricesAtBlock = {};
@@ -51,7 +51,7 @@ function getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, 
     // cache result if the pair is on the cached pairs
     if(cachedPairs.includes(`${fromSymbol}-${toSymbol}`)) {
         cache[`${platform}-${fromSymbol}-${toSymbol}`] = {
-            pricesAtBlock,
+            data: pricesAtBlock,
             expirationDate: Date.now() + 30 * 60 * 1000, // cache for 30 min
         };
     }
