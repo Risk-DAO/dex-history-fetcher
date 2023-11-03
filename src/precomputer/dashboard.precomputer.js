@@ -3,9 +3,7 @@ const { ethers } = require('ethers');
 const { fnName, roundTo, sleep, logFnDurationWithLabel, logFnDuration } = require('../utils/utils');
 const { dashboardPairsToCompute } = require('./precomputer.config');
 const { DATA_DIR, PLATFORMS } = require('../utils/constants');
-const RUN_EVERY_MINUTES = 3 * 60; // in minutes
-const MONITORING_NAME = 'Dashboard Precomputer';
-const RPC_URL = process.env.RPC_URL;
+
 const fs = require('fs');
 const path = require('path');
 const { getBlocknumberForTimestamp } = require('../utils/web3.utils');
@@ -14,6 +12,9 @@ const { computeParkinsonVolatility } = require('../utils/volatility');
 const { getDefaultSlippageMap, getPricesAtBlockForIntervalViaPivot } = require('../data.interface/internal/data.interface.utils');
 const { median, average, quantile } = require('simple-statistics');
 
+const RUN_EVERY_MINUTES = 6 * 60; // in minutes
+const MONITORING_NAME = 'Dashboard Precomputer';
+const RPC_URL = process.env.RPC_URL;
 const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
 const NB_DAYS = 180;
 const TARGET_DATA_POINTS = NB_DAYS;
@@ -107,6 +108,10 @@ async function PrecomputeDashboardData() {
                                     const priceWeight = allPlatformsOutput[block].slippageMap[100].base;
                                     allPlatformsOutput[block].totalPriceWeight = allPlatformsOutput[block].price > 0 ? priceWeight : 0;
                                     allPlatformsOutput[block].price = allPlatformsOutput[block].price * priceWeight;
+                                    allPlatformsOutput[block].priceAvg = allPlatformsOutput[block].priceAvg * priceWeight;
+                                    allPlatformsOutput[block].priceMedian = allPlatformsOutput[block].priceMedian * priceWeight;
+                                    allPlatformsOutput[block].priceQ10 = allPlatformsOutput[block].priceQ10 * priceWeight;
+                                    allPlatformsOutput[block].priceQ90 = allPlatformsOutput[block].priceQ90 * priceWeight;
                                     allPlatformsOutput[block].biggestDailyChange = allPlatformsOutput[block].biggestDailyChange * priceWeight;
                                 }
 
@@ -124,11 +129,11 @@ async function PrecomputeDashboardData() {
                                 if(newPrice > 0) {
                                     allPlatformsOutput[block].totalPriceWeight += newWeight;
                                     allPlatformsOutput[block].price += (newPrice * newWeight);
-                                    allPlatformsOutput[block].biggestDailyChange += platformOutput[block].biggestDailyChange * newWeight;
-                                    allPlatformsOutput[block].priceAvg += platformOutput[block].priceAvg * newWeight;
-                                    allPlatformsOutput[block].priceMedian += platformOutput[block].priceMedian * newWeight;
-                                    allPlatformsOutput[block].priceQ10 += platformOutput[block].priceQ10 * newWeight;
-                                    allPlatformsOutput[block].priceQ90 += platformOutput[block].priceQ90 * newWeight;
+                                    allPlatformsOutput[block].biggestDailyChange += (platformOutput[block].biggestDailyChange * newWeight);
+                                    allPlatformsOutput[block].priceAvg += (platformOutput[block].priceAvg * newWeight);
+                                    allPlatformsOutput[block].priceMedian += (platformOutput[block].priceMedian * newWeight);
+                                    allPlatformsOutput[block].priceQ10 += (platformOutput[block].priceQ10 * newWeight);
+                                    allPlatformsOutput[block].priceQ90 += (platformOutput[block].priceQ90 * newWeight);
                                 }
 
                                 // sum liquidities
@@ -223,7 +228,12 @@ function generateDashboardDataFromLiquidityData(platformLiquidity, pricesAtBlock
         } else {
             const prices = [];
             for(const priceBlock of priceBlocksBefore) {
-                prices.push(pricesAtBlock[priceBlock]);
+                const p = pricesAtBlock[priceBlock];
+                if(p > 0) {
+                    prices.push(p);
+                } else {
+                    console.log('noprice');
+                }
             }
 
             platformOutputResult[block].price = prices.at(-1);
