@@ -125,6 +125,10 @@ async function PrecomputeDashboardData() {
                                     allPlatformsOutput[block].totalPriceWeight += newWeight;
                                     allPlatformsOutput[block].price += (newPrice * newWeight);
                                     allPlatformsOutput[block].biggestDailyChange += platformOutput[block].biggestDailyChange * newWeight;
+                                    allPlatformsOutput[block].priceAvg += platformOutput[block].priceAvg * newWeight;
+                                    allPlatformsOutput[block].priceMedian += platformOutput[block].priceMedian * newWeight;
+                                    allPlatformsOutput[block].priceQ10 += platformOutput[block].priceQ10 * newWeight;
+                                    allPlatformsOutput[block].priceQ90 += platformOutput[block].priceQ90 * newWeight;
                                 }
 
                                 // sum liquidities
