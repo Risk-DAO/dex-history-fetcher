@@ -25,7 +25,7 @@ function cleanPriceCache() {
  * @param {number} toBlock 
  * @returns {{[blocknumber: number]: number}}
  */
-function getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock) {
+function getPricesAtBlockForIntervalWithCache(platform, fromSymbol, toSymbol, fromBlock, toBlock) {
     if(cache[`${platform}-${fromSymbol}-${toSymbol}`] && cache[`${platform}-${fromSymbol}-${toSymbol}`].expirationDate > Date.now()) {
         console.log(`getPricesAtBlockForInterval: using cache for ${platform}-${fromSymbol}-${toSymbol}`);
         return cache[`${platform}-${fromSymbol}-${toSymbol}`].data;
@@ -55,6 +55,27 @@ function getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, 
         };
     }
 
+    return pricesAtBlock;
+}
+
+
+function getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock) {
+    let pricesAtBlock = {};
+    if(platform == 'curve') {
+        pricesAtBlock = getPricesAtBlockForIntervalForCurve(fromSymbol, toSymbol, fromBlock, toBlock);
+    } else {
+        if(platform == 'uniswapv3' 
+        && ((fromSymbol == 'stETH' && toSymbol == 'WETH') 
+            || (fromSymbol == 'WETH' && toSymbol == 'stETH'))) {
+            pricesAtBlock = generateFakePriceForStETHWETHUniswapV3(fromBlock, toBlock);
+        } else {
+            const filename = `${fromSymbol}-${toSymbol}-unified-data.csv`;
+            const fullFilename = path.join(DATA_DIR, 'precomputed', platform, filename);
+    
+            pricesAtBlock = readAllPricesFromFilename(fullFilename, fromBlock, toBlock);
+        }
+    }
+    
     return pricesAtBlock;
 }
 

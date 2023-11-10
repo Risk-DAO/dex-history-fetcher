@@ -22,7 +22,7 @@ const NB_DAYS_AVG = 30;
 
 const BIGGEST_DAILY_CHANGE_MEDIAN_OVER_BLOCK = 300; // amount of blocks to median the price over
 const BIGGEST_DAILY_CHANGE_OVER_DAYS = 90; // amount of days to compute the biggest daily change
-let BLOCK_PER_DAY = 0;
+let BLOCK_PER_DAY = 0; // 7127
 
 async function PrecomputeDashboardData() {
 // eslint-disable-next-line no-constant-condition
