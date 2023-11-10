@@ -91,6 +91,26 @@ function generateFakePriceForStETHWETHUniswapV3(fromBlock, toBlock) {
     return pricesAtBlock;
 }
 
+function findNearestBlockBefore(targetBlock, blocks, startIndex) {
+    let block = blocks[startIndex];
+    let selectedIndex = startIndex;
+    for(let i = startIndex + 1; i < blocks.length; i++) {
+        const nextBlock = blocks[i];
+        if(nextBlock > targetBlock) {
+            block = blocks[i-1];
+            selectedIndex = i-1;
+            break;
+        }
+    }
+
+    if(block > targetBlock) {
+        return null;
+    }
+
+    return {block, selectedIndex};
+}
+
+
 function getPricesAtBlockForIntervalViaPivot(platform, fromSymbol, toSymbol, fromBlock, toBlock, pivotSymbol) {
     const start = Date.now();
     if(!pivotSymbol) {
@@ -122,31 +142,34 @@ function getPricesAtBlockForIntervalViaPivot(platform, fromSymbol, toSymbol, fro
     // based on the number of prices in each segments
     // example if the segment1 has 1000 prices and segment2 has 500 prices
     // we will use segment1 as the base for the blocknumbers in the returned object
+    let currentBlockOtherSegmentIndex = 0;
     if(keysSegment1.length > keysSegment2.length) {
-        // compute all the prices with blocks from segment1
+    // compute all the prices with blocks from segment1
         for(const [blockNumber, priceSegment1] of Object.entries(dataSegment1)) {
-            const blocksBeforeSegment2 = keysSegment2.filter(_ => _ <= Number(blockNumber));
-            if(blocksBeforeSegment2.length == 0) {
+            const nearestBlockDataBefore =  findNearestBlockBefore(Number(blockNumber), keysSegment2, currentBlockOtherSegmentIndex);
+            if(!nearestBlockDataBefore) {
+                console.log(`ignoring block ${blockNumber}`);
                 continue;
             }
 
-            // take the last, meaning it's the closest to 'blockNumber' from segment1
-            const nearestBlockNumberSegment2 = blocksBeforeSegment2.at(-1);
-            const priceSegment2 = dataSegment2[nearestBlockNumberSegment2];
+            currentBlockOtherSegmentIndex = nearestBlockDataBefore.selectedIndex;
+
+            const priceSegment2 = dataSegment2[nearestBlockDataBefore.block];
             const computedPrice = priceSegment1 * priceSegment2;
             priceAtBlock[blockNumber] = computedPrice;
         }
     } else {
         // compute all the prices with blocks from segment2
         for(const [blockNumber, priceSegment2] of Object.entries(dataSegment2)) {
-            const blocksBeforeSegment1 = keysSegment1.filter(_ => _ <= Number(blockNumber));
-            if(blocksBeforeSegment1.length == 0) {
+            const nearestBlockDataBefore = findNearestBlockBefore(Number(blockNumber), keysSegment1, currentBlockOtherSegmentIndex);
+            if(!nearestBlockDataBefore) {
+                console.log(`ignoring block ${blockNumber}`);
                 continue;
             }
 
-            // take the last, meaning it's the closest to 'blockNumber' from segment1
-            const nearestBlockNumberSegment1 = blocksBeforeSegment1.at(-1);
-            const priceSegment1 = dataSegment1[nearestBlockNumberSegment1];
+            currentBlockOtherSegmentIndex = nearestBlockDataBefore.selectedIndex;
+            
+            const priceSegment1 = dataSegment1[nearestBlockDataBefore.block];
             const computedPrice = priceSegment1 * priceSegment2;
             priceAtBlock[blockNumber] = computedPrice;
         }
