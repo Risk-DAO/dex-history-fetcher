@@ -46,6 +46,9 @@ function findNearestBlockBefore(targetBlock, blocks, startIndex) {
             selectedIndex = i-1;
             break;
         }
+        
+        block = blocks[i];
+        selectedIndex = i;
     }
 
     if(block > targetBlock) {
