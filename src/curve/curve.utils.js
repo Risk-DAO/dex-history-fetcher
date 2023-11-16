@@ -2,6 +2,7 @@ const { ethers, Contract, BigNumber } = require('ethers');
 
 const fs = require('fs');
 const { normalize, getConfTokenBySymbol } = require('../utils/token.utils');
+const { tricryptoFactoryAbi } = require('./curve.config');
 const BIGINT_1e18 = (BigInt(10) ** BigInt(18));
 
 function getCurveDataforBlockInterval(dataDir, poolName, startBlock, endBlock) {
@@ -199,6 +200,8 @@ function getCurveDataFile(dataDir, poolName) {
 function v2_computeLiquidityForSlippageCurvePool(baseQty, targetPrice, baseReserves, i, j, amplificationFactor) {
     let low = undefined;
     let high = undefined;
+    let lowTo = undefined;
+    let highTo = undefined;
     let qtyFrom = baseQty * 2n;
     const exitBoundsDiff = 0.1/100; // exit binary search when low and high bound have less than this amount difference
     // eslint-disable-next-line no-constant-condition
@@ -223,13 +226,16 @@ function v2_computeLiquidityForSlippageCurvePool(baseQty, targetPrice, baseReser
         // console.log(`DAI Qty: [${low ? normalize(BigNumber.from(low), 18) : '0'} <-> ${high ? normalize(BigNumber.from(high), 18) : '+∞'}]. Current price: 1 ${fromSymbol} = ${currentPrice} ${toSymbol}, targetPrice: ${targetPrice}. Try qty: ${normalizedFrom} ${fromSymbol} = ${normalizedTo} ${toSymbol}. variation: ${variation * 100}%`);
         if(low && high) {
             if(variation < exitBoundsDiff) {
-                return (high + low) / 2n;
+                const base = (high + low) / 2n;
+                const quote = (highTo + lowTo) / 2n;
+                return {base, quote};
             }
         }
 
         if (currentPrice > targetPrice) {
             // current price too high, must increase qtyFrom
             low = qtyFrom;
+            lowTo = qtyTo;
 
             if(!high) {
                 // if high is undefined, just double next try qty
@@ -240,6 +246,7 @@ function v2_computeLiquidityForSlippageCurvePool(baseQty, targetPrice, baseReser
         } else {
             // current price too low, must decrease qtyFrom
             high = qtyFrom;
+            highTo = qtyTo;
 
             if(!low) {
                 // if low is undefined, next try qty = qty / 2
@@ -251,17 +258,8 @@ function v2_computeLiquidityForSlippageCurvePool(baseQty, targetPrice, baseReser
     }
 }
 
-/**
- * Find the liquidity for slippage using curve data
- * Use binary search to find the value
- * @param {BigInt} baseQty 
- * @param {number} basePrice 
- * @param {number} targetPrice 
- * @param {BigInt[]} reserves 
- * @param {number} i 
- * @param {number} j 
- * @param {number} amplificationFactor
- */
+
+// this is the old function: avg slippage
 function computeLiquidityForSlippageCurvePool(baseQty, targetPrice, reserves, i, j, amplificationFactor) {
     let low = undefined;
     let high = undefined;
@@ -307,9 +305,11 @@ function computeLiquidityForSlippageCurvePool(baseQty, targetPrice, reserves, i,
 }
 
 
-function v2_computeLiquidityForSlippageCurvePoolCryptoV2(baseQty, targetPrice, baseReserves, i, j, amplificationFactor, gamma, D, priceScale, precisions, decimalsFrom, decimalsTo) {
+function v2_computeLiquidityForSlippageCurvePoolCryptoV2(baseAmountPrice, baseQty, targetPrice, baseReserves, i, j, amplificationFactor, gamma, D, priceScale, precisions, decimalsFrom, decimalsTo) {
     let low = undefined;
     let high = undefined;
+    let lowTo = undefined;
+    let highTo = undefined;
     let qtyFrom = baseQty * 2n;
     const exitBoundsDiff = 0.1/100; // exit binary search when low and high bound have less than this amount difference
     // eslint-disable-next-line no-constant-condition
@@ -325,25 +325,26 @@ function v2_computeLiquidityForSlippageCurvePoolCryptoV2(baseQty, targetPrice, b
         newReserves[j] -= qtyTo;
 
         // get the new price for one token
-        const newQtyFrom = 10n ** BigInt(decimalsFrom);
-        const newQtyTo = get_dy_v2(i, j, newQtyFrom, newReserves, BigInt(newReserves.length), amplificationFactor, gamma, D, priceScale, precisions);
+        const newQtyTo = get_dy_v2(i, j, baseAmountPrice, newReserves, BigInt(newReserves.length), amplificationFactor, gamma, D, priceScale, precisions);
 
-        const normalizedFrom = normalize(newQtyFrom.toString(), decimalsFrom);
+        const normalizedFrom = normalize(baseAmountPrice.toString(), decimalsFrom);
         const normalizedTo = normalize(newQtyTo.toString(), decimalsTo);
         const currentPrice = normalizedTo / normalizedFrom;
 
         const variation = (Number(high) / Number(low)) - 1;
-        // console.log(`DAI Qty: [${low ? normalize(BigNumber.from(low), 18) : '0'} <-> ${high ? normalize(BigNumber.from(high), 18) : '+∞'}]. Current price: 1 ${fromSymbol} = ${currentPrice} ${toSymbol}, targetPrice: ${targetPrice}. Try qty: ${normalizedFrom} ${fromSymbol} = ${normalizedTo} ${toSymbol}. variation: ${variation * 100}%`);
+        // console.log(`WBTC Qty: [${low ? normalize(BigNumber.from(low), 18) : '0'} <-> ${high ? normalize(BigNumber.from(high), 18) : '+∞'}]. Current price: 1 WBTC = ${currentPrice} USDT, targetPrice: ${targetPrice}. Try qty: ${normalizedFrom} WBTC = ${normalizedTo} USDT. variation: ${variation * 100}%`);
         if(low && high) {
             if(variation < exitBoundsDiff) {
-                return (high + low) / 2n;
+                const base = (high + low) / 2n;
+                const quote = (highTo + lowTo) / 2n;
+                return {base, quote};
             }
         }
 
         if (currentPrice > targetPrice) {
             // current price too high, must increase qtyFrom
             low = qtyFrom;
-
+            lowTo = qtyTo;
             if(!high) {
                 // if high is undefined, just double next try qty
                 qtyFrom = qtyFrom * 2n;
@@ -353,6 +354,7 @@ function v2_computeLiquidityForSlippageCurvePoolCryptoV2(baseQty, targetPrice, b
         } else {
             // current price too low, must decrease qtyFrom
             high = qtyFrom;
+            highTo = qtyTo;
 
             if(!low) {
                 // if low is undefined, next try qty = qty / 2
@@ -364,7 +366,7 @@ function v2_computeLiquidityForSlippageCurvePoolCryptoV2(baseQty, targetPrice, b
     }
 }
 
-
+// this is the old function: avg slippage
 function computeLiquidityForSlippageCurvePoolCryptoV2(baseQty, targetPrice, reserves, i, j, amplificationFactor, gamma, D, priceScale, precisions, decimalsFrom, decimalsTo) {
     let low = undefined;
     let high = undefined;
@@ -439,7 +441,7 @@ function get_D(xp, N_COINS, A) {
     }
 
     if (S == 0)
-        return 0;    
+        return 0n;    
 
     let Dprev = 0;
     let D = S;
@@ -761,14 +763,26 @@ function computePriceAndSlippageMapForReserveValue(fromSymbol, toSymbol, poolTok
     let lastAmount = BIGINT_1e18;
     for(let slippageBps = 50; slippageBps <= 2000; slippageBps += 50) {
         const targetPrice = price - (price * slippageBps / 10000);
-        const amountFromForSlippage = v2_computeLiquidityForSlippageCurvePool(lastAmount, targetPrice, reservesNorm18Dec, indexFrom, indexTo, ampFactor)
-        const liquidityAtSlippage = normalize(amountFromForSlippage.toString(), 18);
-        lastAmount = amountFromForSlippage;
-        slippageMap[slippageBps] = liquidityAtSlippage;
+        const liquidityObj = v2_computeLiquidityForSlippageCurvePool(lastAmount, targetPrice, reservesNorm18Dec, indexFrom, indexTo, ampFactor);
+        const liquidityAtSlippage = normalize(liquidityObj.base.toString(), 18);
+        const quoteObtainedAtSlippage = normalize(liquidityObj.quote.toString(), 18);
+        lastAmount = liquidityObj.base;
+        slippageMap[slippageBps] = {base: liquidityAtSlippage, quote: quoteObtainedAtSlippage};
     }
 
     return {price, slippageMap};
 }
+
+const baseAmountMap = {
+    'DAI': 1000n * 10n**18n, // 1000 DAI ~= 1000$
+    'USDT': 1000n * 10n**6n, // 1000 USDT ~= 1000$
+    'sUSD': 1000n * 10n**18n, // 1000 sUSD ~= 1000$
+    'USDC': 1000n * 10n**6n, // 1000 USDC ~= 1000$
+    'WETH': 5n * 10n**17n, // 0.5 ETH ~= 1000$
+    'stETH': 5n * 10n**17n, // 0.5 stETH ~= 1000$
+    'cbETH': 5n * 10n**17n, // 0.5 cbETH ~= 1000$
+    'WBTC': 4n * 10n**6n, // 0.04 WBTC ~= 1000$
+};
 
 /**
  * 
@@ -793,18 +807,27 @@ function computePriceAndSlippageMapForReserveValueCryptoV2(fromSymbol, toSymbol,
     const indexTo = poolTokens.indexOf(toSymbol);
     const fromConf = getConfTokenBySymbol(fromSymbol);
     const toConf = getConfTokenBySymbol(toSymbol);
-    const baseAmount = 10n**BigInt(fromConf.decimals);
+    let baseAmount = baseAmountMap[fromSymbol];
+    if(!baseAmount) {
+        console.warn(`No base amount for ${fromSymbol}`);
+        baseAmount = 10n**BigInt(fromConf.decimals);
+    }
+
     const returnVal = get_dy_v2(indexFrom, indexTo, baseAmount, reserves, BigInt(poolTokens.length), BigInt(ampFactor), BigInt(gamma), BigInt(D), priceScale, precisions);
-    const price = normalize(returnVal.toString(), toConf.decimals);
+    const price = normalize(returnVal.toString(), toConf.decimals) / normalize(baseAmount, fromConf.decimals);
+    // console.log(price);
+    // const invPrice = 1 / price;
+    // console.log(invPrice);
     const slippageMap = {};
     let lastAmount = baseAmount;
     for(let slippageBps = 50; slippageBps <= 2000; slippageBps += 50) {
         const targetPrice = price - (price * slippageBps / 10000);
-        const amountFromForSlippage = v2_computeLiquidityForSlippageCurvePoolCryptoV2(lastAmount, targetPrice, reserves, indexFrom, indexTo, ampFactor, gamma, D, priceScale, precisions, fromConf.decimals, toConf.decimals);
-        const liquidityAtSlippage = normalize(amountFromForSlippage.toString(), fromConf.decimals);
-        lastAmount = amountFromForSlippage;
+        const liquidityObj = v2_computeLiquidityForSlippageCurvePoolCryptoV2(baseAmount, lastAmount, targetPrice, reserves, indexFrom, indexTo, ampFactor, gamma, D, priceScale, precisions, fromConf.decimals, toConf.decimals);
+        const liquidityAtSlippage = normalize(liquidityObj.base.toString(), fromConf.decimals);
+        const quoteObtainedAtSlippage = normalize(liquidityObj.quote.toString(), toConf.decimals);
+        lastAmount = liquidityObj.base;
         
-        slippageMap[slippageBps] = liquidityAtSlippage;
+        slippageMap[slippageBps] =  {base: liquidityAtSlippage, quote: quoteObtainedAtSlippage};
     }
 
     return {price, slippageMap};

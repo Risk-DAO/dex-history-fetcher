@@ -48,4 +48,104 @@ const pairsToCompute = {
     ]
 };
 
-module.exports = { pairsToCompute };
+const dashboardPairsToCompute = [
+    {
+        base: 'stETH',
+        quote: 'WETH',
+    },
+    {
+        base: 'USDC',
+        quote: 'WETH',
+    },
+    {
+        base: 'HarryPotterObamaSonic10Inu',
+        quote: 'WETH'
+    },
+    {
+        base: 'PEPE',
+        quote: 'WETH'
+    },
+    {
+        base: 'BLUR',
+        quote: 'WETH'
+    },
+    {
+        base: 'SHIB',
+        quote: 'WETH'
+    },
+    {
+        base: 'MKR',
+        quote: 'USDC',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'UNI',
+        quote: 'USDC',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'LINK',
+        quote: 'USDC',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'LDO',
+        quote: 'USDC',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'RPL',
+        quote: 'USDC',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'CRV',
+        quote: 'USDC',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'APE',
+        quote: 'USDC',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'CVX',
+        quote: 'USDC',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'FXS',
+        quote: 'USDC',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'USDC',
+        quote: 'COMP',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'USDC',
+        quote: 'WBTC',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'USDC',
+        quote: 'UNI',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'USDC',
+        quote: 'LINK',
+        volatilityPivot: 'WETH',
+    },
+    {
+        base: 'WETH',
+        quote: 'cbETH',
+    },
+    {
+        base: 'WETH',
+        quote: 'wstETH',
+    },
+];
+
+module.exports = { pairsToCompute, dashboardPairsToCompute };

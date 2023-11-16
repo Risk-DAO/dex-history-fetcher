@@ -131,8 +131,51 @@ const pairsToFetch = [
     "token0": "wstETH",
     "token1": "USDC"
   },
+  {
+    "token0": "HarryPotterObamaSonic10Inu",
+    "token1": "WETH"
+  },
+  {
+    "token0": "PEPE",
+    "token1": "WETH"
+  },
+  {
+    "token0": "BLUR",
+    "token1": "WETH"
+  },
+  {
+    "token0": "SHIB",
+    "token1": "WETH"
+  },
+  {
+    "token0": "LDO",
+    "token1": "WETH"
+  },
+  {
+    "token0": "WETH",
+    "token1": "RPL"
+  },
+  {
+    "token0": "WETH",
+    "token1": "CRV"
+  },
+  {
+    "token0": "APE",
+    "token1": "WETH"
+  },
+  {
+    "token0": "CVX",
+    "token1": "WETH"
+  },
+  {
+    "token0": "FXS",
+    "token1": "WETH"
+  },
+  {
+    "token0": "COMP",
+    "token1": "WETH"
+  },
 ]
-
 
 module.exports = {
     uniswapV3PairAbi, uniswapFactoryV3Abi, uniswapFactoryV3Address, pairsToFetch

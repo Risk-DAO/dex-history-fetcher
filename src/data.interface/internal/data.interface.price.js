@@ -1,33 +1,9 @@
 // price related functions
 
-const { arrayAverage, fnName, roundTo } = require('../../utils/utils');
+const { fnName, roundTo } = require('../../utils/utils');
 const { computeParkinsonVolatility } = require('../../utils/volatility');
-const { getUnifiedDataForInterval } = require('./data.interface.utils');
+const { getPricesAtBlockForInterval, getPricesAtBlockForIntervalViaPivot } = require('./data.interface.utils');
 
-/**
- * Compute the average price from each platform then re-average for all platforms
- * Example: compute average price of WETH/USDC for univ3 and univ2 separately 
- * then compute (average_univ3 + average_univ2) / 2
- * @param {string} fromSymbol base symbol (WETH, USDC...)
- * @param {string} toSymbol quote symbol (WETH, USDC...)
- * @param {number} fromBlock start block of the query (included)
- * @param {number} toBlock endblock of the query (included)
- * @param {string} platform platform (univ2, univ3...)
- * @returns {number} the average price
- */
-function getAveragePriceForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform) {
-    const data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock);
-    if(!data) {
-        return undefined;
-    }
-    const priceArray = [];
-    for(const dataForBlock of Object.values(data)) {
-        priceArray.push(dataForBlock.price);
-    }
-
-    const avgPrice = arrayAverage(priceArray);
-    return avgPrice;
-}
 
 /**
  * Compute the parkinson's volatility for a pair and a platform
@@ -42,20 +18,13 @@ function getAveragePriceForInterval(fromSymbol, toSymbol, fromBlock, toBlock, pl
 function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBlock, platform, daysToAvg) {
     const label = `${fnName()}[${fromSymbol}/${toSymbol}] [${fromBlock}-${toBlock}] [${platform}]`;
 
-    console.log(`${label}: getting data and compute volatility`);
+    // console.log(`${label}: getting data and compute volatility`);
 
-    const data = getUnifiedDataForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock, 50);
+    const priceAtBlock = getPricesAtBlockForInterval(platform, fromSymbol, toSymbol, fromBlock, toBlock);
 
-    if(!data || Object.keys(data).length == 0) {
+    if(!priceAtBlock || Object.keys(priceAtBlock).length == 0) {
         console.log(`${label}: Cannot find volatility, returning 0`);
         return 0;
-    }
-
-    console.log(`${label}: computing parkinson volatility`);
-    // generate the priceAtBlock object
-    const priceAtBlock = {};
-    for(const [blockNumber, unifiedData] of Object.entries(data)) {
-        priceAtBlock[blockNumber] = unifiedData.price;
     }
 
     const volatility = computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, fromBlock, toBlock, daysToAvg);
@@ -63,4 +32,34 @@ function getParkinsonVolatilityForInterval(fromSymbol, toSymbol, fromBlock, toBl
     return volatility;
 }
 
-module.exports = { getAveragePriceForInterval, getParkinsonVolatilityForInterval };
+/**
+ * Compute the liquidity of a pair (MKR/USDC) using a pivot (WETH)
+ * Find the price for MKR/WETH (segment1) and WETH/USDC (segment2)
+ * and generate the price of MKR/USDC for each block
+ * @param {*} fromSymbol 
+ * @param {*} toSymbol 
+ * @param {*} fromBlock 
+ * @param {*} toBlock 
+ * @param {*} platform 
+ * @param {*} daysToAvg 
+ * @param {*} pivotSymbol 
+ * @returns 
+ */
+function getParkinsonVolatilityForIntervalViaPivot(fromSymbol, toSymbol, fromBlock, toBlock, platform, daysToAvg, pivotSymbol) {
+    const label = `${fnName()}[${fromSymbol}->${pivotSymbol}->${toSymbol}] [${fromBlock}-${toBlock}] [${platform}]`;
+    // console.log(`${label}: getting data and compute volatility`);
+
+    const priceAtBlock = getPricesAtBlockForIntervalViaPivot(platform, fromSymbol, pivotSymbol, fromBlock, toBlock, pivotSymbol);
+
+    if(!priceAtBlock || Object.keys(priceAtBlock).length == 0) {
+        console.log(`${label}: Cannot find data for [${fromSymbol}->${pivotSymbol}->${toSymbol}], returning 0`);
+        return 0;
+    }
+
+    const volatility = computeParkinsonVolatility(priceAtBlock, fromSymbol, toSymbol, fromBlock, toBlock, daysToAvg);
+    console.log(`${label}: volatility found for ${platform}: ${roundTo(volatility*100, 2)}%`);
+    return volatility;
+}
+
+
+module.exports = { getParkinsonVolatilityForInterval, getParkinsonVolatilityForIntervalViaPivot };

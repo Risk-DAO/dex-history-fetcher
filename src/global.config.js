@@ -155,6 +155,34 @@ const tokens = {
         decimals: 18,
         address: '0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0'
     },
+    HarryPotterObamaSonic10Inu: {
+        decimals: 8,
+        address: '0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9'
+    },
+    PEPE: {
+        decimals: 18,
+        address: '0x6982508145454ce325ddbe47a25d4ec3d2311933'
+    },
+    BLUR: {
+        decimals: 18,
+        address: '0x5283d291dbcf85356a21ba090e6db59121208b44'
+    },
+    SHIB: {
+        decimals: 18,
+        address: '0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce'
+    },
+    RPL: {
+        decimals: 18,
+        address: '0xD33526068D116cE69F19A9ee46F0bd304F21A51f'
+    },
+    APE: {
+        decimals: 18,
+        address: '0x4d224452801ACEd8B2F0aebE155379bb5D594381'
+    },
+    FXS: {
+        decimals: 18,
+        address: '0x3432B6A60D23Ca0dFCa7761B7ab56459D9C964D0'
+    },
 };
 
 module.exports = { tokens };

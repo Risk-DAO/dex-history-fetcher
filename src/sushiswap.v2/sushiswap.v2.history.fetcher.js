@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const sushiv2Config = require('./sushiswap.v2.config');
-const { GetContractCreationBlockNumber } = require('../utils/web3.utils');
+const { GetContractCreationBlockNumber, getBlocknumberForTimestamp } = require('../utils/web3.utils');
 const { sleep, fnName, roundTo, readLastLine } = require('../utils/utils');
 const { RecordMonitoring } = require('../utils/monitoring');
 const { DATA_DIR } = require('../utils/constants');
@@ -49,19 +49,36 @@ async function SushiswapV2HistoryFetcher() {
             console.log(`${fnName()}: starting`);
             const web3Provider = new ethers.providers.StaticJsonRpcProvider(RPC_URL);
             const currentBlock = await web3Provider.getBlockNumber() - 10;
+            const minStartDate = Math.round(Date.now()/1000) - 380 * 24 * 60 * 60; // min start block is 380 days ago
+            const minStartBlock = await getBlocknumberForTimestamp(minStartDate);
             const stalePools = [];
+            const poolsData = [];
             for(const pairToFetch of sushiv2Config.pairsToFetch) {
                 console.log(`${fnName()}: Start fetching pair `, pairToFetch);
-                const poolIsStale = await FetchHistoryForPair(web3Provider, pairToFetch, currentBlock);
+                const poolIsStale = await FetchHistoryForPair(web3Provider, pairToFetch, currentBlock, minStartBlock);
                 console.log(`${fnName()}: End fetching pair `, pairToFetch);
                 if(poolIsStale) {
                     stalePools.push(`${pairToFetch.base}-${pairToFetch.quote}`);
                 }
+
+                poolsData.push({
+                    tokens: [pairToFetch.base, pairToFetch.quote],
+                    address: pairToFetch.pool,
+                    label: ''
+                });
             }
 
             if(stalePools.length > 0) {
                 console.warn(`Stale pools: ${stalePools.join(',')}`);
             }
+            
+            const fetcherResult = {
+                dataSourceName: 'sushiswapv2',
+                lastBlockFetched: currentBlock,
+                lastRunTimestampMs: Date.now(),
+                poolsFetched: poolsData
+            };
+            fs.writeFileSync(path.join(DATA_DIR, 'sushiswapv2', 'sushiswapv2-fetcher-result.json'), JSON.stringify(fetcherResult, null, 2));
 
             await generateUnifiedFileSushiswapV2(currentBlock);
             console.log(`${fnName()}: ending`);
@@ -102,7 +119,7 @@ async function SushiswapV2HistoryFetcher() {
  * @param {ethers.providers.BaseProvider} web3Provider 
  * @param {{base: string, quote: string, pool: string}} pairConfig
  */
-async function FetchHistoryForPair(web3Provider, pairConfig, currentBlock) {
+async function FetchHistoryForPair(web3Provider, pairConfig, currentBlock, minStartBlock) {
     const historyFileName = path.join(DATA_DIR, 'sushiswapv2', `${pairConfig.base}-${pairConfig.quote}_sushiswapv2.csv`);
 
     const pairContract = new ethers.Contract(pairConfig.pool, sushiv2Config.lpTokenABI, web3Provider);
@@ -125,6 +142,10 @@ async function FetchHistoryForPair(web3Provider, pairConfig, currentBlock) {
     if(!startBlock) {
         const deployBlockNumber = await GetContractCreationBlockNumber(web3Provider, pairConfig.pool);
         startBlock = deployBlockNumber;
+    }
+
+    if(startBlock < minStartBlock) {
+        startBlock = minStartBlock;
     }
 
     console.log(`${fnName()}[${pairConfig.base}/${pairConfig.quote}]: start fetching data for ${currentBlock - startBlock} blocks to reach current block: ${currentBlock}`);

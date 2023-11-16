@@ -80,7 +80,21 @@ function computeLiquiditySushiV2Pool(fromReserve, toReserve, targetSlippage) {
     const initPrice = toReserve / fromReserve;
     const targetPrice = initPrice - (initPrice * targetSlippage);
     const amountOfFromToSell = Math.sqrt(targetPrice * fromReserve * toReserve)/targetPrice - fromReserve;
-    return amountOfFromToSell;
+    const amountOfToObtained = calculateYReceived(fromReserve, toReserve, amountOfFromToSell);
+    return {base: amountOfFromToSell, quote: amountOfToObtained};
+}
+
+
+function calculateYReceived(x0, y0, xSell) {
+    // Initial state of the liquidity pool
+    const k0 = x0 * y0;
+    // Calculate the new quantity of asset X after the sale (it increases)
+    const x1 = x0 + xSell;
+    // Calculate the new quantity of asset Y using the x * y = k formula
+    const y1 = k0 / x1;
+    // Calculate the difference in asset Y received
+    const deltaY = y0 - y1;
+    return deltaY;
 }
 
 function computeSushiswapV2Price(normalizedFrom, normalizedTo) {

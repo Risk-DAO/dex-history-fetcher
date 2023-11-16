@@ -15,6 +15,7 @@ function unifyProtocolData(protocol) {
     let numberOfDaysAccumulated = 0;
     let currentDay = new Date();
     const protocolData = {};
+    protocolData['protocolAverage'] = {};
     while (numberOfDaysAccumulated < 180) {
         //opening latest protocol file
         const day = jsDateToString(currentDay);
@@ -24,6 +25,8 @@ function unifyProtocolData(protocol) {
         try {
             const contents = fs.readFileSync(filePath, 'utf8');
             const latestData = JSON.parse(contents);
+            protocolData['protocolAverage'][currentDay.getTime()] = latestData['weightedCLF'];
+
             for (const [market, marketData] of Object.entries(latestData.results)) {
                 if (!protocolData[market]) {
                     protocolData[market] = {};
@@ -52,6 +55,7 @@ function unifyProtocolData(protocol) {
 function computeAverages(protocolData, numberOfDaysAccumulated) {
     const toAverage = {};
     const averaged = {};
+    averaged['protocolAverageHistory'] = protocolData['protocolAverage'];
     try {
         for (const [market, marketData] of Object.entries(protocolData)) {
             if (!toAverage[market]) {
@@ -107,6 +111,5 @@ function computeAveragesForProtocol(protocol) {
     const averagesToWrite = computeAverages(protocolData, numberOfDaysAccumulated);
     return averagesToWrite;
 }
-
 
 module.exports = { computeAveragesForProtocol };
